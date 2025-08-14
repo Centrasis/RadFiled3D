@@ -1,2 +1,2 @@
 from .radiationfieldloader import DataLoaderBuilder, RadiationFieldDataset
-from .types import RadiationField, RadiationFieldChannel, DirectionalInput, PositionalInput, TrainingInputData, ChannelMetrics, TrainingMetrics
+from .types import RadiationField, RadiationFieldChannel, DirectionalInput, PositionalInput, TrainingInputData

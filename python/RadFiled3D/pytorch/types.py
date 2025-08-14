@@ -27,15 +27,3 @@ class PositionalInput(NamedTuple):
 class TrainingInputData(NamedTuple):
     input: Union[DirectionalInput, PositionalInput]
     ground_truth: Union[RadiationField, RadiationFieldChannel]
-
-
-class ChannelMetrics(NamedTuple):
-    fluence_loss: Tensor
-    spectrum_loss: Tensor
-    fluence_accuracy: Tensor
-    spectrum_accuracy: Tensor
-
-
-class TrainingMetrics(NamedTuple):
-    scatter_field: ChannelMetrics
-    xray_beam: ChannelMetrics
