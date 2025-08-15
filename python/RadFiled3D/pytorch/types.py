@@ -16,12 +16,14 @@ class RadiationField(NamedTuple):
 class DirectionalInput(NamedTuple):
     direction: Tensor
     spectrum: Tensor
+    geometry: Union[Tensor, None] = None
 
 
 class PositionalInput(NamedTuple):
     direction: Tensor
     spectrum: Tensor
     position: Tensor
+    geometry: Union[Tensor, None] = None
 
 
 class TrainingInputData(NamedTuple):

@@ -6,6 +6,7 @@ from RadFiled3D.pytorch.helpers import RadiationFieldHelper
 import torch
 from torch import Tensor
 from typing import Union
+from .processing import DataProcessing
 
 
 class RadField3DDataset(CartesianFieldDataset):
@@ -18,16 +19,25 @@ class RadField3DDataset(CartesianFieldDataset):
     The dataset returns instances of TrainingInputData, which contains the input as a DirectionalInput as well as the ground truth as a RadiationField.
     The shape of the ground truth tensors is (c, x, y, z) c is the number of channels (typically 32 for spectra and 1 for all other layers), and (x, y, z) are the dimensions of the radiation field.
     The shape of the input tensor is (3,) for the tube direction and (n,) for the tube spectrum, where n is the number of bins in the tube spectrum.
+    The dataset can apply data processing techniques to the input data.
     """
-    def __init__(self, file_paths: list[str] = None, zip_file: str = None):
+    def __init__(self, file_paths: list[str] = None, zip_file: str = None, data_processings: list[DataProcessing] = None):
         super().__init__(file_paths=file_paths, zip_file=zip_file, metadata_load_mode=MetadataLoadMode.FULL)
+        self.data_processings = data_processings if data_processings is not None else []
+
+    def __len__(self):
+        dataset_size = super().__len__()
+        multiplicator = 1.0
+        if self.data_processings is not None:
+            for aug in self.data_processings:
+                multiplicator *= aug.dataset_multiplier()
+        return int(dataset_size * multiplicator)
 
     def __getitem__(self, idx: int) -> TrainingInputData:
         field, metadata = super().__getitem__(idx)
         assert isinstance(field, CartesianRadiationField), "Dataset must contain CartesianRadiationFields."
         assert isinstance(metadata, RadiationFieldMetadataV1), "Metadata must be of type RadiationFieldMetadataV1."
         return self.transform2training_input(field, metadata)
-
 
     def transform2training_input(self, field: CartesianRadiationField, metadata: RadiationFieldMetadataV1) -> TrainingInputData:
         with torch.no_grad():
@@ -68,6 +78,16 @@ class RadField3DDataset(CartesianFieldDataset):
                 input=input,
                 ground_truth=rad_field
             )
+        
+    def apply_processings(self, input: TrainingInputData) -> TrainingInputData:
+        """
+        Apply all data processing modules to the input data.
+        :param input: The input data to process.
+        :return: The processed input data.
+        """
+        for processing in self.data_processings:
+            input = processing(input)
+        return input
 
 
 class RadField3DVoxelwiseDataset(RadField3DDataset):
@@ -80,8 +100,8 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
     The shape of the input tensor is (3,) for the voxel position in normalized world space [0..1] as well as the tube direction and (n,) for the tube spectrum, where n is the number of bins in the tube spectrum.
     """
 
-    def __init__(self, file_paths: list[str] = None, zip_file: str = None):
-        super().__init__(file_paths=file_paths, zip_file=zip_file)
+    def __init__(self, file_paths: list[str] = None, zip_file: str = None, data_processings: list[DataProcessing] = None):
+        super().__init__(file_paths=file_paths, zip_file=zip_file, data_processings=data_processings)
         field = self._get_field(0)
         self.field_voxel_counts = field.get_voxel_counts()
         self.voxels_per_field = self.field_voxel_counts.x * self.field_voxel_counts.y * self.field_voxel_counts.z
@@ -341,3 +361,55 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                     )
                 )
             )
+
+
+class RadField3DDatasetWithGeometry(RadField3DDataset):
+    """
+    A 3D dataset class for RadField3D with additional geometric information.
+    If an .rf file contains a channel named "geometry", its "density" layer will be loaded as a tensor of shape (1, D, W, H).
+    """
+
+    def __init__(self, file_paths: list[str] = None, zip_file: str = None, data_processings: list[DataProcessing] = None, create_binary_geometry_mask: bool = False, normalize_geometry: bool = False):
+        """
+        Initialize the dataset with the given parameters.
+        Args:
+            file_paths: A list of file paths to the .rf files. Those shall be relative, if loading from a zip file.
+            zip_file: A zip file containing the .rf files.
+            data_processings: A list of data processing functions to apply to the dataset.
+            create_binary_geometry_mask: Whether to create a binary mask for the geometry.
+            normalize_geometry: Whether to normalize the geometry tensor by using z-score normalization.
+        """
+        super().__init__(file_paths, zip_file, data_processings)
+        self.create_binary_geometry_mask = create_binary_geometry_mask
+        self.should_normalize_geometry = normalize_geometry
+
+    @staticmethod
+    def normalize_geometry(geometry_tensor: torch.Tensor) -> torch.Tensor:
+        return (geometry_tensor - geometry_tensor.mean()) / (geometry_tensor.std() + 1e-6)
+
+    def transform2training_input(self, field: CartesianRadiationField, metadata: RadiationFieldMetadataV1) -> TrainingInputData:
+        data = super().transform2training_input(field, metadata)
+        if field.has_channel("geometry"):
+            geometry_tensor = RadiationFieldHelper.load_tensor_from_field(field, "geometry", "density").to(torch.float32)
+            if self.create_binary_geometry_mask:
+                geometry_tensor[geometry_tensor > 0.0] = 1.0  # Normalize geometry tensor to binary values
+            if self.should_normalize_geometry:
+                geometry_tensor = RadField3DDatasetWithGeometry.normalize_geometry(geometry_tensor)
+            data = TrainingInputData(
+                input=DirectionalInput(
+                    direction=data.input.direction,
+                    spectrum=data.input.spectrum,
+                    geometry=geometry_tensor
+                ),
+                ground_truth=data.ground_truth
+            )
+        else:
+            data = TrainingInputData(
+                input=DirectionalInput(
+                    direction=data.input.direction,
+                    spectrum=data.input.spectrum,
+                    geometry=None
+                ),
+                ground_truth=data.ground_truth
+            )
+        return data
