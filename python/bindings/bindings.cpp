@@ -197,7 +197,7 @@ py::array create_py_array_generic(const T* data, size_t len, size_t element_size
 		data,
         py::capsule(data, [](void* data) {
 			delete[] static_cast<T*>(data);
-        }
+        })
 	));
 }
 
