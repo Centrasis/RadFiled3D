@@ -187,6 +187,7 @@ class RadiationFieldDataset(Dataset):
         :param idx: The index of the file in the dataset.
         :return: A named tuple containing the radiation field and its metadata. Format: An instance of TrainingInputData, which contains the ground truth and and input.
         """
+        idx = idx % len(self.file_paths)
         field = self._get_field(idx)
         metadata = self._get_metadata(idx)
         return (self.transform(field, idx), self.transform_origin(metadata, idx))
