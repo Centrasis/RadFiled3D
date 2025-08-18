@@ -69,8 +69,30 @@ class DataLoaderBuilder(object):
 
     @staticmethod
     def collate_wrapper(batch):
-        if isinstance(batch, list):
-            return pt_utils.collate.default_collate(batch)
+        if isinstance(batch, list) and len(batch) > 0:
+            sample = batch[0]
+            if hasattr(sample, '_fields'):  # It's a named tuple
+                fields = sample._fields
+                collated_fields = {}
+                
+                for field_name in fields:
+                    # Collect all non-None values for this field across the batch
+                    field_values = [getattr(item, field_name) for item in batch if getattr(item, field_name) is not None]
+                    assert len(field_values) == len(batch) or len(field_values) == 0, f"All items in the batch must have the same fields filled. That means either {field_name} is None for all elements of the batch or not None for all."
+
+                    if len(field_values) > 0:  # Only collate if there are non-None value
+                        if hasattr(field_values[0], '_fields'):  # another named tuple
+                            collated_fields[field_name] = DataLoaderBuilder.collate_wrapper(field_values)
+                        else:
+                            try:
+                                collated_fields[field_name] = pt_utils.collate.default_collate(field_values)
+                            except Exception:
+                                raise ValueError(f"Failed to collate field '{field_name}': {field_values}")
+                    else:
+                        collated_fields[field_name] = None
+                return sample.__class__(**collated_fields)
+            else:
+                return pt_utils.collate.default_collate(batch)
         else:
             return batch
 
