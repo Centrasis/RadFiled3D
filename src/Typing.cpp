@@ -46,30 +46,29 @@ Typing::DType Typing::Helper::get_dtype(const std::string& dtype)
 		return Typing::DType::Hist;
 	}
 
-	const std::string vec_prefix = "glm::vec<";
+	std::string vec_prefix = "glm::vec<";
 	const std::string struct_prefix = "struct ";
 	const std::string class_prefix = "class ";
-	std::string type_prefix = "";
 	if (dtype.compare(0, struct_prefix.size(), struct_prefix) == 0) {
-		type_prefix = struct_prefix;
+		vec_prefix = struct_prefix + vec_prefix;
 	} else {
 		if (dtype.compare(0, class_prefix.size(), class_prefix) == 0) {
-			type_prefix = class_prefix;
+			vec_prefix = class_prefix + vec_prefix;
 		}
 	}
 
 	if (dtype.compare(0, vec_prefix.size(), vec_prefix) == 0) {
 		// check for vector type, if the file was created by a different compiler
-		const std::string vec3_prefix = type_prefix + "glm::vec<3, float";
-		const std::string vec2_prefix = type_prefix + "glm::vec<2, float";
-		const std::string vec4_prefix = type_prefix + "glm::vec<4, float";
-		if (dtype.compare(0, vec3_prefix.size(), vec3_prefix) == 0) {
+		const std::string vec2_prefix = "2, float";
+		const std::string vec3_prefix = "3, float";
+		const std::string vec4_prefix = "4, float";
+		if (dtype.compare(vec_prefix.size(), vec3_prefix.size(), vec3_prefix) == 0) {
 			return Typing::DType::Vec3;
 		}
-		if (dtype.compare(0, vec2_prefix.size(), vec2_prefix) == 0) {
+		if (dtype.compare(vec_prefix.size(), vec2_prefix.size(), vec2_prefix) == 0) {
 			return Typing::DType::Vec2;
 		}
-		if (dtype.compare(0, vec4_prefix.size(), vec4_prefix) == 0) {
+		if (dtype.compare(vec_prefix.size(), vec4_prefix.size(), vec4_prefix) == 0) {
 			return Typing::DType::Vec4;
 		}
 	}
