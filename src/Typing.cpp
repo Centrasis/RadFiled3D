@@ -59,16 +59,18 @@ Typing::DType Typing::Helper::get_dtype(const std::string& dtype)
 
 	if (dtype.compare(0, vec_prefix.size(), vec_prefix) == 0) {
 		// check for vector type, if the file was created by a different compiler
-		const std::string vec2_prefix = "2, float";
-		const std::string vec3_prefix = "3, float";
-		const std::string vec4_prefix = "4, float";
-		if (dtype.compare(vec_prefix.size(), vec3_prefix.size(), vec3_prefix) == 0) {
+		std::string shrunk_dtype = dtype.substr(vec_prefix.size());
+		shrunk_dtype.erase(std::remove(shrunk_dtype.begin(), shrunk_dtype.end(), ' '), shrunk_dtype.end());
+		const std::string vec2_prefix = "2,float";
+		const std::string vec3_prefix = "3,float";
+		const std::string vec4_prefix = "4,float";
+		if (shrunk_dtype.compare(0, vec3_prefix.size(), vec3_prefix) == 0) {
 			return Typing::DType::Vec3;
 		}
-		if (dtype.compare(vec_prefix.size(), vec2_prefix.size(), vec2_prefix) == 0) {
+		if (shrunk_dtype.compare(0, vec2_prefix.size(), vec2_prefix) == 0) {
 			return Typing::DType::Vec2;
 		}
-		if (dtype.compare(vec_prefix.size(), vec4_prefix.size(), vec4_prefix) == 0) {
+		if (shrunk_dtype.compare(0, vec4_prefix.size(), vec4_prefix) == 0) {
 			return Typing::DType::Vec4;
 		}
 	}
