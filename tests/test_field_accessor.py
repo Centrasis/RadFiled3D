@@ -190,4 +190,4 @@ def test_multi_voxel_accessing():
         assert layer2[i] == 2.0
 
     for i in range(0, 6):
-        assert (histogram1[i] == hist1_target[i, 0, 0]).all(), "Histograms should be equal after accessing the first field"
+        assert (histogram1[i] == hist1_target[0, 0, 0, i]).all(), "Histograms should be equal after accessing the first field"

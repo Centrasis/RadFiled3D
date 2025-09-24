@@ -34,3 +34,9 @@ class DataProcessing(nn.Module):
         This way, the parameters can be easily logged.
         """
         return {}
+
+    def get_name(self) -> str:
+        """
+        Get the name of the current processing module.
+        """
+        return self.__class__.__name__

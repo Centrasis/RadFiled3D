@@ -15,7 +15,6 @@ def setup_test_file(name: str):
     assert array.dtype == "float32"
 
     array[:, :, :] = 1.0
-
     array[2:5, 2:5, 2:5] = 2.0
 
     array = field.get_channel("channel1").get_layer_as_ndarray("doserate")
@@ -23,6 +22,14 @@ def setup_test_file(name: str):
     assert array[2, 2, 2] == 2.0
     assert array.min() == 1.0
     assert array.max() == 2.0
+
+    field.get_channel("channel1").get_voxel_by_coord("doserate", 0.99, 0.0, 0.0).set_data(3.0)
+    field.get_channel("channel1").get_voxel_by_coord("doserate", 0.0, 0.99, 0.0).set_data(4.0)
+    field.get_channel("channel1").get_voxel_by_coord("doserate", 0.0, 0.0, 0.99).set_data(5.0)
+
+    assert array[9, 0, 0] == 3.0
+    assert array[0, 9, 0] == 4.0
+    assert array[0, 0, 9] == 5.0
 
     metadata = RadiationFieldMetadataV1(
         RadiationFieldSimulationMetadataV1(
@@ -272,6 +279,8 @@ def test_single_layer_loading():
     
     doserate = accessor.access_layer_from_buffer(data, "channel1", "doserate")
     doserate = doserate.get_as_ndarray()
+    doserate[:, :, :] = 1.0  # just to check that we can modify it
+    doserate[2, 2, 2] = 2.0
     assert doserate.shape == (10, 10, 10)
     assert doserate.dtype == "float32"
     assert doserate[0, 0, 0] == 1.0
@@ -281,6 +290,8 @@ def test_single_layer_loading():
 
     doserate = accessor.access_layer("test03.rf3", "channel1", "doserate")
     doserate = doserate.get_as_ndarray()
+    doserate[:, :, :] = 1.0  # just to check that we can modify it
+    doserate[2, 2, 2] = 2.0
     assert doserate.shape == (10, 10, 10)
     assert doserate.dtype == "float32"
     assert doserate[0, 0, 0] == 1.0

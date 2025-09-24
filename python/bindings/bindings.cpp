@@ -170,7 +170,8 @@ py::array create_py_array_generic(const T* data, const glm::uvec3& shape, size_t
     const size_t components = static_cast<size_t>(element_size / sizeof(T));
     return static_cast<py::array>(py::array_t<T>(
         { static_cast<size_t>(shape.x), static_cast<size_t>(shape.y), static_cast<size_t>(shape.z), components },  // shape
-        { static_cast<size_t>(element_size * shape.y * shape.z), static_cast<size_t>(shape.z * element_size), static_cast<size_t>(element_size), sizeof(T) },  // strides
+		//{ static_cast<size_t>(element_size * shape.y * shape.x), static_cast<size_t>(shape.x * element_size), static_cast<size_t>(element_size), sizeof(T) },  // strides (C instead fortran order)
+		{ sizeof(T), static_cast<size_t>(element_size), static_cast<size_t>(shape.x * element_size), static_cast<size_t>(element_size * shape.y * shape.x) },  // strides
         data,
         py::capsule(data, [](void* data) {
             auto memory_safe_struct = shared_ptrs.find((void*)data);
@@ -189,7 +190,8 @@ py::array create_py_array_generic(const T* data, size_t len, size_t element_size
     const size_t components = static_cast<size_t>(element_size / sizeof(T));
     return (components > 1) ? static_cast<py::array>(py::array_t<T>(
 		{ len, components },  // shape
-		{ element_size, sizeof(T) },  // strides
+		//{ element_size, sizeof(T) },  // strides (C instead fortran order)
+		{ sizeof(T), element_size },  // strides
 		data
 	)) : static_cast<py::array>(py::array_t<T>(
 		{ len },  // shape
@@ -214,7 +216,8 @@ py::array create_py_array_generic(const T* data, const glm::uvec2& shape, size_t
     const size_t components = static_cast<size_t>(element_size / sizeof(T));
     return static_cast<py::array>(py::array_t<T>(
         { static_cast<size_t>(shape.x), static_cast<size_t>(shape.y), components },  // shape
-        { static_cast<size_t>(element_size * shape.y), static_cast<size_t>(element_size), sizeof(T) },  // strides
+        //{ static_cast<size_t>(element_size * shape.y), static_cast<size_t>(element_size), sizeof(T) },  // strides (C instead fortran order)
+		{ sizeof(T), static_cast<size_t>(element_size), static_cast<size_t>(shape.x * element_size) },  // strides
         data,
         py::capsule(data, [](void* data) {
             auto memory_safe_struct = shared_ptrs.find((void*)data);
@@ -240,7 +243,8 @@ py::array create_py_array_as(const T* data, const glm::uvec3& shape, std::shared
 
     return static_cast<py::array>(py::array_t<T>(
         { shape.x, shape.y, shape.z },  // shape
-        { sizeof(T) * shape.y * shape.z, shape.z * sizeof(T), sizeof(T) },  // strides
+        //{ sizeof(T) * shape.y * shape.z, shape.z * sizeof(T), sizeof(T) },  // strides (C instead fortran order)
+		{ sizeof(T), sizeof(T) * shape.x, sizeof(T) * shape.y * shape.x },  // strides
         data,
         py::capsule(data, [](void* data) {
             auto memory_safe_struct = shared_ptrs.find((void*)data);
@@ -266,7 +270,8 @@ py::array create_py_array_as(const T* data, const glm::uvec2& shape, std::shared
 
 	return static_cast<py::array>(py::array_t<T>(
 		{ static_cast<size_t>(shape.x), static_cast<size_t>(shape.y) },  // shape
-		{ static_cast<size_t>(sizeof(T) * shape.y), sizeof(T) },  // strides
+		//{ static_cast<size_t>(sizeof(T) * shape.y), sizeof(T) },  // strides (C instead fortran order)
+		{ sizeof(T), sizeof(T) * shape.x },  // strides
 		data,
         py::capsule(data, [](void* data) {
             auto memory_safe_struct = shared_ptrs.find((void*)data);
