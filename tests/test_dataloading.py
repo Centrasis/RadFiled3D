@@ -208,25 +208,7 @@ def test_store_and_load():
     assert array.min() == 1.0
     assert array.max() == 2.0
 
-    metadata = RadiationFieldMetadataV1(
-        RadiationFieldSimulationMetadataV1(
-            100,
-            "",
-            "Phys",
-            RadiationFieldXRayTubeMetadataV1(
-                vec3(0, 0, 0),
-                vec3(0, 0, 0),
-                0,
-                "TubeID"
-            )
-        ),
-        RadiationFieldSoftwareMetadataV1(
-            "RadFiled3D",
-            "0.1.0",
-            "repo",
-            "commit"
-        )
-    )
+    metadata = Metadata.default()
     FieldStore.store(field, metadata, "test02.rf3", StoreVersion.V1)
 
     field2: CartesianRadiationField = FieldStore.load("test02.rf3")
