@@ -37,8 +37,6 @@ jobs:
             python-name: cp312
           - python-version: 3.13
             python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
     steps:
     - uses: actions/checkout@v4
     - name: Install compiler
@@ -90,8 +88,6 @@ jobs:
             python-name: cp312
           - python-version: 3.13
             python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -152,8 +148,6 @@ jobs:
             python-name: cp312
           - python-version: 3.13
             python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Test on Linux ${{ matrix.python-version }}
@@ -195,8 +189,6 @@ jobs:
             python-name: cp312
           - python-version: 3.13
             python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     name: Test on Windows ${{ matrix.python-version }}
@@ -233,8 +225,6 @@ jobs:
             python-name: cp312
           - python-version: 3.13
             python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
     if: startsWith(github.ref, 'refs/tags/')
     name: Publish on Linux ${{ matrix.python-version }}
     needs:
@@ -289,8 +279,6 @@ jobs:
             python-name: cp312
           - python-version: 3.13
             python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Publish on Windows ${{ matrix.python-version }}
