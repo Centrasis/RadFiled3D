@@ -7,6 +7,12 @@
 
 namespace RadFiled3D {
 	namespace Typing {
+		enum FieldShape : uint8_t {
+			Cone = 0,
+			Rectangle = 1,
+			Ellipsis = 2
+		};
+
 		enum class DType {
 			Float,
 			Double,

@@ -1,6 +1,12 @@
 import numpy as np
-from typing import Any, Tuple, Union
+from typing import Any, Tuple
 from enum import Enum
+
+
+class FieldShape(Enum):
+    CONE = 0
+    RECTANGLE = 1
+    ELLIPSIS = 2
 
 
 class DType(Enum):

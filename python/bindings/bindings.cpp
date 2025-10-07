@@ -866,8 +866,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         }, py::arg("key"), py::return_value_policy::reference)
         .def("get_dynamic_metadata_keys", &Storage::V1::RadiationFieldMetadata::get_dynamic_metadata_keys)
         .def("add_dynamic_histogram_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key, size_t bins, float bin_width) {
-		    RadFiled3D::OwningHistogramVoxel hist(bins, bin_width);
-            self.set_dynamic_metadata<RadFiled3D::HistogramVoxel>(key, hist);
+            self.set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel>(key, RadFiled3D::HistogramVoxel(bins, bin_width, nullptr));
 			IVoxel* voxel = self.get_dynamic_metadata().at(key);
             return VOXEL_REFERENCE(voxel);
 		}, py::arg("key"), py::arg("bins"), py::arg("bin_width"), py::return_value_policy::reference)
@@ -1094,6 +1093,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("SAMPLING", GridTracerAlgorithm::SAMPLING)
 		.value("BRESENHAM", GridTracerAlgorithm::BRESENHAM)
         .value("LINETRACING", GridTracerAlgorithm::LINETRACING);
+
+    py::enum_<Typing::FieldShape>(m, "FieldShape")
+        .value("CONE", Typing::FieldShape::Cone)
+        .value("RECTANGLE", Typing::FieldShape::Rectangle)
+        .value("ELLIPSIS", Typing::FieldShape::Ellipsis);
 
     py::enum_<Typing::DType>(m, "DType")
         .value("FLOAT32", Typing::DType::Float)

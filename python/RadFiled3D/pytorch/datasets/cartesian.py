@@ -2,7 +2,6 @@ from RadFiled3D.RadFiled3D import uvec3, vec3, CartesianRadiationField, Radiatio
 from .base import MetadataLoadMode, RadiationFieldDataset
 from typing import Union, Tuple
 from torch import Tensor
-from RadFiled3D.pytorch.types import RadiationField, RadiationFieldChannel
 
 
 class CartesianFieldDataset(RadiationFieldDataset):

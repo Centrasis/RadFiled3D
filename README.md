@@ -59,7 +59,8 @@ Disclaimer: Not all methods support keyword arguments as they need to be defined
 ## From Python
 Simple example on how to create and store a radiation field. Find more in the example file: [Example](./examples/python/example01.py)
 ```python
-from RadFiled3D.RadFiled3D import CartesianRadiationField, FieldStore, StoreVersion, DType
+from RadFiled3D.RadFiled3D import CartesianRadiationField, DType
+from RadFiled3D.utils import FieldStore, StoreVersion
 from RadFiled3D.metadata.v1 import Metadata
 
 
@@ -199,7 +200,9 @@ hits_counts.reshape((grid_shape.x, grid_shape.y, grid_shape.z))
 ### Faster loading of field series
 As the *RadFiled3D* format possesses a dynamic structure, the loading of a radiation field requires the discovery of channels and layers as well as calculating the binary entry points of channels, layers and voxels. When loading datasets for machine learning, the structure of the fields loaded will likely be constant for each dataset. Therefore, the binary entry points can be precalculated to access only those parts of the *RadFiled3D* files that are really needed to increase the loading speed and to reduce the needed memory. This is relealized by the **FieldAccessors** objects.
 ```python
-from RadFiled3D.RadFiled3D import CartesianFieldAccessor, FieldStore, FieldType, uvec3
+from RadFiled3D.RadFiled3D import CartesianFieldAccessor, FieldType, uvec3
+from RadFiled3D.utils import FieldStore
+from RadFiled3D.metadata.v1 import Metadata
 
 accessor: CartesianFieldAccessor = FieldStore.construct_field_accessor("a_file.rf3")
 field_type = accessor.get_field_type()

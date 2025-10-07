@@ -17,6 +17,7 @@ class DirectionalInput(NamedTuple):
     direction: Tensor
     spectrum: Tensor
     geometry: Union[Tensor, None] = None
+    beam_shape_parameters: Union[Tensor, None] = None
 
 
 class PositionalInput(NamedTuple):
@@ -24,6 +25,7 @@ class PositionalInput(NamedTuple):
     spectrum: Tensor
     position: Tensor
     geometry: Union[Tensor, None] = None
+    beam_shape_parameters: Union[Tensor, None] = None
 
 
 class TrainingInputData(NamedTuple):

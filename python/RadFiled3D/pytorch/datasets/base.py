@@ -1,4 +1,5 @@
-from RadFiled3D.RadFiled3D import FieldStore, RadiationField as RawRadiationField, PolarRadiationField, CartesianRadiationField, RadiationFieldMetadata, VoxelGrid, PolarSegments, FieldAccessor, CartesianFieldAccessor, PolarFieldAccessor, Voxel
+from RadFiled3D.RadFiled3D import StoreVersion, RadiationField as RawRadiationField, PolarRadiationField, CartesianRadiationField, RadiationFieldMetadata, VoxelGrid, PolarSegments, FieldAccessor, CartesianFieldAccessor, PolarFieldAccessor, Voxel
+from RadFiled3D.utils import FieldStore
 import zipfile
 from enum import Enum
 from torch import Tensor
@@ -54,6 +55,17 @@ class RadiationFieldDataset(Dataset):
         
         self._field_accessor: FieldAccessor = None
         self.file_paths = manager.list(file_paths) if file_paths is not None else None
+        self._store_version = self._get_store_version()
+
+    @property
+    def store_version(self) -> StoreVersion:
+        return self._store_version
+
+    def _get_store_version(self) -> StoreVersion:
+        if self.is_dataset_zipped:
+            return FieldAccessor.get_store_version(self.load_file_buffer(0))
+        else:
+            return FieldStore.get_store_version(self.file_paths[0])
 
     def _get_field_accessor(self) -> Union[FieldAccessor, CartesianFieldAccessor, PolarFieldAccessor]:
         if self._field_accessor is None:
@@ -153,14 +165,14 @@ class RadiationFieldDataset(Dataset):
         if self.is_dataset_zipped:
             file_buffer = self.load_file_buffer_by_path(file_path)
             if self.metadata_load_mode == MetadataLoadMode.FULL:
-                metadata: RadiationFieldMetadata = FieldStore.peek_metadata_from_buffer(file_buffer)
+                metadata: RadiationFieldMetadata = FieldStore.load_metadata_from_buffer_v1(file_buffer) if self._store_version == StoreVersion.V1 else FieldStore.load_metadata_from_buffer(file_buffer)
             elif self.metadata_load_mode == MetadataLoadMode.HEADER:
                 metadata: RadiationFieldMetadata = FieldStore.peek_metadata_from_buffer(file_buffer)
             else:
                 metadata = None
         else:
             if self.metadata_load_mode == MetadataLoadMode.FULL:
-                metadata: RadiationFieldMetadata = FieldStore.load_metadata(file_path)
+                metadata: RadiationFieldMetadata = FieldStore.load_metadata_v1(file_path) if self._store_version == StoreVersion.V1 else FieldStore.load_metadata(file_path)
             elif self.metadata_load_mode == MetadataLoadMode.HEADER:
                 metadata: RadiationFieldMetadata = FieldStore.peek_metadata(file_path)
             else:

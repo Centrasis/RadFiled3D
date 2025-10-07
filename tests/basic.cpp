@@ -402,6 +402,44 @@ namespace {
 		}
 	}
 
+	TEST(Storage, MetadataHists) {
+		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
+			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+				100,
+				"geom",
+				"FTFP_BERT",
+				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+					glm::vec3(1.f, 0.f, 0.f),
+					glm::vec3(0.f, 0.f, 0.f),
+					100.f,
+					"XRayTube"
+				)
+			),
+			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+				"test",
+				"1.0",
+				"repo",
+				"commit"
+			)
+		);
+		{
+			size_t bins = 150;
+			float bin_width = 4.6f;
+			RadFiled3D::HistogramVoxel hist(bins, bin_width, nullptr);
+			metadata->set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel>("test_hist", hist);
+			RadFiled3D::HistogramVoxel& new_hist = *static_cast<RadFiled3D::HistogramVoxel*>(metadata->get_dynamic_metadata().at("test_hist"));
+			for (size_t i = 0; i < 10; i++)
+				new_hist.get_histogram()[i] = 1.f * i;
+			EXPECT_EQ(new_hist.get_bins(), bins);
+			EXPECT_EQ(new_hist.get_histogram_bin_width(), bin_width);
+		}
+
+		RadFiled3D::HistogramVoxel* voxel = static_cast<RadFiled3D::HistogramVoxel*>(metadata->get_dynamic_metadata().at("test_hist"));
+
+		for (size_t i = 0; i < 10; i++)
+			EXPECT_FLOAT_EQ(voxel->get_histogram()[i], 1.f * i);
+	}
+
 	TEST(Storage, JoinFields) {
 		std::shared_ptr<CartesianRadiationField> field = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));
