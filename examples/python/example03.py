@@ -44,5 +44,5 @@ else:
 
 
 # plot tube spectrum
-fig = go.Figure(data=go.Scatter(x=numpy.arange(0, (tube_spectrum.get_bins() - 1) * tube_spectrum.get_histogram_bin_width(), tube_spectrum.get_histogram_bin_width()) - tube_spectrum.get_histogram_bin_width(), y=tube_spectrum.get_histogram()))
+fig = go.Figure(data=go.Scatter(x=tube_spectrum[:, 0], y=tube_spectrum[:, 1], mode='lines+markers'))
 fig.show()

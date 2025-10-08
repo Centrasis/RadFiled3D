@@ -163,7 +163,7 @@ class Metadata(object):
         field_shape: FieldShape = property(_get_field_shape, _set_field_shape)
         
         def _get_opening_angle_deg(self) -> float:
-            if self.field_shape != FieldShape.CONE or not "xray_tube_opening_angle_deg" in self.dyn_metadata_keys:
+            if self.field_shape != FieldShape.CONE or "xray_tube_opening_angle_deg" not in self.dyn_metadata_keys:
                 return None
             vx = self._metadata.get_dynamic_metadata("xray_tube_opening_angle_deg")
             return vx.get_data()
@@ -183,7 +183,7 @@ class Metadata(object):
         opening_angle_deg: float = property(_get_opening_angle_deg, _set_opening_angle_deg)
 
         def _get_field_rect_dimensions_m(self) -> vec2:
-            if self.field_shape == FieldShape.RECTANGLE or not "xray_tube_field_rect_dimensions_m" in self.dyn_metadata_keys:
+            if self.field_shape != FieldShape.RECTANGLE or "xray_tube_field_rect_dimensions_m" not in self.dyn_metadata_keys:
                 return None
             vx = self._metadata.get_dynamic_metadata("xray_tube_field_rect_dimensions_m")
             return vx.get_data()
@@ -203,7 +203,7 @@ class Metadata(object):
         field_rect_dimensions_m: vec2 = property(_get_field_rect_dimensions_m, _set_field_rect_dimensions_m)
         
         def _get_field_ellipsis_opening_angles_deg(self) -> vec2:
-            if self.field_shape != FieldShape.ELLIPSIS or not "xray_tube_field_ellipsis_opening_angles_deg" in self.dyn_metadata_keys:
+            if self.field_shape != FieldShape.ELLIPSIS or "xray_tube_field_ellipsis_opening_angles_deg" not in self.dyn_metadata_keys:
                 return None
             vx = self._metadata.get_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg")
             return vx.get_data()
