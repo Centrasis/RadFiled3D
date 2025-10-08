@@ -22,6 +22,7 @@ The aim of this library is, to provide a simple to use API for a structured, bin
   - [Tracing paths in Cartesian Coordinate Systems](#tracing-paths-in-cartesian-coordinate-systems)
   - [Faster loading of field series](#faster-loading-of-field-series)
   - [From C++](#from-c)
+    - [Aviailable Voxel Datatypes](#aviailable-voxel-datatypes)
 - [Field Structure](#field-structure)
 - [Dependencies](#dependencies)
 
