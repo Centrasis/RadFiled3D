@@ -22,7 +22,7 @@ The aim of this library is, to provide a simple to use API for a structured, bin
   - [Tracing paths in Cartesian Coordinate Systems](#tracing-paths-in-cartesian-coordinate-systems)
   - [Faster loading of field series](#faster-loading-of-field-series)
   - [From C++](#from-c)
-    - [Aviailable Voxel Datatypes](#aviailable-voxel-datatypes)
+    - [Available Voxel Datatypes](#Available-voxel-datatypes)
 - [Field Structure](#field-structure)
 - [Dependencies](#dependencies)
 
@@ -240,8 +240,8 @@ void main() {
 }
 ```
 
-### Aviailable Voxel Datatypes
-In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datatype. But in order to deserialize them from a file or use them from Python, there is only a specific list implemented. The aviailable datatypes are:
+### Available Voxel Datatypes
+In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datatype. But in order to deserialize them from a file or use them from Python, there is only a specific list implemented. The Available datatypes are:
 | C++ Type   | RadFiled3D.DType  |
 | --------   | ------------  |
 | float      | DType.FLOAT32 |
