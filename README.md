@@ -239,6 +239,25 @@ void main() {
 }
 ```
 
+### Aviailable Voxel Datatypes
+In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datatype. But in order to deserialize them from a file or use them from Python, there is only a specific list implemented. The aviailable datatypes are:
+| C++ Type   | RadFiled3D.DType  |
+| --------   | ------------  |
+| float      | DType.FLOAT32 |
+| double     | DType.FLOAT64 |
+| int        | DType.INT32   |
+| uint8_t    | DType.BYTE  |
+| unsigned char    | DType.BYTE  |
+| char    | DType.SCHAR  |
+| uint32_t   | DType.UINT32  |
+| uint64_t   | DType.UINT64  |
+| unsigned long long | DType.UINT64  |
+| glm::vec2     | DType.VEC2 |
+| glm::vec3     | DType.VEC3 |
+| glm::vec4     | DType.VEC4 |
+| HistogramVoxel<float> | DType.HISTOGRAM |
+
+
 ## Field Structure
 RadFiled3D defines a field structure, that provides the user with the possibility to first define in which kind of space he wants to operate. Therefore one can choose between `CartesianRadiationField` and `PolarRadiationField`.
 - *CartesianRadiationField*: Segments a room defined by an extent of the room itself and each cuboid voxel into a set of voxels. Each voxel can be addressed by a 3D position (coordinate: x, y, z), a 3D index (number of the voxel in each dimension) or a flat 1D index.
