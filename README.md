@@ -106,9 +106,14 @@ class MyLayerDataset(CartesianFieldSingleLayerDataset):
     def __getitem____(self, idx: int) -> TrainingInputData:
         layer, metadata = super().__getitem__(idx)
         tube_dir = metadata.get_header().simulation.tube.radiation_direction
+        tube_pos = metadata.get_header().simulation.tube.radiation_origin
         # transform the layers data to a tensor
         return TrainingInputData(
-            input=DirectionalInput(direction=torch.tensor([tube_dir.x, tube_dir.y, tube_dir.z]))
+            input=DirectionalInput(
+                direction=torch.tensor([tube_dir.x, tube_dir.y, tube_dir.z]),
+                origin=torch.tensor([tube_pos.x, tube_pos.y, tube_pos.z]),
+                spectrum=None
+            )
             ground_truth=RadiationFieldHelper.load_tensor_from_layer(layer)
         )
 
@@ -145,7 +150,8 @@ Directly iterate RadField3D datasets either by loading whole fields or iterating
 from RadField3D.pytorch.datasets.radfield3d import RadField3DDataset
 from RadField3D.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset
 # import the pyTorch compatible datatypes
-from RadField3D.pytorch import RadiationField, DataLoaderBuilder
+from RadField3D.pytorch import DataLoaderBuilder
+from RadField3D.pytorch.types import DirectionalInput, PositionalInput, TrainingInputData, RadiationField
 
 
 builder = DataLoaderBuilder(
@@ -163,9 +169,28 @@ train_dl = builder.build_train_dataloader(
 )
 
 # iterate over the dataset using fully useable pyTorch classes
-for field, metadata in train_dl:
-    pass
+for train_data in train_dl:
+    input: DirectionalInput | PositionalInput = train_data.input
+    field: RadiationField = train_data.ground_truth
 ```
+**TrainingInputData** consists of two components
+**metadata** (as ``DirectionalInput`` or ``PositionalInput``) contains the following information 
+- radiation direction (x, y, z)
+- radiation origin (x, y, z)
+- field shape (Cone, Rectangle, Ellipsis)
+- field shape parameters (opening angle, size at origin, ...)
+- x-ray tube output spectrum
+
+**field** (as ``RadiationField``) contains the following information
+- direct x-ray beam component (as ``RadiationFieldChannel``)
+    - spectrum per voxel
+    - fluence per voxel
+    - statistical error per voxel
+- scatter field component (as ``RadiationFieldChannel``)
+    - spectrum per voxel
+    - fluence per voxel
+    - statistical error per voxel
+- geometry (binary density map)
 
 ### Tracing paths in Cartesian Coordinate Systems
 In order to integrate RadFiled3D with other simulation frameworks or applications, one can either take the final results and write it voxel-wise to RadFiled3D or one can already use RadFiled3D during the particle tracking. Therefore, this library offers `GridTracers`. Each of them implements a different line-segment tracing algorithm to find consecutive voxels that are intersected.

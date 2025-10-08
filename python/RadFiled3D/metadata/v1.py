@@ -146,7 +146,7 @@ class Metadata(object):
             if not "xray_field_shape" in self.dyn_metadata_keys or self._field_shape is not None:
                 return self._field_shape
             vx = self._metadata.get_dynamic_metadata("xray_field_shape")
-            self._field_shape = FieldShape(ord(vx.get_data()))
+            self._field_shape = FieldShape(vx.get_data())
             return self._field_shape
         
         def _set_field_shape(self, shape: FieldShape) -> None:
@@ -157,7 +157,7 @@ class Metadata(object):
             else:
                 vx = self._metadata.get_dynamic_metadata("xray_field_shape")
                 assert isinstance(vx, Voxel), f"Expected Voxel, got {type(vx)}"
-            vx.set_data(chr(shape.value))
+            vx.set_data(shape.value)
             self._field_shape = shape
 
         field_shape: FieldShape = property(_get_field_shape, _set_field_shape)
@@ -249,9 +249,23 @@ class Metadata(object):
             header.simulation.physics_list = physics_list + chr(0) # Ensure null-terminated string
             self._metadata.set_header(header)
 
+        def _get_simulation_duration_s(self) -> int:
+            vx = self._metadata.get_dynamic_metadata("simulation_duration_s")
+            return vx.get_data()
+
+        def _set_simulation_duration_s(self, duration_s: int) -> None:
+            assert isinstance(duration_s, (float, int)), f"Expected int, got {type(duration_s)}"
+            duration_s = int(duration_s)
+            if "simulation_duration_s" not in self._metadata.get_dynamic_metadata_keys():
+                vx = self._metadata.add_dynamic_metadata("simulation_duration_s", DType.UINT64)
+            else:
+                vx = self._metadata.get_dynamic_metadata("simulation_duration_s")
+            vx.set_data(duration_s)
+
         primary_particle_count: int = property(_get_primary_particle_count, _set_primary_particle_count)
         geometry: str = property(_get_geometry, _set_geometry)
         physics_list: str = property(_get_physics_list, _set_physics_list)
+        simulation_duration_s: int = property(_get_simulation_duration_s, _set_simulation_duration_s)
         tube: "Metadata.XRayTube"
 
         def __init__(self, geometry: str, primary_particle_count: int, physics_list: str, tube: "Metadata.XRayTube", metadata: RadiationFieldMetadataV1) -> None:

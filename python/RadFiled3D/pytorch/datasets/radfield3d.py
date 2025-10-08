@@ -62,28 +62,45 @@ class RadField3DDataset(CartesianFieldDataset):
                 metadata_header.simulation.tube.radiation_direction.y,
                 metadata_header.simulation.tube.radiation_direction.z
             )
+            tube_origin = (
+                metadata_header.simulation.tube.radiation_origin.x,
+                metadata_header.simulation.tube.radiation_origin.y,
+                metadata_header.simulation.tube.radiation_origin.z
+            )
             tube_direction = torch.tensor([abc[0], abc[1], abc[2]], dtype=torch.float32)
+            tube_origin = torch.tensor([tube_origin[0], tube_origin[1], tube_origin[2]], dtype=torch.float32)
+            field_dimensions = (
+                field.get_voxel_counts().x * field.get_voxel_dimensions().x,
+                field.get_voxel_counts().y * field.get_voxel_dimensions().y,
+                field.get_voxel_counts().z * field.get_voxel_dimensions().z
+            )
+            field_dimensions = torch.tensor([field_dimensions[0], field_dimensions[1], field_dimensions[2]], dtype=torch.float32)
+            tube_origin = (tube_origin + (0.5 * field_dimensions)) / field_dimensions # Normalize to [0, 1], assuming the origin is at the center of the field
             tube_spectrum = metadata.simulation.tube.spectrum
             if tube_spectrum is not None:
                 tube_spectrum = torch.tensor(tube_spectrum[:, 1], dtype=torch.float32)  # Only take the counts, not the bin edges
 
             field_shape = metadata.simulation.tube.field_shape
+            field_shape_params = None
             if field_shape is not None:
                 if field_shape == FieldShape.CONE:
-                    field_shape = torch.tensor([metadata.simulation.tube.opening_angle_deg], dtype=torch.float32)
+                    field_shape_params = torch.tensor([metadata.simulation.tube.opening_angle_deg], dtype=torch.float32)
                 elif field_shape == FieldShape.RECTANGLE:
                     rect: vec2 = metadata.simulation.tube.field_rect_dimensions_m
-                    field_shape = torch.tensor([rect.x, rect.y], dtype=torch.float32)
+                    field_shape_params = torch.tensor([rect.x, rect.y], dtype=torch.float32)
                 elif field_shape == FieldShape.ELLIPSIS:
                     angles: vec2 = metadata.simulation.tube.field_ellipsis_opening_angles_deg
-                    field_shape = torch.tensor([angles.x, angles.y], dtype=torch.float32)
+                    field_shape_params = torch.tensor([angles.x, angles.y], dtype=torch.float32)
                 else:
                     raise RuntimeError(f"Unsupported field shape: {field_shape}")
+                field_shape = torch.tensor([int(field_shape)], dtype=torch.float32)
 
             input = DirectionalInput(
                 direction=tube_direction,
+                origin=tube_origin,
                 spectrum=tube_spectrum,
-                beam_shape_parameters=field_shape
+                beam_shape_parameters=field_shape_params,
+                beam_shape_type=field_shape
             )
 
             return TrainingInputData(
@@ -118,6 +135,11 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
         super().__init__(file_paths=file_paths, zip_file=zip_file, data_processings=data_processings)
         field = self._get_field(0)
         self.field_voxel_counts = field.get_voxel_counts()
+        self.field_dimensions = (
+            field.get_voxel_counts().x * field.get_voxel_dimensions().x,
+            field.get_voxel_counts().y * field.get_voxel_dimensions().y,
+            field.get_voxel_counts().z * field.get_voxel_dimensions().z
+        )
         self.voxels_per_field = self.field_voxel_counts.x * self.field_voxel_counts.y * self.field_voxel_counts.z
         self.cached_metadata: DirectionalInput = None
         self.cached_fields: RadiationField = None
@@ -171,9 +193,11 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
             field_voxel_counts = first_data.ground_truth.scatter_field.spectrum.shape[1:4]
             self.cached_metadata = DirectionalInput(
                 direction=torch.empty((len(self.file_paths), 3), dtype=torch.float32).share_memory_(),
+                origin=torch.empty((len(self.file_paths), 3), dtype=torch.float32).share_memory_(),
                 spectrum=torch.empty((len(self.file_paths), first_data.input.spectrum.shape[0]), dtype=torch.float32).share_memory_(),
                 geometry=torch.empty((len(self.file_paths), *first_data.input.geometry.shape), dtype=torch.float32).share_memory_() if first_data.input.geometry is not None else None,
-                beam_shape_parameters=torch.empty((len(self.file_paths), first_data.input.beam_shape_parameters.shape[0]), dtype=torch.float32).share_memory_() if first_data.input.beam_shape_parameters is not None else None
+                beam_shape_parameters=torch.empty((len(self.file_paths), first_data.input.beam_shape_parameters.shape[0]), dtype=torch.float32).share_memory_() if first_data.input.beam_shape_parameters is not None else None,
+                beam_shape_type=torch.empty((len(self.file_paths), 1), dtype=torch.float32).share_memory_() if first_data.input.beam_shape_type is not None else None
             )
 
             self.cached_fields = RadiationField(
@@ -216,9 +240,11 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
         input = PositionalInput(
             position=xyz,
             direction=cached_metadata.direction[idx].clone(),
+            origin=cached_metadata.origin[idx].clone(),
             spectrum=cached_metadata.spectrum[idx].clone(),
             geometry=cached_metadata.geometry[idx].clone() if cached_metadata.geometry is not None else None,
-            beam_shape_parameters=cached_metadata.beam_shape_parameters[idx].clone() if cached_metadata.beam_shape_parameters is not None else None
+            beam_shape_parameters=cached_metadata.beam_shape_parameters[idx].clone() if cached_metadata.beam_shape_parameters is not None else None,
+            beam_shape_type=cached_metadata.beam_shape_type[idx].clone() if cached_metadata.beam_shape_type is not None else None
         ) if cached_metadata is not None else None
 
         return TrainingInputData(
@@ -265,33 +291,45 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                 metadata_header.simulation.tube.radiation_direction.y,
                 metadata_header.simulation.tube.radiation_direction.z
             )
+            tube_origin = (
+                metadata_header.simulation.tube.radiation_origin.x,
+                metadata_header.simulation.tube.radiation_origin.y,
+                metadata_header.simulation.tube.radiation_origin.z
+            )
             tube_direction = torch.tensor([abc[0], abc[1], abc[2]], dtype=torch.float32, device=xyz.device, requires_grad=False)
+            tube_origin = torch.tensor([tube_origin[0], tube_origin[1], tube_origin[2]], dtype=torch.float32, device=xyz.device, requires_grad=False)
+            field_dimensions = torch.tensor([self.field_dimensions[0], self.field_dimensions[1], self.field_dimensions[2]], dtype=torch.float32)
+            tube_origin = (tube_origin + (0.5 * field_dimensions)) / field_dimensions # Normalize to [0, 1], assuming the origin is at the center of the field
             tube_spectrum = metadata.simulation.tube.spectrum
             if tube_spectrum is not None:
                 tube_spectrum = torch.tensor(tube_spectrum[:, 1], dtype=torch.float32, device=xyz.device, requires_grad=False)
 
             field_shape = metadata.simulation.tube.field_shape
+            beam_shape_params = None
             if field_shape is not None:
                 if field_shape == FieldShape.CONE:
-                    field_shape = torch.tensor([metadata.simulation.tube.opening_angle_deg], dtype=torch.float32)
+                    beam_shape_params = torch.tensor([metadata.simulation.tube.opening_angle_deg], dtype=torch.float32)
                 elif field_shape == FieldShape.RECTANGLE:
                     rect: vec2 = metadata.simulation.tube.field_rect_dimensions_m
-                    field_shape = torch.tensor([rect.x, rect.y], dtype=torch.float32)
+                    beam_shape_params = torch.tensor([rect.x, rect.y], dtype=torch.float32)
                 elif field_shape == FieldShape.ELLIPSIS:
                     angles: vec2 = metadata.simulation.tube.field_ellipsis_opening_angles_deg
-                    field_shape = torch.tensor([angles.x, angles.y], dtype=torch.float32)
+                    beam_shape_params = torch.tensor([angles.x, angles.y], dtype=torch.float32)
                 else:
                     raise RuntimeError(f"Unsupported field shape: {field_shape}")
+                field_shape = torch.tensor([int(field_shape)], dtype=torch.float32)
 
             field_voxel_counts = torch.tensor([self.field_voxel_counts.x, self.field_voxel_counts.y, self.field_voxel_counts.z], dtype=torch.float32, device=xyz.device, requires_grad=False)
             xyz = xyz / (field_voxel_counts - 1.0) # Normalize xyz to [0, 1]
 
             input = PositionalInput(
                 position=xyz,
+                origin=tube_origin,
                 direction=tube_direction,
                 spectrum=tube_spectrum,
                 geometry=geometry,
-                beam_shape_parameters=field_shape
+                beam_shape_parameters=beam_shape_params,
+                beam_shape_type=field_shape
             )
             return TrainingInputData(
                 input=input,
@@ -353,27 +391,39 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                     metadata_header.simulation.tube.radiation_direction.y,
                     metadata_header.simulation.tube.radiation_direction.z
                 )
+                tube_origin = (
+                    metadata_header.simulation.tube.radiation_origin.x,
+                    metadata_header.simulation.tube.radiation_origin.y,
+                    metadata_header.simulation.tube.radiation_origin.z
+                )
                 tube_spectrum = torch.tensor(raw_metadata.simulation.tube.spectrum[:, 1], dtype=torch.float32, device=xyz.device, requires_grad=False)
+                tube_origin = torch.tensor([tube_origin[0], tube_origin[1], tube_origin[2]], dtype=torch.float32, device=xyz.device, requires_grad=False)
+                field_dimensions = torch.tensor([self.field_dimensions[0], self.field_dimensions[1], self.field_dimensions[2]], dtype=torch.float32)
+                tube_origin = (tube_origin + (0.5 * field_dimensions)) / field_dimensions # Normalize to [0, 1], assuming the origin is at the center of the field
                 field_shape = raw_metadata.simulation.tube.field_shape
+                beam_shape_params = None
                 if field_shape is not None:
                     if field_shape == FieldShape.CONE:
-                        field_shape = torch.tensor([raw_metadata.simulation.tube.opening_angle_deg], dtype=torch.float32)
+                        beam_shape_params = torch.tensor([raw_metadata.simulation.tube.opening_angle_deg], dtype=torch.float32)
                     elif field_shape == FieldShape.RECTANGLE:
                         rect: vec2 = raw_metadata.simulation.tube.field_rect_dimensions_m
-                        field_shape = torch.tensor([rect.x, rect.y], dtype=torch.float32)
+                        beam_shape_params = torch.tensor([rect.x, rect.y], dtype=torch.float32)
                     elif field_shape == FieldShape.ELLIPSIS:
                         angles: vec2 = raw_metadata.simulation.tube.field_ellipsis_opening_angles_deg
-                        field_shape = torch.tensor([angles.x, angles.y], dtype=torch.float32)
+                        beam_shape_params = torch.tensor([angles.x, angles.y], dtype=torch.float32)
                     else:
                         raise RuntimeError(f"Unsupported field shape: {field_shape}")
+                    field_shape = torch.tensor([int(field_shape)], dtype=torch.float32)
 
                 if metadata is None:
                     metadata: PositionalInput = PositionalInput(
                         position=xyz / (field_voxel_counts - 1.0),  # Normalize xyz to [0, 1]
                         direction=torch.empty((len(indices), 3), dtype=torch.float32, device=xyz.device, requires_grad=False),
+                        origin=torch.empty((len(indices), 3), dtype=torch.float32, device=xyz.device, requires_grad=False),
                         spectrum=torch.empty((len(indices), tube_spectrum.shape[-1]), dtype=torch.float32, device=xyz.device, requires_grad=False),
                         geometry=None,
-                        beam_shape_parameters=torch.empty((len(indices), 1), dtype=torch.float32, device=xyz.device, requires_grad=False) if raw_metadata.simulation.tube.field_shape is not None else None
+                        beam_shape_parameters=torch.empty((len(indices), 1), dtype=torch.float32, device=xyz.device, requires_grad=False) if raw_metadata.simulation.tube.field_shape is not None else None,
+                        beam_shape_type=torch.empty((len(indices), 1), dtype=torch.float32, device=xyz.device, requires_grad=False) if raw_metadata.simulation.tube.field_shape is not None else None
                     )
 
                 metadata.direction[vx_count:vx_count + len(voxel_request.voxel_indices), 0] = abc[0]
@@ -382,7 +432,9 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                 
                 metadata.spectrum[vx_count:vx_count + len(voxel_request.voxel_indices), :] = tube_spectrum
                 if field_shape is not None:
-                    metadata.beam_shape_parameters[vx_count:vx_count + len(voxel_request.voxel_indices), :] = field_shape
+                    metadata.beam_shape_parameters[vx_count:vx_count + len(voxel_request.voxel_indices), :] = beam_shape_params
+                    metadata.beam_shape_type[vx_count:vx_count + len(voxel_request.voxel_indices), :] = field_shape
+                metadata.origin[vx_count:vx_count + len(voxel_request.voxel_indices), :] = tube_origin
                 vx_count += len(voxel_request.voxel_indices)
 
             collection: VoxelCollection = accessor.access(requests)
@@ -392,8 +444,10 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                 input=PositionalInput(
                     position=metadata.position,
                     direction=metadata.direction,
+                    origin=metadata.origin,
                     spectrum=metadata.spectrum,
                     beam_shape_parameters=metadata.beam_shape_parameters,
+                    beam_shape_type=metadata.beam_shape_type,
                     geometry=torch.tensor(geom_collection.get_as_ndarray("geometry", "density"), device=xyz.device, requires_grad=False).unsqueeze(-1)
                 ) if geom_collection is not None else metadata,
                 ground_truth=RadiationField(
@@ -446,8 +500,10 @@ class RadField3DDatasetWithGeometry(RadField3DDataset):
             data = TrainingInputData(
                 input=DirectionalInput(
                     direction=data.input.direction,
+                    origin=data.input.origin,
                     spectrum=data.input.spectrum,
                     beam_shape_parameters=data.input.beam_shape_parameters,
+                    beam_shape_type=data.input.beam_shape_type,
                     geometry=geometry_tensor
                 ),
                 ground_truth=data.ground_truth
@@ -456,8 +512,10 @@ class RadField3DDatasetWithGeometry(RadField3DDataset):
             data = TrainingInputData(
                 input=DirectionalInput(
                     direction=data.input.direction,
+                    origin=data.input.origin,
                     spectrum=data.input.spectrum,
                     beam_shape_parameters=data.input.beam_shape_parameters,
+                    beam_shape_type=data.input.beam_shape_type,
                     geometry=None
                 ),
                 ground_truth=data.ground_truth
