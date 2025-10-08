@@ -43,7 +43,7 @@ namespace RadFiled3D {
 					: MemoryBlockDefinition(offset, size), dtype(dtype), elements_per_voxel(elements_per_voxel) {};
 
 				TypedMemoryBlockDefinition() : MemoryBlockDefinition() {
-					this->dtype = Typing::DType::Char;
+					this->dtype = Typing::DType::Byte;
 					this->elements_per_voxel = 0;
 				}
 

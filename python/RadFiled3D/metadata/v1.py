@@ -7,44 +7,44 @@ import numpy as np
 class Metadata(object):
     class Software(object):
         def _get_name(self) -> str:
-            return self.metadata.get_header().software.name
+            return self._metadata.get_header().software.name
         
         def _set_name(self, name: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.software.name = name + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_version(self) -> str:
-            return self.metadata.get_header().software.version
+            return self._metadata.get_header().software.version
         
         def _set_version(self, version: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.software.version = version + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_repository(self) -> str:
-            return self.metadata.get_header().software.repository
+            return self._metadata.get_header().software.repository
         
         def _set_repository(self, repository: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.software.repository = repository + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_commit(self) -> str:
-            return self.metadata.get_header().software.commit
+            return self._metadata.get_header().software.commit
         
         def _set_commit(self, commit: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.software.commit = commit + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_doi(self) -> str:
-            return self.metadata.get_header().software.doi
+            return self._metadata.get_header().software.doi
         
         def _set_doi(self, doi: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.software.doi = doi + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         name: str = property(_get_name, _set_name)
         version: str = property(_get_version, _set_version)
@@ -53,7 +53,7 @@ class Metadata(object):
         doi: str = property(_get_doi, _set_doi)
 
         def __init__(self, name: str, version: str, repository: str, commit: str, doi: str, metadata: RadiationFieldMetadataV1) -> None:
-            self.metadata = metadata
+            self._metadata = metadata
             if metadata is not None:
                 self.name = name
                 self.version = version
@@ -65,7 +65,7 @@ class Metadata(object):
     class XRayTube(object):
         def __init__(self, radiation_direction, radiation_origin, max_energy_eV, tube_id, metadata: RadiationFieldMetadataV1):
             super().__init__()
-            self.metadata = metadata
+            self._metadata = metadata
             self.dyn_metadata_keys = metadata.get_dynamic_metadata_keys() if metadata is not None else []
             self._field_shape = None
             if metadata is not None:
@@ -75,36 +75,36 @@ class Metadata(object):
                 self.tube_id = tube_id
 
         def _get_radiation_direction(self) -> vec3:
-            return self.metadata.get_header().simulation.tube.radiation_direction
+            return self._metadata.get_header().simulation.tube.radiation_direction
         
         def _set_radiation_direction(self, direction: vec3) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.tube.radiation_direction = direction
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_radiation_origin(self) -> vec3:
-            return self.metadata.get_header().simulation.tube.radiation_origin
+            return self._metadata.get_header().simulation.tube.radiation_origin
         
         def _set_radiation_origin(self, origin: vec3) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.tube.radiation_origin = origin
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_max_energy_eV(self) -> float:
-            return self.metadata.get_header().simulation.tube.max_energy_eV
+            return self._metadata.get_header().simulation.tube.max_energy_eV
         
         def _set_max_energy_eV(self, max_energy_eV: float) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.tube.max_energy_eV = max_energy_eV
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_tube_id(self) -> str:
-            return self.metadata.get_header().simulation.tube.tube_id
+            return self._metadata.get_header().simulation.tube.tube_id
         
         def _set_tube_id(self, tube_id: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.tube.tube_id = tube_id + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         radiation_direction: vec3 = property(_get_radiation_direction, _set_radiation_direction)
         radiation_origin: vec3 = property(_get_radiation_origin, _set_radiation_origin)
@@ -114,29 +114,29 @@ class Metadata(object):
         def _get_spectrum(self) -> np.ndarray:
             if "tube_spectrum" not in self.dyn_metadata_keys:
                 return None
-            tube_spectrum_data: HistogramVoxel = self.metadata.get_dynamic_metadata("tube_spectrum")
+            tube_spectrum_data: HistogramVoxel = self._metadata.get_dynamic_metadata("tube_spectrum")
             tube_spectrum = np.zeros((tube_spectrum_data.get_bins(), 2), dtype=np.float32)
             tube_spectrum[:, 0] = np.arange(0, tube_spectrum_data.get_bins() * tube_spectrum_data.get_histogram_bin_width(), tube_spectrum_data.get_histogram_bin_width(), dtype=np.float32)
             tube_spectrum[:, 1] = tube_spectrum_data.get_histogram()
             tube_spectrum[:, 1] = np.where(~np.isnan(tube_spectrum[:, 1]), tube_spectrum[:, 1], 0.0)
-            tube_spectrum[:, 1] = tube_spectrum[:, 1] / tube_spectrum[:, 1].sum()
+            sum = tube_spectrum[:, 1].sum()
+            if sum > 0.0 and not np.isclose(sum, 1.0):
+                tube_spectrum[:, 1] = tube_spectrum[:, 1] / sum
             return tube_spectrum
         
         def _set_spectrum(self, spectrum: np.ndarray) -> None:
-            assert isinstance(spectrum, np.ndarray)
-            assert spectrum.ndim == 2 and spectrum.shape[1] == 2
-            assert np.all(spectrum[:, 0] >= 0) and np.all(spectrum[:, 0] <= self.max_energy_eV)
-            assert np.all(spectrum[:, 1] >= 0)
-            assert np.isclose(spectrum[:, 1].sum(), 1.0), "Spectrum must be normalized to sum to 1"
+            assert isinstance(spectrum, np.ndarray), f"Expected numpy.ndarray, got {type(spectrum)}"
+            assert spectrum.ndim == 2 and spectrum.shape[1] == 2, f"Spectrum must be a 2D array with shape (N, 2), got {spectrum.shape}"
+            assert np.all(spectrum[:, 1] >= 0), "Spectrum values must be non-negative"
             bins = spectrum.shape[0]
             bin_width = spectrum[1, 0] - spectrum[0, 0] if bins > 1 else self.max_energy_eV
             if "tube_spectrum" not in self.dyn_metadata_keys:
                 self.dyn_metadata_keys.append("tube_spectrum")
-                vx = self.metadata.add_dynamic_histogram_metadata("tube_spectrum", bins, bin_width)
+                vx = self._metadata.add_dynamic_histogram_metadata("tube_spectrum", bins, bin_width)
             else:
-                vx = self.metadata.get_dynamic_metadata("tube_spectrum")
-                assert isinstance(vx, HistogramVoxel)
-                assert vx.get_bins() == bins
+                vx = self._metadata.get_dynamic_metadata("tube_spectrum")
+                assert isinstance(vx, HistogramVoxel), f"Expected HistogramVoxel, got {type(vx)}"
+                assert vx.get_bins() == bins, f"Bin count mismatch: {vx.get_bins()} != {bins}"
                 assert np.isclose(vx.get_histogram_bin_width(), bin_width), f"Bin width mismatch: {vx.get_histogram_bin_width()} != {bin_width}"
             vx.get_histogram()[:] = spectrum[:, 1]
 
@@ -145,18 +145,18 @@ class Metadata(object):
         def _get_field_shape(self) -> FieldShape:
             if not "xray_field_shape" in self.dyn_metadata_keys or self._field_shape is not None:
                 return self._field_shape
-            vx = self.metadata.get_dynamic_metadata("xray_field_shape")
+            vx = self._metadata.get_dynamic_metadata("xray_field_shape")
             self._field_shape = FieldShape(ord(vx.get_data()))
             return self._field_shape
         
         def _set_field_shape(self, shape: FieldShape) -> None:
-            assert isinstance(shape, FieldShape)
+            assert isinstance(shape, FieldShape), f"Expected FieldShape, got {type(shape)}"
             if "xray_field_shape" not in self.dyn_metadata_keys:
                 self.dyn_metadata_keys.append("xray_field_shape")
-                vx = self.metadata.add_dynamic_metadata("xray_field_shape", DType.BYTE)
+                vx = self._metadata.add_dynamic_metadata("xray_field_shape", DType.BYTE)
             else:
-                vx = self.metadata.get_dynamic_metadata("xray_field_shape")
-                assert isinstance(vx, Voxel)
+                vx = self._metadata.get_dynamic_metadata("xray_field_shape")
+                assert isinstance(vx, Voxel), f"Expected Voxel, got {type(vx)}"
             vx.set_data(chr(shape.value))
             self._field_shape = shape
 
@@ -165,19 +165,19 @@ class Metadata(object):
         def _get_opening_angle_deg(self) -> float:
             if self.field_shape != FieldShape.CONE or not "xray_tube_opening_angle_deg" in self.dyn_metadata_keys:
                 return None
-            vx = self.metadata.get_dynamic_metadata("xray_tube_opening_angle_deg")
+            vx = self._metadata.get_dynamic_metadata("xray_tube_opening_angle_deg")
             return vx.get_data()
         
         def _set_opening_angle_deg(self, angle: float) -> None:
-            assert isinstance(angle, (float, int))
-            assert angle > 0 and angle < 180
+            assert isinstance(angle, (float, int)), f"Expected float, got {type(angle)}"
+            assert angle > 0 and angle < 360, "Opening angle must be between 0 and 360 degrees"
             if self.field_shape != FieldShape.CONE:
                 raise ValueError("Field shape must be CONE to set opening angle")
             if "xray_tube_opening_angle_deg" not in self.dyn_metadata_keys:
                 self.dyn_metadata_keys.append("xray_tube_opening_angle_deg")
-                vx = self.metadata.add_dynamic_metadata("xray_tube_opening_angle_deg", DType.FLOAT32)
+                vx = self._metadata.add_dynamic_metadata("xray_tube_opening_angle_deg", DType.FLOAT32)
             else:
-                vx = self.metadata.get_dynamic_metadata("xray_tube_opening_angle_deg")
+                vx = self._metadata.get_dynamic_metadata("xray_tube_opening_angle_deg")
             vx.set_data(np.float32(angle))
 
         opening_angle_deg: float = property(_get_opening_angle_deg, _set_opening_angle_deg)
@@ -185,19 +185,19 @@ class Metadata(object):
         def _get_field_rect_dimensions_m(self) -> vec2:
             if self.field_shape == FieldShape.RECTANGLE or not "xray_tube_field_rect_dimensions_m" in self.dyn_metadata_keys:
                 return None
-            vx = self.metadata.get_dynamic_metadata("xray_tube_field_rect_dimensions_m")
+            vx = self._metadata.get_dynamic_metadata("xray_tube_field_rect_dimensions_m")
             return vx.get_data()
 
         def _set_field_rect_dimensions_m(self, dimensions: vec2) -> None:
-            assert isinstance(dimensions, vec2)
-            assert dimensions.x > 0 and dimensions.y > 0
+            assert isinstance(dimensions, vec2), f"Expected vec2, got {type(dimensions)}"
+            assert dimensions.x > 0 and dimensions.y > 0, "Field rectangle dimensions must be positive"
             if self.field_shape != FieldShape.RECTANGLE:
                 raise ValueError("Field shape must be RECTANGLE to set field rectangle dimensions")
             if "xray_tube_field_rect_dimensions_m" not in self.dyn_metadata_keys:
                 self.dyn_metadata_keys.append("xray_tube_field_rect_dimensions_m")
-                vx = self.metadata.add_dynamic_metadata("xray_tube_field_rect_dimensions_m", DType.VEC2)
+                vx = self._metadata.add_dynamic_metadata("xray_tube_field_rect_dimensions_m", DType.VEC2)
             else:
-                vx = self.metadata.get_dynamic_metadata("xray_tube_field_rect_dimensions_m")
+                vx = self._metadata.get_dynamic_metadata("xray_tube_field_rect_dimensions_m")
             vx.set_data(dimensions)
         
         field_rect_dimensions_m: vec2 = property(_get_field_rect_dimensions_m, _set_field_rect_dimensions_m)
@@ -205,20 +205,20 @@ class Metadata(object):
         def _get_field_ellipsis_opening_angles_deg(self) -> vec2:
             if self.field_shape != FieldShape.ELLIPSIS or not "xray_tube_field_ellipsis_opening_angles_deg" in self.dyn_metadata_keys:
                 return None
-            vx = self.metadata.get_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg")
+            vx = self._metadata.get_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg")
             return vx.get_data()
 
         def _set_field_ellipsis_opening_angles_deg(self, angles: vec2) -> None:
-            assert isinstance(angles, vec2)
-            assert angles.x > 0 and angles.x < 180
-            assert angles.y > 0 and angles.y < 180
+            assert isinstance(angles, vec2), f"Expected vec2, got {type(angles)}"
+            assert angles.x > 0 and angles.x < 360, "Field ellipse opening angle x must be between 0 and 360 degrees"
+            assert angles.y > 0 and angles.y < 360, "Field ellipse opening angle y must be between 0 and 360 degrees"
             if self.field_shape != FieldShape.ELLIPSIS:
                 raise ValueError("Field shape must be ELLIPSIS to set field ellipse opening angles")
             if "xray_tube_field_ellipsis_opening_angles_deg" not in self.dyn_metadata_keys:
                 self.dyn_metadata_keys.append("xray_tube_field_ellipsis_opening_angles_deg")
-                vx = self.metadata.add_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg", DType.VEC2)
+                vx = self._metadata.add_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg", DType.VEC2)
             else:
-                vx = self.metadata.get_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg")
+                vx = self._metadata.get_dynamic_metadata("xray_tube_field_ellipsis_opening_angles_deg")
             vx.set_data(angles)
         
         field_ellipsis_opening_angles_deg: vec2 = property(_get_field_ellipsis_opening_angles_deg, _set_field_ellipsis_opening_angles_deg)
@@ -226,28 +226,28 @@ class Metadata(object):
 
     class Simulation(object):
         def _get_primary_particle_count(self) -> int:
-            return self.metadata.get_header().simulation.primary_particle_count
+            return self._metadata.get_header().simulation.primary_particle_count
         
         def _set_primary_particle_count(self, count: int) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.primary_particle_count = count
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_geometry(self) -> str:
-            return self.metadata.get_header().simulation.geometry
+            return self._metadata.get_header().simulation.geometry
         
         def _set_geometry(self, geometry: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.geometry = geometry + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         def _get_physics_list(self) -> str:
-            return self.metadata.get_header().simulation.physics_list
+            return self._metadata.get_header().simulation.physics_list
         
         def _set_physics_list(self, physics_list: str) -> None:
-            header = self.metadata.get_header()
+            header = self._metadata.get_header()
             header.simulation.physics_list = physics_list + chr(0) # Ensure null-terminated string
-            self.metadata.set_header(header)
+            self._metadata.set_header(header)
 
         primary_particle_count: int = property(_get_primary_particle_count, _set_primary_particle_count)
         geometry: str = property(_get_geometry, _set_geometry)
@@ -255,7 +255,7 @@ class Metadata(object):
         tube: "Metadata.XRayTube"
 
         def __init__(self, geometry: str, primary_particle_count: int, physics_list: str, tube: "Metadata.XRayTube", metadata: RadiationFieldMetadataV1) -> None:
-            self.metadata = metadata
+            self._metadata = metadata
             if metadata is not None:
                 self.geometry = geometry
                 self.primary_particle_count = primary_particle_count
@@ -356,7 +356,7 @@ class Metadata(object):
 
         :param metadata: The RadiationFieldMetadataV1 object to set the Metadata object from.
         """
-        assert isinstance(metadata, RadiationFieldMetadataV1)
+        assert isinstance(metadata, RadiationFieldMetadataV1), f"Expected RadiationFieldMetadataV1, got {type(metadata)}"
         raw_header = metadata.get_header()
         self.simulation = Metadata.Simulation(
             geometry=raw_header.simulation.geometry,

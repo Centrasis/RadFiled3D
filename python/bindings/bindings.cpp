@@ -21,6 +21,7 @@
 #include <string>
 #include <tuple>
 #include <iostream>
+#include <cstdint>
 #include <RadFiled3D/dataset/helpers.hpp>
 
 
@@ -86,6 +87,8 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
         return VOXEL_CAPSULE(vx, ScalarVoxel<int>);
     case Typing::DType::Char:
         return VOXEL_CAPSULE(vx, ScalarVoxel<char>);
+    case Typing::DType::Byte:
+        return VOXEL_CAPSULE(vx, ScalarVoxel<uint8_t>);
     case Typing::DType::Vec2:
         return VOXEL_CAPSULE(vx, ScalarVoxel<glm::vec2>);
     case Typing::DType::Vec3:
@@ -887,6 +890,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
             case Typing::DType::Char:
 				self.add_dynamic_metadata<char>(key, 0);
                 break;
+            case Typing::DType::Byte:
+                self.add_dynamic_metadata<uint8_t>(key, 0);
+                break;
             case Typing::DType::Double:
 				self.add_dynamic_metadata<double>(key, 0.0);
 				break;
@@ -920,8 +926,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
 	DECLARE_SCALAR_VOXEL(m, uint32_t, "UInt32Voxel", IVoxel);
 	DECLARE_OWNING_SCALAR_VOXEL(m, uint32_t, "OwningUInt32Voxel", ScalarVoxel<uint32_t>);
 
-	DECLARE_SCALAR_VOXEL(m, char, "ByteVoxel", IVoxel);
-	DECLARE_OWNING_SCALAR_VOXEL(m, char, "OwningByteVoxel", ScalarVoxel<char>);
+    DECLARE_SCALAR_VOXEL(m, char, "SCharVoxel", IVoxel);
+    DECLARE_OWNING_SCALAR_VOXEL(m, char, "OwningSCharVoxel", ScalarVoxel<char>);
+
+    DECLARE_SCALAR_VOXEL(m, uint8_t, "ByteVoxel", IVoxel);
+    DECLARE_OWNING_SCALAR_VOXEL(m, uint8_t, "OwningByteVoxel", ScalarVoxel<uint8_t>);
 
 	DECLARE_SCALAR_VOXEL(m, int, "Int32Voxel", IVoxel);
 	DECLARE_OWNING_SCALAR_VOXEL(m, int, "OwningInt32Voxel", ScalarVoxel<int>);
@@ -1103,13 +1112,14 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("FLOAT32", Typing::DType::Float)
         .value("FLOAT64", Typing::DType::Double)
         .value("INT32", Typing::DType::Int)
-        .value("BYTE", Typing::DType::Char)
+        .value("SCHAR", Typing::DType::Char)
         .value("VEC2", Typing::DType::Vec2)
         .value("VEC3", Typing::DType::Vec3)
         .value("VEC4", Typing::DType::Vec4)
         .value("HISTOGRAM", Typing::DType::Hist)
         .value("UINT64", Typing::DType::UInt64)
-        .value("UINT32", Typing::DType::UInt32);
+        .value("UINT32", Typing::DType::UInt32)
+        .value("BYTE", Typing::DType::Byte);
 
     py::enum_<FieldJoinMode>(m, "FieldJoinMode")
         .value("IDENTITY", FieldJoinMode::Identity)
@@ -1157,6 +1167,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 case Typing::DType::Char:
                     self.add_layer<char>(name, 0, unit);
                     break;
+                case Typing::DType::Byte:
+                    self.add_layer<uint8_t>(name, 0, unit);
+                    break;
                 case Typing::DType::Vec3:
                     self.add_layer<glm::vec3>(name, glm::vec3(0.f), unit);
                     break;
@@ -1196,6 +1209,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<int>>(layer_name, idx));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<char>>(layer_name, idx));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint8_t>>(layer_name, idx));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec2>>(layer_name, idx));
                     case Typing::DType::Vec3:
@@ -1223,6 +1238,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<int>>(layer_name, x, y, z));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<char>>(layer_name, x, y, z));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint8_t>>(layer_name, x, y, z));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<glm::vec2>>(layer_name, x, y, z));
                     case Typing::DType::Vec3:
@@ -1250,6 +1267,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<int>>(layer_name, x, y, z));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<char>>(layer_name, x, y, z));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint8_t>>(layer_name, x, y, z));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<glm::vec2>>(layer_name, x, y, z));
                     case Typing::DType::Vec3:
@@ -1280,6 +1299,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 							return create_py_array_as<int>(self->get_layer<int>(layer), self->get_voxel_counts(), self);
                         case Typing::DType::Char:
 							return create_py_array_as<char>(self->get_layer<char>(layer), self->get_voxel_counts(), self);
+                        case Typing::DType::Byte:
+                            return create_py_array_as<uint8_t>(self->get_layer<uint8_t>(layer), self->get_voxel_counts(), self);
                         case Typing::DType::UInt64:
 							return create_py_array_as<uint64_t>(self->get_layer<uint64_t>(layer), self->get_voxel_counts(), self);
                         case Typing::DType::UInt32:
@@ -1308,6 +1329,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<int>>(idx));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<char>>(idx));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint8_t>>(idx));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec2>>(idx));
                     case Typing::DType::Vec3:
@@ -1347,6 +1370,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<int>>(x, y, z));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<char>>(x, y, z));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint8_t>>(x, y, z));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<glm::vec2>>(x, y, z));
                     case Typing::DType::Vec3:
@@ -1374,6 +1399,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<int>>(x, y, z));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<char>>(x, y, z));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint8_t>>(x, y, z));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<glm::vec2>>(x, y, z));
                     case Typing::DType::Vec3:
@@ -1409,7 +1436,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
 						    return create_py_array_as<int>((int*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
 					    case Typing::DType::Char:
 						    return create_py_array_as<char>((char*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
-					    case Typing::DType::UInt64:
+                        case Typing::DType::Byte:
+                            return create_py_array_as<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+                        case Typing::DType::UInt64:
 						    return create_py_array_as<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
 					    case Typing::DType::UInt32:
 						    return create_py_array_as<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
@@ -1443,6 +1472,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<int>>(x, y));
 			    case Typing::DType::Char:
 				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<char>>(x, y));
+                case Typing::DType::Byte:
+                    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<uint8_t>>(x, y));
 			    case Typing::DType::Vec2:
 				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<glm::vec2>>(x, y));
 			    case Typing::DType::Vec3:
@@ -1470,6 +1501,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<int>>(phi, theta));
 			    case Typing::DType::Char:
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<char>>(phi, theta));
+                case Typing::DType::Byte:
+                    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<uint8_t>>(phi, theta));
 			    case Typing::DType::Vec2:
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<glm::vec2>>(phi, theta));
 			    case Typing::DType::Vec3:
@@ -1505,6 +1538,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return create_py_array_as<int>((int*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
                     case Typing::DType::Char:
                         return create_py_array_as<char>((char*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                    case Typing::DType::Byte:
+                        return create_py_array_as<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
                     case Typing::DType::UInt64:
                         return create_py_array_as<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
                     case Typing::DType::UInt32:
@@ -1536,6 +1571,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<int>>(layer, idx));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<char>>(layer, idx));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<uint8_t>>(layer, idx));
                     case Typing::DType::Vec2:
                         return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<glm::vec2>>(layer, idx));
                     case Typing::DType::Vec3:
@@ -1563,6 +1600,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 						return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<int>>(layer, phi, theta));
                     case Typing::DType::Char:
                         return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<char>>(layer, phi, theta));
+                    case Typing::DType::Byte:
+                        return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<uint8_t>>(layer, phi, theta));
                     case Typing::DType::Vec2:
 						return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<glm::vec2>>(layer, phi, theta));
                     case Typing::DType::Vec3:
@@ -1590,6 +1629,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<int>>(layer, x, y));
                 case Typing::DType::Char:
                     return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<char>>(layer, x, y));
+                case Typing::DType::Byte:
+                    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<uint8_t>>(layer, x, y));
                 case Typing::DType::Vec2:
                     return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<glm::vec2>>(layer, x, y));
                 case Typing::DType::Vec3:
@@ -1619,6 +1660,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 						return create_py_array_as<int>(self->get_layer<int>(layer), self->get_segments_count(), self);
                     case Typing::DType::Char:
 						return create_py_array_as<char>(self->get_layer<char>(layer), self->get_segments_count(), self);
+                    case Typing::DType::Byte:
+                        return create_py_array_as<uint8_t>(self->get_layer<uint8_t>(layer), self->get_segments_count(), self);
                     case Typing::DType::UInt64:
 						return create_py_array_as<uint64_t>(self->get_layer<uint64_t>(layer), self->get_segments_count(), self);
                     case Typing::DType::UInt32:
@@ -2043,6 +2086,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return create_py_array_generic<int>((int*)data_buffer, voxel_count);
                     case Typing::DType::Char:
                         return create_py_array_generic<char>(data_buffer, voxel_count);
+                    case Typing::DType::Byte:
+                        return create_py_array_generic<uint8_t>((uint8_t*)data_buffer, voxel_count);
                     case Typing::DType::UInt64:
                         return create_py_array_generic<uint64_t>((uint64_t*)data_buffer, voxel_count);
                     case Typing::DType::UInt32:

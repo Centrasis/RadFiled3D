@@ -24,7 +24,8 @@ namespace RadFiled3D {
 			Vec4,
 			Hist,
 			UInt64,
-			UInt32
+			UInt32,
+			Byte
 		};
 
 		class Helper {

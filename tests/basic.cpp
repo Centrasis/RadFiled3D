@@ -323,6 +323,7 @@ namespace {
 				"commit"
 			)
 		);
+		metadata->add_dynamic_metadata<uint8_t>("test_byte", static_cast<uint8_t>(5));
 
 		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test02.rf3", StoreVersion::V1));
 
@@ -342,6 +343,10 @@ namespace {
 		EXPECT_EQ(strcmp(metadata2.simulation.tube.tube_id, "XRayTube"), 0);
 		EXPECT_EQ(strcmp(metadata2.simulation.geometry, "geom"), 0);
 		EXPECT_EQ(strcmp(metadata2.simulation.physics_list, "FTFP_BERT"), 0);
+
+		auto metadata_full = FieldStore::load_metadata("test02.rf3");
+		uint8_t test_byte = std::static_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(metadata_full)->get_dynamic_metadata<ScalarVoxel<uint8_t>>("test_byte").get_data();
+		EXPECT_EQ(test_byte, 5);
 		
 		auto channels = field2->get_channels();
 		EXPECT_EQ(channels.size(), 1);

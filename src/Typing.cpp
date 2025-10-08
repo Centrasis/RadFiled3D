@@ -4,6 +4,7 @@
 #include <glm/vec4.hpp>
 #include <stdexcept>
 #include <algorithm>
+#include <cstdint>
 
 using namespace RadFiled3D;
 
@@ -21,6 +22,12 @@ Typing::DType Typing::Helper::get_dtype(const std::string& dtype)
 	}
 	if (dtype == Typing::Helper::get_plain_type_name<char>()) {
 		return Typing::DType::Char;
+	}
+	if (dtype == Typing::Helper::get_plain_type_name<uint8_t>()) {
+		return Typing::DType::Byte;
+	}
+	if (dtype == Typing::Helper::get_plain_type_name<unsigned char>()) {
+		return Typing::DType::Byte;
 	}
 	if (dtype == Typing::Helper::get_plain_type_name<uint64_t>()) {
 		return Typing::DType::UInt64;
@@ -100,6 +107,8 @@ size_t RadFiled3D::Typing::Helper::get_bytes_of_dtype(Typing::DType dtype)
 		return sizeof(glm::vec2);
 	case Typing::DType::Vec4:
 		return sizeof(glm::vec4);
+	case Typing::DType::Byte:
+		return sizeof(uint8_t);
 	case Typing::DType::Hist:
 		return sizeof(float);
 	default:

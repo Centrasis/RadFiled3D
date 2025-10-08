@@ -200,6 +200,9 @@ VoxelBuffer& VoxelBuffer::operator+=(const VoxelBuffer& other)
 		case Typing::DType::Char:
 			add_layers_together<char>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
+		case Typing::DType::Byte:
+			add_layers_together<uint8_t>(this_layer_data, other_layer_data, this->voxel_count);
+			break;
 		case Typing::DType::Vec2:
 			add_layers_together<glm::vec2>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
@@ -272,6 +275,9 @@ VoxelBuffer& VoxelBuffer::operator*=(const VoxelBuffer& other) {
 			break;
 		case Typing::DType::Char:
 			multiply_layers_together<char>(this_layer_data, other_layer_data, this->voxel_count);
+			break;
+		case Typing::DType::Byte:
+			multiply_layers_together<uint8_t>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
 		case Typing::DType::Vec2:
 			multiply_layers_together<glm::vec2>(this_layer_data, other_layer_data, this->voxel_count);
@@ -346,6 +352,9 @@ VoxelBuffer& VoxelBuffer::operator-=(const VoxelBuffer& other) {
 		case Typing::DType::Char:
 			subtract_layers_together<char>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
+		case Typing::DType::Byte:
+			subtract_layers_together<uint8_t>(this_layer_data, other_layer_data, this->voxel_count);
+			break;
 		case Typing::DType::Vec2:
 			subtract_layers_together<glm::vec2>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
@@ -419,6 +428,9 @@ VoxelBuffer& VoxelBuffer::operator/=(const VoxelBuffer& other) {
 		case Typing::DType::Char:
 			divide_layers_together<char>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
+		case Typing::DType::Byte:
+			divide_layers_together<uint8_t>(this_layer_data, other_layer_data, this->voxel_count);
+			break;
 		case Typing::DType::Vec2:
 			divide_layers_together<glm::vec2>(this_layer_data, other_layer_data, this->voxel_count);
 			break;
@@ -484,6 +496,13 @@ VoxelBuffer& VoxelBuffer::operator+=(const float& scalar) {
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				char* this_data = (char*)this_layer_data;
+				this_data[i] += scalar;
+			}
+			break;
+		case Typing::DType::Byte:
+			for (size_t i = 0; i < this->voxel_count; i++)
+			{
+				uint8_t* this_data = (uint8_t*)this_layer_data;
 				this_data[i] += scalar;
 			}
 			break;
@@ -570,6 +589,13 @@ VoxelBuffer& VoxelBuffer::operator-=(const float& scalar) {
 				this_data[i] -= scalar;
 			}
 			break;
+		case Typing::DType::Byte:
+			for (size_t i = 0; i < this->voxel_count; i++)
+			{
+				uint8_t* this_data = (uint8_t*)this_layer_data;
+				this_data[i] -= scalar;
+			}
+			break;
 		case Typing::DType::Vec2:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
@@ -653,6 +679,13 @@ VoxelBuffer& VoxelBuffer::operator*=(const float& scalar) {
 				this_data[i] *= scalar;
 			}
 			break;
+		case Typing::DType::Byte:
+			for (size_t i = 0; i < this->voxel_count; i++)
+			{
+				uint8_t* this_data = (uint8_t*)this_layer_data;
+				this_data[i] *= scalar;
+			}
+			break;
 		case Typing::DType::Vec2:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
@@ -733,6 +766,13 @@ VoxelBuffer& VoxelBuffer::operator/=(const float& scalar) {
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				char* this_data = (char*)this_layer_data;
+				this_data[i] /= scalar;
+			}
+			break;
+		case Typing::DType::Byte:
+			for (size_t i = 0; i < this->voxel_count; i++)
+			{
+				uint8_t* this_data = (uint8_t*)this_layer_data;
 				this_data[i] /= scalar;
 			}
 			break;

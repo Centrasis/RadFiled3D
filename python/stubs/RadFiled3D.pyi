@@ -13,13 +13,14 @@ class DType(Enum):
     FLOAT32 = 0
     FLOAT64 = 1
     INT32 = 2
-    BYTE = 3
+    SCHAR = 3
     VEC2 = 4
     VEC3 = 5
     VEC4 = 6
     HISTOGRAM = 7
     UINT64 = 8
     UINT32 = 9
+    BYTE = 10
 
 
 class FieldType(Enum):

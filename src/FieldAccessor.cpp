@@ -275,6 +275,9 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 	case Typing::DType::Char:
 		voxel = new OwningScalarVoxel<char>((char*)data_buffer);
 		break;
+	case Typing::DType::Byte:
+		voxel = new OwningScalarVoxel<uint8_t>((uint8_t*)data_buffer);
+		break;
 	case Typing::DType::Vec2:
 		voxel = new OwningScalarVoxel<glm::vec2>((glm::vec2*)data_buffer);
 		break;

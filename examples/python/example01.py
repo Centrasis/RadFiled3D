@@ -1,5 +1,7 @@
-from RadFiled3D.RadFiled3D import CartesianRadiationField, FieldStore, vec3, DType, StoreVersion
+from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, StoreVersion
 from RadFiled3D.metadata.v1 import Metadata
+from RadFiled3D.utils import FieldStore
+import numpy as np
 
 ## See the C++ example for more details on the API usage
 ## Also the C++ docstrings are more detailed
@@ -58,26 +60,27 @@ if __name__ == "__main__":
     print(f"Unset data: {voxel.get_data()}")
 
     # Create the metadata object for this field
-    metadata = Metadata(
-        Metadata.Header.Simulation(
-            100,                            # Primary particles
-            "SomeGeometry",                 # Geometry
-            "PhysList",                     # Used physics list
-            Metadata.Header.XRayTube(       # X-Ray tube metadata
-                vec3(0.0, 0.0, 0.0),
-                vec3(0.0, 0.0, 0.0),
-                0.0,
-                "SomeTubeID"
-            )
-        ),
-        Metadata.Header.Software(           # Software metadata
-            "SomeSoftware",
-            "SomeVersion",
-            "SomeRepository",
-            "SomeCommitID",
-            "SomeDOI"                       # Optional DOI
-        )
-    )
+    metadata = Metadata.default()
+    # Fill the metadata with some example data
+    metadata.simulation.primary_particle_count = 100
+    metadata.simulation.geometry = "SomeGeometry"
+    metadata.simulation.physics_list = "PhysList"
+
+    # remember to always set the max_energy_eV before adding a spectrum
+    # set it to 10 keV max energy (important when setting the spectrum as it will be enforced to be below this value)
+    metadata.simulation.tube.max_energy_eV = 10 * 1e3
+    metadata.simulation.tube.radiation_origin = vec3(0.0, 0.0, 0.0)
+    metadata.simulation.tube.radiation_direction = vec3(0.0, -1.0, 0.0)
+    
+    spectrum = np.empty((10, 2))
+    spectrum[:, 0] = np.arange(10) * 1e3  # Energy in eV
+    spectrum[:, 1] = np.random.rand(10)    # Relative intensity
+    spectrum /= spectrum[:, 1].sum()  # Normalize the spectrum, else we will get an error on the next line
+    metadata.simulation.tube.spectrum = spectrum
+
+    print(f"Default SW-name: {metadata.software.name}")
+    metadata.software.version = "v0.1.0"
+    metadata.software.repository = "https://github.com/Centrasis/RadFiled3D"
 
     # Store the field and metadata to a file using the file version 1
     FieldStore.store(crf, metadata, "example01.rf3", StoreVersion.V1)

@@ -268,6 +268,10 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 					throw RadiationFieldStoreException("Unsupported data type 'char' for merging of layer: '" + layer_name + "' in channel: " + channel.first);
 					//target_channel->merge_data_buffer<char>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<char>(join_mode, ratio));
 					break;
+				case Typing::DType::Byte:
+					throw RadiationFieldStoreException("Unsupported data type 'byte' for merging of layer: '" + layer_name + "' in channel: " + channel.first);
+					//target_channel->merge_data_buffer<uint8_t>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<uint8_t>(join_mode, ratio));
+					break;
 				case Typing::DType::Int:
 					target_channel->merge_data_buffer<int>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<int>(join_mode, ratio));
 					break;

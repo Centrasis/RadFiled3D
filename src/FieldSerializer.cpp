@@ -120,6 +120,9 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 	case Typing::DType::Char:
 		layer = VoxelLayer::ConstructFromBufferRaw<char>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 		break;
+	case Typing::DType::Byte:
+		layer = VoxelLayer::ConstructFromBufferRaw<uint8_t>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
+		break;
 	case Typing::DType::Vec2:
 		layer = VoxelLayer::ConstructFromBufferRaw<glm::vec2>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 		break;
@@ -181,6 +184,9 @@ std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeCha
 				break;
 			case Typing::DType::Char:
 				destination->add_layer<char>(std::string(layer_desc.name), 0, layer_desc.unit);
+				break;
+			case Typing::DType::Byte:
+				destination->add_layer<uint8_t>(std::string(layer_desc.name), 0, layer_desc.unit);
 				break;
 			case Typing::DType::Vec3:
 				destination->add_layer<glm::vec3>(std::string(layer_desc.name), glm::vec3(0.f), layer_desc.unit);
