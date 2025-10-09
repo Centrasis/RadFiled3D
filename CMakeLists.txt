@@ -51,7 +51,7 @@ if(RS_Build_PyBindings)
     FetchContent_Declare(
       fetch_pybind
       GIT_REPOSITORY https://github.com/pybind/pybind11.git
-      GIT_TAG        v2.13.6 # v2.11.1
+      GIT_TAG        v3.0.1 # v2.13.6
     )
     FetchContent_GetProperties(fetch_pybind)
     if(NOT fetch_pybind_POPULATED)
