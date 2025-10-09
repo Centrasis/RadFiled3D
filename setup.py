@@ -14,6 +14,7 @@ setup(
     name="RadFiled3D",
     version="1.0.0",
     dependencies=[
+        "numpy>=2.0",
         "rich>=13.9"
     ],
     author="Felix Lehner",
