@@ -70,7 +70,8 @@ def test_copy_and_referencing():
     field.add_channel("channel1")
     field.get_channel("channel1").add_layer("layer1", "unit1", DType.FLOAT32)
 
-    array = field.get_channel("channel1").get_layer_as_ndarray("layer1", copy=True)
+    ch = field.get_channel("channel1")
+    array = ch.get_layer_as_ndarray("layer1", copy=True)
     array[:] = 1.23
     array_old = field.get_channel("channel1").get_layer_as_ndarray("layer1", copy=False)
     assert array_old.min() == 0.0

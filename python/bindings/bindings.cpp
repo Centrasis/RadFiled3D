@@ -1437,7 +1437,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				catch (const std::exception& e) {
 					throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
 				}
-            }, py::arg("layer"), py::arg("copy") = false);
+            }, py::arg("layer"), py::arg("copy") = false)
+            .def("__repr__", [](const VoxelGridBuffer& self) {
+                auto voxel_dim = self.get_voxel_dimensions();
+                auto voxel_count = self.get_voxel_counts();
+                size_t mem_refs = PyMemoryManager::get_memory_references_count(&self);
+                return "<RadFiled3D.VoxelGridBuffer (" + std::to_string(voxel_dim.x) + " m, " + std::to_string(voxel_dim.y) + " m, " + std::to_string(voxel_dim.z) + " m) x (" + std::to_string(voxel_count.x) + ", " + std::to_string(voxel_count.y) + ", " + std::to_string(voxel_count.z) + ") numpy_refs: " + std::to_string(mem_refs) + ">";
+            });
 
             py::class_<VoxelLayer, std::shared_ptr<VoxelLayer>>(m, "VoxelLayer")
                 .def("get_voxel_flat", [](VoxelLayer& self, size_t idx) {
