@@ -88,6 +88,18 @@ set_target_properties(libRadFiled3D
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin"
 )
 
+if(RS_Build_PyBindings)
+  pybind11_add_module(RadFiled3D python/bindings/bindings.cpp)
+  set_property(TARGET RadFiled3D PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
+  add_dependencies(RadFiled3D libRadFiled3D)             
+  if (MSVC)
+    target_link_libraries(RadFiled3D PRIVATE libRadFiled3D)
+  else()
+    target_link_libraries(RadFiled3D PRIVATE libRadFiled3D stdc++fs)
+  endif()
+  set_target_properties(RadFiled3D PROPERTIES FOLDER "Library")
+endif()
+
 if(BUILD_TESTS MATCHES ON)
   if(NOT DEFINED fetch_googletest_POPULATED)
     FetchContent_Declare(
@@ -165,15 +177,3 @@ if(BUILD_EXAMPLES MATCHES ON)
 endif()
 
 set_target_properties(libRadFiled3D PROPERTIES FOLDER "Library")
-
-if(RS_Build_PyBindings)
-  pybind11_add_module(RadFiled3D python/bindings/bindings.cpp)
-  set_property(TARGET RadFiled3D PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
-  add_dependencies(RadFiled3D libRadFiled3D)             
-  if (MSVC)
-    target_link_libraries(RadFiled3D PRIVATE libRadFiled3D)
-  else()
-    target_link_libraries(RadFiled3D PRIVATE libRadFiled3D stdc++fs)
-  endif()
-  set_target_properties(RadFiled3D PROPERTIES FOLDER "Library")
-endif()

@@ -436,7 +436,7 @@ class VoxelBuffer(object):
         """
         ...
 
-    def get_layer_as_ndarray(self, layer_name: str) -> np.ndarray:
+    def get_layer_as_ndarray(self, layer_name: str, copy: bool = False) -> np.ndarray:
         """
         Returns the layer as a numpy ndarray.
         The ndarray will have the shape depending on the concrete BufferType.
@@ -447,6 +447,7 @@ class VoxelBuffer(object):
         The ndarray will have the dtype depending on the concrete VoxelScalar-Type.
 
         :param layer_name: The name of the layer.
+        :param copy: If True, a copy of the data will be returned. If False, a view of the data will be returned.
         :return: The layer as a numpy ndarray.
         """
         ...
@@ -514,7 +515,14 @@ class VoxelGrid(object):
 
     def get_layer(self) -> VoxelLayer: ...
 
-    def get_as_ndarray(self) -> np.ndarray: ...
+    def get_as_ndarray(self, copy: bool = False) -> np.ndarray:
+        """
+        Get the voxel grid as a numpy ndarray.
+        The ndarray will have the shape (x, y, z) depending on the voxel counts.
+        :param copy: If True, a copy of the data will be returned. If False, a view of the data will be returned.
+        :return: The voxel grid as a numpy ndarray.
+        """
+        ...
 
 
 class PolarSegments(object):
@@ -539,7 +547,14 @@ class PolarSegments(object):
 
     def get_layer(self) -> VoxelLayer: ...
 
-    def get_as_ndarray(self) -> np.ndarray: ...
+    def get_as_ndarray(self, copy: bool = False) -> np.ndarray:
+        """
+        Get the polar segments as a numpy ndarray.
+        The ndarray will have the shape (x, y) depending on the segment counts.
+        :param copy: If True, a copy of the data will be returned. If False, a view of the data will be returned.
+        :return: The polar segments as a numpy ndarray.
+        """
+        ...
 
 
 class VoxelGridBuffer(VoxelBuffer):
@@ -1356,7 +1371,7 @@ class VoxelCollectionRequest(object):
 
 
 class VoxelCollection(object):
-    def get_as_ndarray(self, channel: str, layer: str) -> np.ndarray:
+    def get_as_ndarray(self, channel: str, layer: str, copy: bool = False) -> np.ndarray:
         """
         Get the collected voxels as a numpy ndarray.
 

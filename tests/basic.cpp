@@ -178,10 +178,36 @@ namespace {
 	}
 
 	TEST(Voxels, VoxelModificationHistograms) {
+		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
+			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+				100,
+				"geom",
+				"FTFP_BERT",
+				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+					glm::vec3(1.f, 0.f, 0.f),
+					glm::vec3(0.f, 0.f, 0.f),
+					100.f,
+					"XRayTube"
+				)
+			),
+			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+				"test",
+				"1.0",
+				"repo",
+				"commit"
+			)
+		);
+
+		metadata->add_dynamic_metadata<float>("test_float", 1.234f);
+		metadata->add_dynamic_metadata<int>("test_int", 1234);
+		metadata->set_dynamic_custom_metadata<HistogramVoxel>("test_hist", HistogramVoxel(10, 1.f, nullptr));
+		metadata->get_dynamic_metadata<HistogramVoxel>("test_hist").get_histogram()[0] = 1.f;
+
 		std::shared_ptr<CartesianRadiationField> field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));
 
 		const float magic_number = 0.134f;
+		const float magic_diagonal_number = std::sqrt(3.f) * magic_number;
 
 		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), magic_number, "");
 		HistogramVoxel& hist1 = channel->get_voxel<HistogramVoxel>("spectra", 0, 5, 0);
@@ -192,16 +218,54 @@ namespace {
 			EXPECT_EQ(hist1.get_histogram()[i], static_cast<float>(i));
 
 		for (size_t x = 0; x < 10; x++)
+		{
+			HistogramVoxel& hist = channel->get_voxel<HistogramVoxel>("spectra", x, x, x);
+			for (size_t i = 0; i < 26; i++)
+				hist.get_histogram()[i] = magic_diagonal_number;
+		}
+
+		for (size_t x = 0; x < 10; x++)
 			for (size_t y = 0; y < 10; y++)
 				for (size_t z = 0; z < 10; z++) {
 					HistogramVoxel& hist = channel->get_voxel<HistogramVoxel>("spectra", x, y, z);
-					if (y == 5 && x == 0 && z == 0) {
+					if (x == y && x == z) {
 						for (size_t i = 0; i < 26; i++)
-							EXPECT_EQ(hist.get_histogram()[i], static_cast<float>(i));
+							EXPECT_EQ(hist.get_histogram()[i], magic_diagonal_number);
 					}
 					else {
+						if (y == 5 && x == 0 && z == 0) {
+							for (size_t i = 0; i < 26; i++)
+								EXPECT_EQ(hist.get_histogram()[i], static_cast<float>(i));
+						}
+						else {
+							for (size_t i = 0; i < 26; i++)
+								EXPECT_EQ(hist.get_histogram()[i], magic_number);
+						}
+					}
+				}
+
+		FieldStore::store(field, metadata, "test_hist.rf3", StoreVersion::V1);
+		std::shared_ptr<CartesianRadiationField> loaded_field = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test_hist.rf3"));
+		std::shared_ptr<VoxelGridBuffer> loaded_channel = std::static_pointer_cast<VoxelGridBuffer>(loaded_field->get_channel("test_channel"));
+		HistogramVoxel& loaded_hist1 = loaded_channel->get_voxel<HistogramVoxel>("spectra", 0, 5, 0);
+
+		for (size_t x = 0; x < 10; x++)
+			for (size_t y = 0; y < 10; y++)
+				for (size_t z = 0; z < 10; z++) {
+					HistogramVoxel& hist = loaded_channel->get_voxel<HistogramVoxel>("spectra", x, y, z);
+					if (x == y && x == z) {
 						for (size_t i = 0; i < 26; i++)
-							EXPECT_EQ(hist.get_histogram()[i], magic_number);
+							EXPECT_EQ(hist.get_histogram()[i], magic_diagonal_number);
+					}
+					else {
+						if (y == 5 && x == 0 && z == 0) {
+							for (size_t i = 0; i < 26; i++)
+								EXPECT_EQ(hist.get_histogram()[i], static_cast<float>(i));
+						}
+						else {
+							for (size_t i = 0; i < 26; i++)
+								EXPECT_EQ(hist.get_histogram()[i], magic_number);
+						}
 					}
 				}
 	}

@@ -7,14 +7,29 @@ from torch import Tensor
 class CartesianFieldDataset(RadiationFieldDataset):
     def __init__(self, file_paths: list[str] = None, zip_file: str = None, metadata_load_mode: MetadataLoadMode = MetadataLoadMode.HEADER):
         super().__init__(file_paths=file_paths, zip_file=zip_file, metadata_load_mode=metadata_load_mode)
-        field = self._get_field(0)
-        assert isinstance(field, CartesianRadiationField), "Dataset must contain CartesianRadiationFields."
+        self._field_voxel_counts = None
+        self._voxels_per_field = None
 
     def _get_field(self, idx: int) -> CartesianRadiationField:
         return super()._get_field(idx)
     
     def _get_field_accessor(self) -> CartesianFieldAccessor:
         return super()._get_field_accessor()
+    
+    @property
+    def field_voxel_counts(self) -> uvec3:
+        if self._field_voxel_counts is None:
+            field = self._get_field(0)
+            assert isinstance(field, CartesianRadiationField), "Dataset must contain CartesianRadiationFields."
+            self._field_voxel_counts = field.get_voxel_counts()
+        return self._field_voxel_counts
+    
+    @property
+    def voxels_per_field(self) -> int:
+        if self._voxels_per_field is None:
+            vx_counts = self.field_voxel_counts
+            self._voxels_per_field = int(vx_counts.x * vx_counts.y * vx_counts.z)
+        return self._voxels_per_field
     
     field_accessor: CartesianFieldAccessor = property(_get_field_accessor)
 
@@ -122,9 +137,8 @@ class CartesianFieldLayeredDataset(CartesianFieldDataset):
 class CartesianSingleVoxelDataset(CartesianFieldSingleLayerDataset):
     def __init__(self, file_paths: list[str] = None, zip_file: str = None, metadata_load_mode: MetadataLoadMode = MetadataLoadMode.HEADER):
         super().__init__(file_paths=file_paths, zip_file=zip_file, metadata_load_mode=metadata_load_mode)
-        field = self._get_field(0)
-        self.field_voxel_counts = field.get_voxel_counts()
-        self.voxels_per_field = self.field_voxel_counts.x * self.field_voxel_counts.y * self.field_voxel_counts.z
+        self._field_voxel_counts = None
+        self._voxels_per_field = None
         self.zip_ref = None # remove zip reference to avoid pickling issues
         self._field_accessor = None # remove field accessor to avoid pickling issues
 

@@ -23,6 +23,11 @@
 #include <iostream>
 #include <cstdint>
 #include <RadFiled3D/dataset/helpers.hpp>
+#include <pybind11/detail/common.h>
+#include <mutex>
+#ifdef WIN32
+typedef Py_ssize_t ssize_t;
+#endif
 
 
 namespace py = pybind11;
@@ -160,134 +165,251 @@ public:
     }
 };
 
-template<typename T>
-py::array create_py_array_generic(const T* data, const glm::uvec3& shape, size_t element_size, std::shared_ptr<void> ptr) {
-    auto memory_safe_struct = shared_ptrs.find((void*)data);
-    if (memory_safe_struct != shared_ptrs.end()) {
-        memory_safe_struct->second.first++;
-    }
-    else {
-        shared_ptrs[(void*)data] = std::make_pair(1, ptr);
-    }
+class PyMemoryManager {
+public:
+    struct SharedPtrMemories {
+    protected:
+        std::shared_ptr<void> parent;
+		std::map<void*, size_t> ref_counts;
+        
 
-    const size_t components = static_cast<size_t>(element_size / sizeof(T));
-    return static_cast<py::array>(py::array_t<T>(
-        { static_cast<size_t>(shape.x), static_cast<size_t>(shape.y), static_cast<size_t>(shape.z), components },  // shape
-		//{ static_cast<size_t>(element_size * shape.y * shape.x), static_cast<size_t>(shape.x * element_size), static_cast<size_t>(element_size), sizeof(T) },  // strides (C instead fortran order)
-		{ sizeof(T), static_cast<size_t>(element_size), static_cast<size_t>(shape.x * element_size), static_cast<size_t>(element_size * shape.y * shape.x) },  // strides
-        data,
-        py::capsule(data, [](void* data) {
-            auto memory_safe_struct = shared_ptrs.find((void*)data);
-            if (memory_safe_struct != shared_ptrs.end()) {
-                memory_safe_struct->second.first--;
-                if (memory_safe_struct->second.first == 0) {
-                    shared_ptrs.erase(memory_safe_struct);
+    public:
+        SharedPtrMemories(std::shared_ptr<void> parent) {
+            this->parent = parent;
+        }
+
+        std::shared_ptr<void> get_parent() const {
+            return this->parent;
+        }
+
+        void register_memory_view(void* buffer) {
+            auto mem_block = this->ref_counts.find(buffer);
+            if (mem_block == this->ref_counts.end()) {
+                mem_block = this->ref_counts.find(buffer);
+                if (mem_block == this->ref_counts.end()) {
+                    this->ref_counts.insert({ buffer, 0 });
+                    mem_block = this->ref_counts.find(buffer);
                 }
             }
-        })
-    ));
-}
+            mem_block->second++;
+        }
+
+        void unregister_memory_view(void* buffer) {
+            auto mem_block = this->ref_counts.find(buffer);
+            if (mem_block == this->ref_counts.end())
+                return;
+
+            if (mem_block->second > 0 && (--mem_block->second) == 0) {
+                this->ref_counts.erase(mem_block);
+            }
+        }
+
+        bool is_empty() const {
+            return this->ref_counts.size() == 0;
+        }
+
+        size_t get_memory_references() const {
+            return this->ref_counts.size();
+        }
+    };
+
+protected:
+	static std::map<void*, SharedPtrMemories> memories;
+    static std::map<void*, SharedPtrMemories*> buffer_link;
+    static std::mutex mutex;
+
+public:
+    static void register_memory_view(std::shared_ptr<void> parent, void* buffer) {
+        std::lock_guard<std::mutex> lk(PyMemoryManager::mutex);
+
+        auto mem_info = PyMemoryManager::memories.find(parent.get());
+        if (mem_info == PyMemoryManager::memories.end()) {
+            memories.insert({ parent.get(), parent });
+            mem_info = PyMemoryManager::memories.find(parent.get());
+        }
+
+        mem_info->second.register_memory_view(buffer);
+        auto link = buffer_link.find(buffer);
+        if (link == buffer_link.end()) {
+            buffer_link.insert({ buffer, &mem_info->second });
+        }
+    }
+
+    static void unregister_memory_view(void* buffer) {
+        std::lock_guard<std::mutex> lk(PyMemoryManager::mutex);
+
+        auto link = buffer_link.find(buffer);
+        if (link == buffer_link.end())
+            return;
+
+        link->second->unregister_memory_view(buffer);
+        if (link->second->is_empty()) {
+            auto mem_info = PyMemoryManager::memories.find(link->second->get_parent().get());
+            buffer_link.erase(link);
+            PyMemoryManager::memories.erase(mem_info);
+        }
+    }
+
+    static size_t get_memory_references_count(const void* ptr) {
+        std::lock_guard<std::mutex> lk(PyMemoryManager::mutex);
+
+        auto mem_info = PyMemoryManager::memories.find(const_cast<void*>(ptr));
+        if (mem_info == PyMemoryManager::memories.end())
+            return 0;
+
+        return mem_info->second.get_memory_references();
+    }
+};
+std::mutex PyMemoryManager::mutex;
+std::map<void*, PyMemoryManager::SharedPtrMemories*> PyMemoryManager::buffer_link;
+std::map<void*, PyMemoryManager::SharedPtrMemories> PyMemoryManager::memories;
+
 
 template<typename T>
-py::array create_py_array_generic(const T* data, size_t len, size_t element_size = sizeof(T)) {
+py::array create_py_array_generic(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
     const size_t components = static_cast<size_t>(element_size / sizeof(T));
-    return (components > 1) ? static_cast<py::array>(py::array_t<T>(
-		{ len, components },  // shape
-		//{ element_size, sizeof(T) },  // strides (C instead fortran order)
-		{ sizeof(T), element_size },  // strides
-		data
-	)) : static_cast<py::array>(py::array_t<T>(
-		{ len },  // shape
-		{ sizeof(T) },  // strides
-		data,
-        py::capsule(data, [](void* data) {
-			delete[] static_cast<T*>(data);
-        })
-	));
-}
+    std::array<size_t, 4> target_shape = {
+        static_cast<size_t>(shape.x),
+        static_cast<size_t>(shape.y),
+        static_cast<size_t>(shape.z),
+        static_cast<size_t>(components)
+    };
+    // strides to match VoxelGrid implementation of linear mapping
+    const std::array<size_t, 4> strides = {
+        static_cast<size_t>(components * sizeof(T)),
+        static_cast<size_t>(shape.x * components * sizeof(T)),
+        static_cast<size_t>(shape.x * shape.y * components * sizeof(T)),
+        static_cast<size_t>(sizeof(T))
+    };
 
-template<typename T>
-py::array create_py_array_generic(const T* data, const glm::uvec2& shape, size_t element_size, std::shared_ptr<void> ptr) {
-    auto memory_safe_struct = shared_ptrs.find((void*)data);
-	if (memory_safe_struct != shared_ptrs.end()) {
-		memory_safe_struct->second.first++;
-	}
-	else {
-		shared_ptrs[(void*)data] = std::make_pair(1, ptr);
-	}
-
-    const size_t components = static_cast<size_t>(element_size / sizeof(T));
-    return static_cast<py::array>(py::array_t<T>(
-        { static_cast<size_t>(shape.x), static_cast<size_t>(shape.y), components },  // shape
-        //{ static_cast<size_t>(element_size * shape.y), static_cast<size_t>(element_size), sizeof(T) },  // strides (C instead fortran order)
-		{ sizeof(T), static_cast<size_t>(element_size), static_cast<size_t>(shape.x * element_size) },  // strides
-        data,
-        py::capsule(data, [](void* data) {
-            auto memory_safe_struct = shared_ptrs.find((void*)data);
-			if (memory_safe_struct != shared_ptrs.end()) {
-				memory_safe_struct->second.first--;
-				if (memory_safe_struct->second.first == 0) {
-					shared_ptrs.erase(memory_safe_struct);
-				}
-			}
-        })
-    ));
-}
-
-template<typename T>
-py::array create_py_array_as(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr) {
-    auto memory_safe_struct = shared_ptrs.find((void*)data);
-    if (memory_safe_struct != shared_ptrs.end()) {
-        memory_safe_struct->second.first++;
+    py::capsule capsule;
+    void* array_buffer = nullptr;
+    if (copy_data) {
+        array_buffer = new T[shape.x * shape.y * shape.z * components];
+        std::memcpy(array_buffer, data, shape.x * shape.y * shape.z * element_size);
+        capsule = py::capsule(array_buffer, [](void* py_data) {
+            delete[] static_cast<T*>(py_data);
+        });
     }
     else {
-        shared_ptrs[(void*)data] = std::make_pair(1, ptr);
+        PyMemoryManager::register_memory_view(ptr, (void*)data);
+        capsule = py::capsule(data, [](void* py_data) {
+            PyMemoryManager::unregister_memory_view(py_data);
+        });
+        array_buffer = (void*)data;
     }
 
-    return static_cast<py::array>(py::array_t<T>(
-        { shape.x, shape.y, shape.z },  // shape
-        //{ sizeof(T) * shape.y * shape.z, shape.z * sizeof(T), sizeof(T) },  // strides (C instead fortran order)
-		{ sizeof(T), sizeof(T) * shape.x, sizeof(T) * shape.y * shape.x },  // strides
-        data,
-        py::capsule(data, [](void* data) {
-            auto memory_safe_struct = shared_ptrs.find((void*)data);
-            if (memory_safe_struct != shared_ptrs.end()) {
-                memory_safe_struct->second.first--;
-                if (memory_safe_struct->second.first == 0) {
-                    shared_ptrs.erase(memory_safe_struct);
-                }
-            }
-        })
-    ));
+    py::buffer_info info = py::buffer_info(
+        array_buffer,
+        sizeof(T),
+        py::format_descriptor<T>::format(),
+        static_cast<size_t>(4),  // ndim
+        target_shape,
+        strides
+    );
+    
+    return py::array(info, capsule);
 }
 
 template<typename T>
-py::array create_py_array_as(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr) {
-    auto memory_safe_struct = shared_ptrs.find((void*)data);
-    if (memory_safe_struct != shared_ptrs.end()) {
-        memory_safe_struct->second.first++;
-    }
-    else {
-        shared_ptrs[(void*)data] = std::make_pair(1, ptr);
-    }
-
-	return static_cast<py::array>(py::array_t<T>(
-		{ static_cast<size_t>(shape.x), static_cast<size_t>(shape.y) },  // shape
-		//{ static_cast<size_t>(sizeof(T) * shape.y), sizeof(T) },  // strides (C instead fortran order)
-		{ sizeof(T), sizeof(T) * shape.x },  // strides
-		data,
-        py::capsule(data, [](void* data) {
-            auto memory_safe_struct = shared_ptrs.find((void*)data);
-            if (memory_safe_struct != shared_ptrs.end()) {
-                memory_safe_struct->second.first--;
-                if (memory_safe_struct->second.first == 0) {
-                    shared_ptrs.erase(memory_safe_struct);
-                }
-            }
-        })
-	));
+py::array create_py_array(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr, bool copy_data) {
+    return create_py_array_generic<T>(data, shape, ptr, copy_data, sizeof(T));
 }
 
+template<typename T>
+py::array create_py_array_generic(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
+    size_t components = element_size / sizeof(T);
+    std::array<size_t, 2> target_shape = {
+        len,
+        components
+    };
+    const std::array<size_t, 2> strides = {
+        sizeof(T) * components,
+        sizeof(T)
+    };
+
+    py::capsule capsule;
+    void* array_buffer = nullptr;
+    if (copy_data) {
+        array_buffer = new T[len];
+        std::memcpy(array_buffer, data, len * sizeof(T));
+        capsule = py::capsule(array_buffer, [](void* py_data) {
+            delete[] static_cast<T*>(py_data);
+        });
+    }
+    else {
+        PyMemoryManager::register_memory_view(ptr, (void*)data);
+        capsule = py::capsule(data, [](void* py_data) {
+            PyMemoryManager::unregister_memory_view(py_data);
+        });
+        array_buffer = (void*)data;
+    }
+
+    py::buffer_info info = py::buffer_info(
+        array_buffer,
+        sizeof(T),
+        py::format_descriptor<T>::format(),
+        2,  // ndim
+        target_shape,
+        strides
+    );
+
+    return py::array(info, capsule);
+}
+
+template<typename T>
+py::array create_py_array(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data) {
+    return create_py_array_generic<T>(data, len, ptr, copy_data, sizeof(T));
+}
+
+template<typename T>
+py::array create_py_array_generic(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
+    const size_t components = static_cast<size_t>(element_size / sizeof(T));
+    std::array<size_t, 3> target_shape = {
+        static_cast<size_t>(shape.x),
+        static_cast<size_t>(shape.y),
+        static_cast<size_t>(components)
+    };
+    // strides to match PolarSegments implementation of linear mapping
+    const std::array<size_t, 3> strides = {
+        static_cast<size_t>(components * sizeof(T)),
+        static_cast<size_t>(shape.x * components * sizeof(T)),
+        static_cast<size_t>(sizeof(T))
+    };
+
+    py::capsule capsule;
+    void* array_buffer = nullptr;
+    if (copy_data) {
+        array_buffer = new T[shape.x * shape.y * components];
+        std::memcpy(array_buffer, data, shape.x * shape.y * element_size);
+        capsule = py::capsule(array_buffer, [](void* py_data) {
+            delete[] static_cast<T*>(py_data);
+        });
+    }
+    else {
+        PyMemoryManager::register_memory_view(ptr, (void*)data);
+        capsule = py::capsule(data, [](void* py_data) {
+            PyMemoryManager::unregister_memory_view(py_data);
+        });
+        array_buffer = (void*)data;
+    }
+
+    py::buffer_info info = py::buffer_info(
+        array_buffer,
+        sizeof(T),
+        py::format_descriptor<T>::format(),
+        static_cast<size_t>(3),  // ndim
+        target_shape,
+        strides
+    );
+
+    return py::array(info, capsule);
+}
+
+template<typename T>
+py::array create_py_array(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data) {
+    return create_py_array_generic<T>(data, shape, ptr, copy_data, sizeof(T));
+}
 
 PYBIND11_MODULE(RadFiled3D, m) {
     m.doc() = R"pbdoc(
@@ -1285,37 +1407,37 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
-            .def("get_layer_as_ndarray", [](std::shared_ptr<VoxelGridBuffer>& self, const std::string& layer) {
+            .def("get_layer_as_ndarray", [](std::shared_ptr<VoxelGridBuffer>& self, const std::string& layer, bool copy) {
                 try {
                     const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
                     const Typing::DType type = Typing::Helper::get_dtype(layer_info.get_type());
 
                     switch (type) {
                         case Typing::DType::Float:
-							return create_py_array_as<float>(self->get_layer<float>(layer), self->get_voxel_counts(), self);
+							return create_py_array<float>(self->get_layer<float>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::Double:
-							return create_py_array_as<double>(self->get_layer<double>(layer), self->get_voxel_counts(), self);
+							return create_py_array<double>(self->get_layer<double>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::Int:
-							return create_py_array_as<int>(self->get_layer<int>(layer), self->get_voxel_counts(), self);
+							return create_py_array<int>(self->get_layer<int>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::Char:
-							return create_py_array_as<char>(self->get_layer<char>(layer), self->get_voxel_counts(), self);
+							return create_py_array<char>(self->get_layer<char>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::Byte:
-                            return create_py_array_as<uint8_t>(self->get_layer<uint8_t>(layer), self->get_voxel_counts(), self);
+                            return create_py_array<uint8_t>(self->get_layer<uint8_t>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::UInt64:
-							return create_py_array_as<uint64_t>(self->get_layer<uint64_t>(layer), self->get_voxel_counts(), self);
+							return create_py_array<uint64_t>(self->get_layer<uint64_t>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::UInt32:
-                            return create_py_array_as<unsigned long>(self->get_layer<unsigned long>(layer), self->get_voxel_counts(), self);
+                            return create_py_array<unsigned long>(self->get_layer<unsigned long>(layer), self->get_voxel_counts(), self, copy);
                     }
 
                     const size_t element_size = layer_info.get_bytes();
                     const float* data = self->get_layer<float>(layer);
 
-                    return create_py_array_generic<float>(data, self->get_voxel_counts(), element_size, self);
+                    return create_py_array_generic<float>(data, self->get_voxel_counts(), self, copy, element_size);
                 }
 				catch (const std::exception& e) {
 					throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
 				}
-            });
+            }, py::arg("layer"), py::arg("copy") = false);
 
             py::class_<VoxelLayer, std::shared_ptr<VoxelLayer>>(m, "VoxelLayer")
                 .def("get_voxel_flat", [](VoxelLayer& self, size_t idx) {
@@ -1346,7 +1468,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::return_value_policy::reference)
+                }, py::arg("idx"), py::return_value_policy::reference)
                 .def("get_unit", &VoxelLayer::get_unit)
                 .def("get_statistical_error", &VoxelLayer::get_statistical_error)
                 .def("get_voxel_count", &VoxelLayer::get_voxel_count);
@@ -1422,37 +1544,43 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 .def("__exit__", [](std::shared_ptr<VoxelGrid>& r, py::object exc_type, py::object exc_value, py::object traceback) {
                     r.reset();
 			    })
-                .def("get_as_ndarray", [](std::shared_ptr<VoxelGrid>& self) {
+                .def("__repr__", [](const VoxelGrid& self) {
+                    auto voxel_dim = self.get_voxel_dimensions();
+                    auto voxel_count = self.get_voxel_counts();
+                    size_t mem_refs = PyMemoryManager::get_memory_references_count(&self);
+                    return "<RadFiled3D.VoxelGrid (" + std::to_string(voxel_dim.x) + " m, " + std::to_string(voxel_dim.y) + " m, " + std::to_string(voxel_dim.z) + " m) x (" + std::to_string(voxel_count.x) + ", " + std::to_string(voxel_count.y) + ", " + std::to_string(voxel_count.z) + ") numpy_refs: " + std::to_string(mem_refs) + ">";
+                })
+                .def("get_as_ndarray", [](std::shared_ptr<VoxelGrid>& self, bool copy) {
 				    try {
 					    const auto& layer_info = self->get_layer()->get_voxel_flat<IVoxel>(0);
 					    const Typing::DType type = Typing::Helper::get_dtype(layer_info.get_type());
 
 					    switch (type) {
 					    case Typing::DType::Float:
-						    return create_py_array_as<float>((float*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+						    return create_py_array<float>((float*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case Typing::DType::Double:
-						    return create_py_array_as<double>((double*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+						    return create_py_array<double>((double*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case Typing::DType::Int:
-						    return create_py_array_as<int>((int*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+						    return create_py_array<int>((int*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case Typing::DType::Char:
-						    return create_py_array_as<char>((char*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+						    return create_py_array<char>((char*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
                         case Typing::DType::Byte:
-                            return create_py_array_as<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+                            return create_py_array<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
                         case Typing::DType::UInt64:
-						    return create_py_array_as<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+						    return create_py_array<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case Typing::DType::UInt32:
-						    return create_py_array_as<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self);
+						    return create_py_array<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    }
 
 					    const size_t element_size = layer_info.get_bytes();
 					    const float* data = (float*)self->get_layer()->get_raw_data();
 
-					    return create_py_array_generic<float>(data, self->get_voxel_counts(), element_size, self);
+					    return create_py_array_generic<float>(data, self->get_voxel_counts(), self, copy, element_size);
 				    }
 				    catch (const std::exception& e) {
 					    throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
 				    }
-                });
+                }, py::arg("copy") = false);
 
         py::class_<PolarSegments, std::shared_ptr<PolarSegments>>(m, "PolarSegments")
 			.def(py::init([](const glm::uvec2& segments_counts, std::shared_ptr<VoxelLayer> layer) {
@@ -1524,37 +1652,37 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			.def("__exit__", [](std::shared_ptr<PolarSegments>& r, py::object exc_type, py::object exc_value, py::object traceback) {
 			    r.reset();
 		    })
-            .def("get_as_ndarray", [](std::shared_ptr<PolarSegments>& self) {
+            .def("get_as_ndarray", [](std::shared_ptr<PolarSegments>& self, bool copy) {
                 try {
                     const auto& layer_info = self->get_layer()->get_voxel_flat<IVoxel>(0);
                     const Typing::DType type = Typing::Helper::get_dtype(layer_info.get_type());
 
                     switch (type) {
                     case Typing::DType::Float:
-                        return create_py_array_as<float>((float*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<float>((float*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case Typing::DType::Double:
-                        return create_py_array_as<double>((double*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<double>((double*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case Typing::DType::Int:
-                        return create_py_array_as<int>((int*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<int>((int*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case Typing::DType::Char:
-                        return create_py_array_as<char>((char*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<char>((char*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case Typing::DType::Byte:
-                        return create_py_array_as<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case Typing::DType::UInt64:
-                        return create_py_array_as<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case Typing::DType::UInt32:
-                        return create_py_array_as<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_segments_count(), self);
+                        return create_py_array<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     }
 
                     const size_t element_size = layer_info.get_bytes();
                     const float* data = (float*)self->get_layer()->get_raw_data();
 
-                    return create_py_array_generic<float>(data, self->get_segments_count(), element_size, self);
+                    return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
                 }
                 catch (const std::exception& e) {
                     throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
                 }
-			});
+			}, py::arg("copy") = false);
 
         py::class_<PolarSegmentsBuffer, std::shared_ptr<PolarSegmentsBuffer>, VoxelBuffer>(m, "PolarSegmentsBuffer")
             .def("get_segments_count", &PolarSegmentsBuffer::get_segments_count)
@@ -1647,32 +1775,32 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
-            .def("get_layer_as_ndarray", [](std::shared_ptr<PolarSegmentsBuffer>& self, const std::string& layer) {
+            .def("get_layer_as_ndarray", [](std::shared_ptr<PolarSegmentsBuffer>& self, const std::string& layer, bool copy) {
                 const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
                 const Typing::DType type = Typing::Helper::get_dtype(layer_info.get_type());
             
                 switch (type) {
                     case Typing::DType::Float:
-						return create_py_array_as<float>(self->get_layer<float>(layer), self->get_segments_count(), self);
+						return create_py_array<float>(self->get_layer<float>(layer), self->get_segments_count(), self, copy);
                     case Typing::DType::Double:
-						return create_py_array_as<double>(self->get_layer<double>(layer), self->get_segments_count(), self);
+						return create_py_array<double>(self->get_layer<double>(layer), self->get_segments_count(), self, copy);
                     case Typing::DType::Int:
-						return create_py_array_as<int>(self->get_layer<int>(layer), self->get_segments_count(), self);
+						return create_py_array<int>(self->get_layer<int>(layer), self->get_segments_count(), self, copy);
                     case Typing::DType::Char:
-						return create_py_array_as<char>(self->get_layer<char>(layer), self->get_segments_count(), self);
+						return create_py_array<char>(self->get_layer<char>(layer), self->get_segments_count(), self, copy);
                     case Typing::DType::Byte:
-                        return create_py_array_as<uint8_t>(self->get_layer<uint8_t>(layer), self->get_segments_count(), self);
+                        return create_py_array<uint8_t>(self->get_layer<uint8_t>(layer), self->get_segments_count(), self, copy);
                     case Typing::DType::UInt64:
-						return create_py_array_as<uint64_t>(self->get_layer<uint64_t>(layer), self->get_segments_count(), self);
+						return create_py_array<uint64_t>(self->get_layer<uint64_t>(layer), self->get_segments_count(), self, copy);
                     case Typing::DType::UInt32:
-                        return create_py_array_as<unsigned long>(self->get_layer<unsigned long>(layer), self->get_segments_count(), self);
+                        return create_py_array<unsigned long>(self->get_layer<unsigned long>(layer), self->get_segments_count(), self, copy);
                 }
 
 				if (type == Typing::DType::Hist) {
 					const size_t element_size = layer_info.get_bytes();
 					const float* data = self->get_layer<float>(layer);
 
-					return create_py_array_generic<float>(data, self->get_segments_count(), element_size, self);
+					return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
                 }
                 else {
 					throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
@@ -1681,8 +1809,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 const size_t element_size = layer_info.get_bytes();
                 const float* data = self->get_layer<float>(layer);
 
-				return create_py_array_generic<float>(data, self->get_segments_count(), element_size, self);
-            });
+				return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
+            }, py::arg("layer"), py::arg("copy") = false);
 
         py::class_<IRadiationField, std::shared_ptr<IRadiationField>>(m, "RadiationField")
             .def("get_typename", &IRadiationField::get_typename)
@@ -1738,7 +1866,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     auto field_dim   = a.get_field_dimensions();
                     auto voxel_dim   = a.get_voxel_dimensions();
                     auto voxel_count = a.get_voxel_counts();
-                    return "<RadFiled3D.CartesianRadiationField (" + std::to_string(field_dim.x) + " m, " + std::to_string(field_dim.y) + " m, " + std::to_string(field_dim.z) + " m) @ Voxels(" + std::to_string(voxel_dim.x) + " m, " + std::to_string(voxel_dim.y) + " m, " + std::to_string(voxel_dim.z) + " m) x (" + std::to_string(voxel_count.x) + ", " + std::to_string(voxel_count.y) + ", " + std::to_string(voxel_count.z) + ")>";
+                    size_t mem_refs = PyMemoryManager::get_memory_references_count(&a);
+                    return "<RadFiled3D.CartesianRadiationField (" + std::to_string(field_dim.x) + " m, " + std::to_string(field_dim.y) + " m, " + std::to_string(field_dim.z) + " m) @ Voxels(" + std::to_string(voxel_dim.x) + " m, " + std::to_string(voxel_dim.y) + " m, " + std::to_string(voxel_dim.z) + " m) x (" + std::to_string(voxel_count.x) + ", " + std::to_string(voxel_count.y) + ", " + std::to_string(voxel_count.z) + ") numpy_refs: " + std::to_string(mem_refs) + ">";
                 }
              );
 
@@ -1773,7 +1902,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def("__repr__",
                 [](const PolarRadiationField& a) {
                     auto segments = a.get_segments_count();
-                    return "<RadFiled3D.PolarRadiationField (" + std::to_string(segments.x) + " x " + std::to_string(segments.y) + ")>";
+                    size_t mem_refs = PyMemoryManager::get_memory_references_count(&a);
+                    return "<RadFiled3D.PolarRadiationField (" + std::to_string(segments.x) + " x " + std::to_string(segments.y) + ")  numpy_refs: " + std::to_string(mem_refs) + ">";
                 }
             );
 
@@ -2062,10 +2192,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
         py::class_<VoxelCollectionRequest>(m, "VoxelCollectionRequest")
             .def(py::init<const std::string&, const std::vector<size_t>&>(), py::arg("file_path"), py::arg("voxel_indices"))
             .def_readonly("file_path", &VoxelCollectionRequest::filePath)
-            .def_readonly("voxel_indices", &VoxelCollectionRequest::voxelIndices);
+            .def_readonly("voxel_indices", &VoxelCollectionRequest::voxelIndices)
+            .def("__repr__", [](const VoxelCollectionRequest& a) {
+                return std::string("<RadFiled3D.VoxelCollectionRequest (requested voxels per layer: ") + std::to_string(a.voxelIndices.size()) + std::string(")>");
+            });
 
         py::class_<VoxelCollection, std::shared_ptr<VoxelCollection>>(m, "VoxelCollection")
-            .def("get_as_ndarray", [](std::shared_ptr<VoxelCollection>& self, const std::string& channel, const std::string& layer) {
+            .def("get_as_ndarray", [](std::shared_ptr<VoxelCollection>& self, const std::string& channel, const std::string& layer, bool copy) {
 			    auto channel_it = self->channels.find(channel);
                 if (channel_it == self->channels.end())
 					throw std::runtime_error("Channel '" + channel + "' not found in VoxelCollection");
@@ -2079,24 +2212,33 @@ PYBIND11_MODULE(RadFiled3D, m) {
 
                 switch (type) {
                     case Typing::DType::Float:
-                        return create_py_array_generic<float>((float*)data_buffer, voxel_count);
+                        return create_py_array<float>((float*)data_buffer, voxel_count, self, copy);
                     case Typing::DType::Double:
-                        return create_py_array_generic<double>((double*)data_buffer, voxel_count);
+                        return create_py_array<double>((double*)data_buffer, voxel_count, self, copy);
                     case Typing::DType::Int:
-                        return create_py_array_generic<int>((int*)data_buffer, voxel_count);
+                        return create_py_array<int>((int*)data_buffer, voxel_count, self, copy);
                     case Typing::DType::Char:
-                        return create_py_array_generic<char>(data_buffer, voxel_count);
+                        return create_py_array<char>(data_buffer, voxel_count, self, copy);
                     case Typing::DType::Byte:
-                        return create_py_array_generic<uint8_t>((uint8_t*)data_buffer, voxel_count);
+                        return create_py_array<uint8_t>((uint8_t*)data_buffer, voxel_count, self, copy);
                     case Typing::DType::UInt64:
-                        return create_py_array_generic<uint64_t>((uint64_t*)data_buffer, voxel_count);
+                        return create_py_array<uint64_t>((uint64_t*)data_buffer, voxel_count, self, copy);
                     case Typing::DType::UInt32:
-                        return create_py_array_generic<unsigned long>((unsigned long*)data_buffer, voxel_count);
+                        return create_py_array<unsigned long>((unsigned long*)data_buffer, voxel_count, self, copy);
                 }
 
                 const size_t element_size = layer_it->second.voxels[0]->get_bytes();
-                return create_py_array_generic<float>((float*)data_buffer, voxel_count, element_size);
-            }, py::arg("channel"), py::arg("layer"), py::return_value_policy::take_ownership);
+                return create_py_array_generic<float>((float*)data_buffer, voxel_count, self, copy, element_size);
+            }, py::arg("channel"), py::arg("layer"), py::arg("copy") = false)
+            .def("__repr__", [](const VoxelCollection& a) {
+                size_t vx_count = 0;
+                for (auto itr = a.channels.begin(); itr != a.channels.end(); ++itr) {
+                    for (auto litr = itr->second.layers.begin(); litr != itr->second.layers.end(); ++litr) {
+                        vx_count += litr->second.voxels.size();
+                    }
+                }
+                return std::string("<RadFiled3D.VoxelCollection (voxels: ") + std::to_string(vx_count) + std::string(")>");
+            });
 
         py::class_<VoxelCollectionAccessor>(m, "VoxelCollectionAccessor")
             .def(py::init<std::shared_ptr<Storage::FieldAccessor>, const std::vector<std::string>&, const std::vector<std::string>&>(), py::arg("accessor"), py::arg("channels"), py::arg("layers"))

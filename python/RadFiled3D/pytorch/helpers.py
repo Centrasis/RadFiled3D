@@ -13,13 +13,7 @@ class RadiationFieldHelper:
         :param layer_name: The name of the layer to load.
         :return: The layer as a PyTorch tensor. The tensor will have the shape (c, x, y) or (c, x, y, z) depending on the field type (cartesian/polar) where c is the number of channels.
         """
-
         field_tensor = torch.tensor(radiation_field.get_channel(channel_name).get_layer_as_ndarray(layer_name).astype("float32"))
-        if len(field_tensor.shape) == 3 and isinstance(radiation_field, CartesianRadiationField):
-            field_tensor = field_tensor.unsqueeze(-1)
-        if len(field_tensor.shape) == 2 and isinstance(radiation_field, PolarRadiationField):
-            field_tensor = field_tensor.unsqueeze(-1)
-
         field_tensor = field_tensor.permute(-1, *range(field_tensor.ndimension() - 1))
         return field_tensor
     
@@ -30,12 +24,6 @@ class RadiationFieldHelper:
         :param voxel_grid: The VoxelGrid object to load.
         :return: The VoxelGrid as a PyTorch tensor. The tensor will have the shape (c, x, y) or (c, x, y, z) where c is the number of channels.
         """
-
         layer_tensor = torch.tensor(layer.get_as_ndarray().astype("float32"))
-        if len(layer_tensor.shape) == 3 and isinstance(layer, VoxelGrid):
-            layer_tensor = layer_tensor.unsqueeze(-1)
-        if len(layer_tensor.shape) == 2 and isinstance(layer, PolarSegments):
-            layer_tensor = layer_tensor.unsqueeze(-1)
-
         layer_tensor = layer_tensor.permute(-1, *range(layer_tensor.ndimension() - 1))
         return layer_tensor

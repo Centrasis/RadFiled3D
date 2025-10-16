@@ -7,13 +7,19 @@ from torch import Tensor
 class PolarFieldDataset(RadiationFieldDataset):
     def __init__(self, file_paths = None, zip_file = None, metadata_load_mode = MetadataLoadMode.HEADER):
         super().__init__(file_paths, zip_file, metadata_load_mode)
-        field = self._get_field(0)
-        assert isinstance(field, PolarRadiationField), "Dataset must contain PolarRadiationFields."
+        self._field_dimensions = None
 
     def _get_field_accessor(self) -> PolarFieldAccessor:
         return super()._get_field_accessor()
     
     field_accessor: PolarFieldAccessor = property(_get_field_accessor)
+
+    @property
+    def field_dimensions(self) -> vec2:
+        if self._field_dimensions is None:
+            field = self._get_field(0)
+            self._field_dimensions = field.get_segments_count()
+        return self._field_dimensions
 
     def _get_field(self, idx: int) -> PolarRadiationField:
         return super()._get_field(idx)
@@ -82,9 +88,6 @@ class PolarFieldSingleLayerDataset(PolarFieldDataset):
 class PolarSingleVoxelDataset(PolarFieldSingleLayerDataset):
     def __init__(self, file_paths = None, zip_file = None, metadata_load_mode = MetadataLoadMode.HEADER):
         super().__init__(file_paths, zip_file, metadata_load_mode)
-        field = self._get_field(0)
-        self.field_voxel_counts = field.get_voxel_counts()
-        self.voxels_per_field = self.field_voxel_counts.x * self.field_voxel_counts.y
         self.zip_ref = None # remove zip reference to avoid pickling issues
         self._field_accessor = None # remove field accessor to avoid pickling issues
 

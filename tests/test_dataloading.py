@@ -14,7 +14,7 @@ def setup_test_file(name: str):
     assert field.get_voxel_counts() == uvec3(10, 10, 10)
 
     array = field.get_channel("channel1").get_layer_as_ndarray("doserate")
-    assert array.shape == (10, 10, 10)
+    assert array.shape == (10, 10, 10, 1)
     assert array.dtype == "float32"
 
     array[:, :, :] = 1.0
@@ -29,6 +29,8 @@ def setup_test_file(name: str):
     field.get_channel("channel1").get_voxel_by_coord("doserate", 0.99, 0.0, 0.0).set_data(3.0)
     field.get_channel("channel1").get_voxel_by_coord("doserate", 0.0, 0.99, 0.0).set_data(4.0)
     field.get_channel("channel1").get_voxel_by_coord("doserate", 0.0, 0.0, 0.99).set_data(5.0)
+
+    print(array)
 
     assert array[9, 0, 0] == 3.0
     assert array[0, 9, 0] == 4.0
@@ -57,10 +59,28 @@ def test_creation():
     assert field.get_voxel_counts() == uvec3(10, 10, 10)
 
     array = field.get_channel("channel1").get_layer_as_ndarray("layer1")
-    assert array.shape == (10, 10, 10)
+    assert array.shape == (10, 10, 10, 1)
     assert array.dtype == "float32"
     assert array.min() == 0.0
     assert array.max() == 0.0
+
+
+def test_copy_and_referencing():
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.1, 0.1, 0.1))
+    field.add_channel("channel1")
+    field.get_channel("channel1").add_layer("layer1", "unit1", DType.FLOAT32)
+
+    array = field.get_channel("channel1").get_layer_as_ndarray("layer1", copy=True)
+    array[:] = 1.23
+    array_old = field.get_channel("channel1").get_layer_as_ndarray("layer1", copy=False)
+    assert array_old.min() == 0.0
+    assert array_old.max() == 0.0
+    assert array.min() == 1.23
+    assert array.max() == 1.23
+    array_old[:] = 4.56
+    array_new = field.get_channel("channel1").get_layer_as_ndarray("layer1", copy=False)
+    assert array_new.min() == 4.56
+    assert array_new.max() == 4.56
 
 
 def test_modification_via_ndarray():
@@ -73,7 +93,7 @@ def test_modification_via_ndarray():
     assert field.get_voxel_counts() == uvec3(10, 10, 10)
 
     array = field.get_channel("channel1").get_layer_as_ndarray("layer1")
-    assert array.shape == (10, 10, 10)
+    assert array.shape == (10, 10, 10, 1)
     assert array.dtype == "float32"
 
     array[:, :, :] = 1.0
@@ -195,7 +215,7 @@ def test_store_and_load():
     assert field.get_voxel_counts() == uvec3(10, 10, 10)
 
     array = field.get_channel("channel1").get_layer_as_ndarray("layer1")
-    assert array.shape == (10, 10, 10)
+    assert array.shape == (10, 10, 10, 1)
     assert array.dtype == "float32"
 
     array[:, :, :] = 1.0
@@ -218,7 +238,7 @@ def test_store_and_load():
     assert field2.get_voxel_counts() == uvec3(10, 10, 10)
 
     array2 = field2.get_channel("channel1").get_layer_as_ndarray("layer1")
-    assert array2.shape == (10, 10, 10)
+    assert array2.shape == (10, 10, 10, 1)
     assert array2.dtype == "float32"
 
     arr1 = field.get_channel("channel1").get_layer_as_ndarray("layer1")
@@ -257,7 +277,7 @@ def test_single_layer_loading():
     doserate = doserate.get_as_ndarray()
     doserate[:, :, :] = 1.0  # just to check that we can modify it
     doserate[2, 2, 2] = 2.0
-    assert doserate.shape == (10, 10, 10)
+    assert doserate.shape == (10, 10, 10, 1)
     assert doserate.dtype == "float32"
     assert doserate[0, 0, 0] == 1.0
     assert doserate[2, 2, 2] == 2.0
@@ -268,7 +288,7 @@ def test_single_layer_loading():
     doserate = doserate.get_as_ndarray()
     doserate[:, :, :] = 1.0  # just to check that we can modify it
     doserate[2, 2, 2] = 2.0
-    assert doserate.shape == (10, 10, 10)
+    assert doserate.shape == (10, 10, 10, 1)
     assert doserate.dtype == "float32"
     assert doserate[0, 0, 0] == 1.0
     assert doserate[2, 2, 2] == 2.0

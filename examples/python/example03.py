@@ -1,6 +1,5 @@
 from RadFiled3D.RadFiled3D import FieldShape
 from plotly import graph_objects as go
-import numpy
 import sys
 from RadFiled3D.metadata.v1 import Metadata
 from RadFiled3D.utils import FieldStore

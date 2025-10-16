@@ -80,12 +80,38 @@ def test_radfield3d_dataset():
         field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.1, 0.1, 0.1))
         field.add_channel("scatter_field")
         field.add_channel("xray_beam")
-        field.get_channel("scatter_field").add_layer("hits", "unit1", DType.FLOAT32)
-        field.get_channel("scatter_field").add_layer("error", "unit1", DType.FLOAT32)
-        field.get_channel("scatter_field").add_histogram_layer("spectrum", 32, 0.1, "unit1")
-        field.get_channel("xray_beam").add_layer("hits", "unit1", DType.FLOAT32)
-        field.get_channel("xray_beam").add_layer("error", "unit1", DType.FLOAT32)
-        field.get_channel("xray_beam").add_histogram_layer("spectrum", 32, 0.1, "unit1")
+        ch = field.get_channel("scatter_field")
+        ch_xray = field.get_channel("xray_beam")
+        ch.add_layer("hits", "unit1", DType.FLOAT32)
+        ch.add_layer("error", "unit1", DType.FLOAT32)
+        ch.add_histogram_layer("spectrum", 32, 0.1, "unit1")
+        ch_xray.add_layer("hits", "unit1", DType.FLOAT32)
+        ch_xray.add_layer("error", "unit1", DType.FLOAT32)
+        ch_xray.add_histogram_layer("spectrum", 32, 0.1, "unit1")
+
+        spectrum = ch.get_layer_as_ndarray("spectrum", copy=True)
+        assert not np.isnan(spectrum).any(), "Spectrum contains NaN values."
+        assert not np.isinf(spectrum).any(), "Spectrum contains Inf values."
+        spectrum = np.random.rand(*spectrum.shape)
+        assert not np.isnan(spectrum).any(), "Spectrum contains NaN values."
+        assert not np.isinf(spectrum).any(), "Spectrum contains Inf values."
+        spectrum_sums = spectrum.sum(axis=-1, keepdims=True)
+        spectrum /= spectrum_sums
+
+        spectrum1 = spectrum.copy()
+
+        first_hist1 = spectrum[0, 0, 0, :].copy()
+
+        spectrum_empty = ch.get_layer_as_ndarray("spectrum", copy=True)
+        assert np.allclose(spectrum_empty, 0.0), "Spectrum layer is not empty as expected."
+        ch.get_layer_as_ndarray("spectrum", copy=False)[:] = spectrum
+
+        spectrum = ch.get_layer_as_ndarray("spectrum", copy=True)
+        first_hist2 = spectrum[0, 0, 0, :].copy()
+        assert np.allclose(first_hist1, first_hist2), "Spectrum values changed unexpectedly between accesses."
+        assert np.allclose(spectrum1, spectrum), "Spectrum values changed unexpectedly."
+        spectrum_sums = spectrum.sum(axis=-1, keepdims=True)
+        assert np.allclose(spectrum_sums[spectrum_sums != 0], 1.0), "Spectrum normalization failed."
 
         os.makedirs("test_dataset", exist_ok=True)
 

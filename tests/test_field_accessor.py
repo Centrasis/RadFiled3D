@@ -168,7 +168,7 @@ def test_multi_voxel_accessing():
     ]
 
     collection: VoxelCollection = vx_accessor.access(req)
-    layer1 = collection.get_as_ndarray("channel1", "layer1")
+    layer1 = collection.get_as_ndarray("channel1", "layer1", copy=False)
     layer2 = collection.get_as_ndarray("channel1", "layer2")
     histogram1 = collection.get_as_ndarray("channel1", "histogram1")
 

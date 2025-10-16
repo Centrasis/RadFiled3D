@@ -133,17 +133,28 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
 
     def __init__(self, file_paths: list[str] = None, zip_file: str = None, data_processings: list[DataProcessing] = None):
         super().__init__(file_paths=file_paths, zip_file=zip_file, data_processings=data_processings)
-        field = self._get_field(0)
-        self.field_voxel_counts = field.get_voxel_counts()
-        self.field_dimensions = (
-            field.get_voxel_counts().x * field.get_voxel_dimensions().x,
-            field.get_voxel_counts().y * field.get_voxel_dimensions().y,
-            field.get_voxel_counts().z * field.get_voxel_dimensions().z
-        )
-        self.voxels_per_field = self.field_voxel_counts.x * self.field_voxel_counts.y * self.field_voxel_counts.z
+        self._field_dimensions = None
         self.cached_metadata: DirectionalInput = None
         self.cached_fields: RadiationField = None
-        self._has_geometry = field.has_channel("geometry")
+        self._has_geometry = None
+
+    @property
+    def field_dimensions(self) -> tuple[float, float, float]:
+        if self._field_dimensions is None:
+            field = self._get_field(0)
+            self._field_dimensions = (
+                field.get_voxel_counts().x * field.get_voxel_dimensions().x,
+                field.get_voxel_counts().y * field.get_voxel_dimensions().y,
+                field.get_voxel_counts().z * field.get_voxel_dimensions().z
+            )
+        return self._field_dimensions
+    
+    @property
+    def has_geometry(self) -> bool:
+        if self._has_geometry is None:
+            field = self._get_field(0)
+            self._has_geometry = field.has_channel("geometry")
+        return self._has_geometry
 
     def fetch_data2cache(self, files: list[str], external_fields_cache: RadiationField = None, external_metadata_cache: DirectionalInput = None) -> tuple[DirectionalInput, RadiationField]:
         """
@@ -271,7 +282,7 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
             xray_spectrum = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="xray_beam", layer_name="spectrum").get_histogram()
             xray_fluence = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="xray_beam", layer_name="hits").get_data()
             xray_error = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="xray_beam", layer_name="error").get_data()
-            geometry = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="geometry", layer_name="density").get_data() if self._has_geometry else None
+            geometry = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="geometry", layer_name="density").get_data() if self.has_geometry else None
             field = RadiationField(
                 scatter_field=RadiationFieldChannel(
                     spectrum=torch.tensor(scatter_spectrum, dtype=torch.float32, device=xyz.device, requires_grad=False),
@@ -368,7 +379,7 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                     "error"
                 ]
             )
-            geom_accessor = VoxelCollectionAccessor(self.field_accessor, ["geometry"], ["density"]) if self._has_geometry else None
+            geom_accessor = VoxelCollectionAccessor(self.field_accessor, ["geometry"], ["density"]) if self.has_geometry else None
             field_voxel_counts = torch.tensor([self.field_voxel_counts.x, self.field_voxel_counts.y, self.field_voxel_counts.z], dtype=torch.float32, device=xyz.device, requires_grad=False)
 
             requests = []
