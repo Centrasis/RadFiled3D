@@ -59,6 +59,12 @@ def test_creation():
     assert field.get_voxel_counts() == uvec3(10, 10, 10)
 
     array = field.get_channel("channel1").get_layer_as_ndarray("layer1")
+    print(array)
+    for i in range(10):
+        for j in range(10):
+            for k in range(10):
+                if array[i, j, k, 0] != 0.0:
+                    print(f"Non-zero voxel at {i},{j},{k}: {array[i,j,k,0]}")
     assert array.shape == (10, 10, 10, 1)
     assert array.dtype == "float32"
     assert array.min() == 0.0

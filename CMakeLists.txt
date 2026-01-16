@@ -10,9 +10,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(FetchContent)
 set(FETCHCONTENT_QUIET TRUE)
 
-option(BUILD_TESTS "Build the tests" OFF)
-option(BUILD_EXAMPLES "Build the examples" OFF)
-option(RS_Build_PyBindings "If the python bindings should be build" ON)
+option(RADFILED_BUILD_TESTS "Build the tests" OFF)
+option(RADFILED_BUILD_EXAMPLES "Build the examples" OFF)
+option(RADFILED_Build_PyBindings "If the python bindings should be build" ON)
 
 message(STATUS "Download GLM...")
 FetchContent_Declare(
@@ -26,7 +26,7 @@ if(NOT glm_POPULATED)
   add_subdirectory(${glm_SOURCE_DIR} ${glm_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
-if(RS_Build_PyBindings)
+if(RADFILED_Build_PyBindings)
   set(PYTHON_VERSION "3.11" CACHE STRING "Python Version to use for pyBind11 and conda.")
   set_property(CACHE PYTHON_VERSION PROPERTY STRINGS  "3.14" "3.13" "3.12" "3.11" "3.10")
   set(PYBIND11_PYTHON_VERSION ${PYTHON_VERSION})
@@ -47,24 +47,47 @@ if(RS_Build_PyBindings)
     message(STATUS "Python was already found: ${Python_EXECUTABLE}")
   endif()
 
-  if(NOT DEFINED fetch_pybind_POPULATED)
-    FetchContent_Declare(
-      fetch_pybind
-      GIT_REPOSITORY https://github.com/pybind/pybind11.git
-      GIT_TAG        v3.0.1 # v2.13.6
-    )
-    FetchContent_GetProperties(fetch_pybind)
-    if(NOT fetch_pybind_POPULATED)
-      FetchContent_Populate(fetch_pybind)
-      add_subdirectory(
-        ${fetch_pybind_SOURCE_DIR}
-        ${fetch_pybind_BINARY_DIR}
+  #if(NOT DEFINED fetch_pybind_POPULATED)
+  #  FetchContent_Declare(
+  #    fetch_pybind
+  #    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+  #    GIT_TAG        v3.0.1 # v2.13.6
+  #  )
+  #  FetchContent_GetProperties(fetch_pybind)
+  #  if(NOT fetch_pybind_POPULATED)
+  #    FetchContent_Populate(fetch_pybind)
+  #    add_subdirectory(
+  #      ${fetch_pybind_SOURCE_DIR}
+  #      ${fetch_pybind_BINARY_DIR}
+  #    )
+  #  endif()
+  #else()
+  #  message(STATUS "Pybind11 was already fetched at: ${fetch_pybind_SOURCE_DIR}.")
+  #endif()
+  if(NOT nanobind_FOUND)
+    if(NOT DEFINED fetch_nanobind_POPULATED)
+      FetchContent_Declare(
+        fetch_nanobind
+        GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+        GIT_TAG        v2.10.2
       )
+      FetchContent_GetProperties(fetch_nanobind)
+      if(NOT fetch_nanobind_POPULATED)
+        FetchContent_Populate(fetch_nanobind)
+        set(nanobind_DIR "${fetch_nanobind_SOURCE_DIR}/cmake" CACHE PATH "Path to nanobind cmake files" FORCE)
+        add_subdirectory(
+          ${fetch_nanobind_SOURCE_DIR}
+          ${fetch_nanobind_BINARY_DIR}
+        )
+      endif()
+    else()
+      message(STATUS "Nanobind was already fetched at: ${fetch_nanobind_SOURCE_DIR}.")
     endif()
   else()
-    message(STATUS "Pybind11 was already fetched at: ${fetch_pybind_SOURCE_DIR}.")
+    message(STATUS "Nanobind was already found: ${nanobind_DIR}")
   endif()
-endif(RS_Build_PyBindings)
+
+endif(RADFILED_Build_PyBindings)
 
 # Add the source files
 file(GLOB SOURCES "src/*.cpp")
@@ -88,8 +111,9 @@ set_target_properties(libRadFiled3D
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin"
 )
 
-if(RS_Build_PyBindings)
-  pybind11_add_module(RadFiled3D python/bindings/bindings.cpp)
+if(RADFILED_Build_PyBindings)
+  #pybind11_add_module(RadFiled3D python/bindings/bindings.cpp)
+  nanobind_add_module(RadFiled3D python/bindings/bindings.cpp)
   set_property(TARGET RadFiled3D PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
   add_dependencies(RadFiled3D libRadFiled3D)             
   if (MSVC)
@@ -100,7 +124,7 @@ if(RS_Build_PyBindings)
   set_target_properties(RadFiled3D PROPERTIES FOLDER "Library")
 endif()
 
-if(BUILD_TESTS MATCHES ON)
+if(RADFILED_BUILD_TESTS MATCHES ON)
   if(NOT DEFINED fetch_googletest_POPULATED)
     FetchContent_Declare(
       googletest
@@ -165,7 +189,7 @@ if(BUILD_TESTS MATCHES ON)
 endif()
 
 
-if(BUILD_EXAMPLES MATCHES ON)
+if(RADFILED_BUILD_EXAMPLES MATCHES ON)
   add_executable(example01 examples/cxx/example01.cpp)
   if (MSVC)
     target_link_libraries(example01 libRadFiled3D)

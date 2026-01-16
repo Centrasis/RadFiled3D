@@ -1,10 +1,14 @@
 #define PYBIND11_DETAILED_ERROR_MESSAGES
 
-#include <pybind11/functional.h>
-#include <pybind11/stl.h>
-#include <pybind11/stl_bind.h>
-#include <pybind11/operators.h>
-#include <pybind11/numpy.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/function.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/operators.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/unique_ptr.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <glm/glm.hpp>
 #include <RadFiled3D/storage/RadiationFieldStore.hpp>
 #include <RadFiled3D/RadiationField.hpp>
@@ -18,20 +22,20 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <vector>
+#include <array>
 #include <string>
 #include <tuple>
 #include <iostream>
 #include <cstdint>
 #include <RadFiled3D/dataset/helpers.hpp>
-#include <pybind11/detail/common.h>
 #include <mutex>
 #ifdef WIN32
 typedef Py_ssize_t ssize_t;
 #endif
 
 
-namespace py = pybind11;
-using namespace pybind11::detail;
+namespace nb = nanobind;
 using namespace RadFiled3D;
 using namespace RadFiled3D::Storage;
 using namespace RadFiled3D::Dataset;
@@ -47,16 +51,16 @@ struct NonDeletingDeleter {
 #define VOXEL_CAPSULE(vx, T) std::static_pointer_cast<IVoxel>(std::shared_ptr<T>(static_cast<T*>(vx)))
 
 #define DECLARE_SCALAR_VOXEL(m, dT, name, parent) \
-    py::class_<ScalarVoxel<dT>, std::shared_ptr<ScalarVoxel<dT>>, parent>(m, name)\
-        .def("get_data", &ScalarVoxel<dT>::get_data, py::return_value_policy::reference)\
+    nb::class_<ScalarVoxel<dT>, parent>(m, name)\
+        .def("get_data", &ScalarVoxel<dT>::get_data, nb::rv_policy::reference)\
         .def("set_data", [](ScalarVoxel<dT>& v, dT value) {\
             v = value;\
         })\
-        .def(py::self == py::self)\
-        .def(py::self /= py::self)\
-        .def(py::self *= py::self)\
-        .def(py::self += py::self)\
-        .def(py::self -= py::self)\
+        .def(nb::self == nb::self)\
+        .def(nb::self /= nb::self)\
+        .def(nb::self *= nb::self)\
+        .def(nb::self += nb::self)\
+        .def(nb::self -= nb::self)\
         .def("__repr__",\
             [](const ScalarVoxel<dT>& a) {\
                 return "<RadFiled3D." + std::string(name) + " (" + std::to_string(a.get_data()) + ")>";\
@@ -64,16 +68,16 @@ struct NonDeletingDeleter {
         )
 
 #define DECLARE_OWNING_SCALAR_VOXEL(m, dT, name, parent) \
-    py::class_<OwningScalarVoxel<dT>, std::shared_ptr<OwningScalarVoxel<dT>>, parent>(m, name)\
-        .def("get_data", &OwningScalarVoxel<dT>::get_data, py::return_value_policy::reference)\
+    nb::class_<OwningScalarVoxel<dT>, parent>(m, name)\
+        .def("get_data", &OwningScalarVoxel<dT>::get_data, nb::rv_policy::reference)\
         .def("set_data", [](OwningScalarVoxel<dT>& v, dT value) {\
             v.set_data(&value);\
         })\
-        .def(py::self == py::self)\
-        .def(py::self /= py::self)\
-        .def(py::self *= py::self)\
-        .def(py::self += py::self)\
-        .def(py::self -= py::self)\
+        .def(nb::self == nb::self)\
+        .def(nb::self /= nb::self)\
+        .def(nb::self *= nb::self)\
+        .def(nb::self += nb::self)\
+        .def(nb::self -= nb::self)\
         .def("__repr__",\
             [](const OwningScalarVoxel<dT>& a) {\
                 return "<RadFiled3D." + std::string(name) + " (" + std::to_string(a.get_data()) + ")>";\
@@ -266,7 +270,7 @@ std::map<void*, PyMemoryManager::SharedPtrMemories> PyMemoryManager::memories;
 
 
 template<typename T>
-py::array create_py_array_generic(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
+nb::object create_py_array_generic(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
     const size_t components = static_cast<size_t>(element_size / sizeof(T));
     std::array<size_t, 4> target_shape = {
         static_cast<size_t>(shape.x),
@@ -275,95 +279,89 @@ py::array create_py_array_generic(const T* data, const glm::uvec3& shape, std::s
         static_cast<size_t>(components)
     };
     // strides to match VoxelGrid implementation of linear mapping
-    const std::array<size_t, 4> strides = {
-        static_cast<size_t>(components * sizeof(T)),
-        static_cast<size_t>(shape.x * components * sizeof(T)),
-        static_cast<size_t>(shape.x * shape.y * components * sizeof(T)),
-        static_cast<size_t>(sizeof(T))
+    const std::array<int64_t, 4> strides = {
+        static_cast<int64_t>(components),
+        static_cast<int64_t>(shape.x * components),
+        static_cast<int64_t>(shape.x * shape.y * components),
+        static_cast<int64_t>(1)
     };
 
-    py::capsule capsule;
+    nb::capsule capsule;
     void* array_buffer = nullptr;
     if (copy_data) {
         array_buffer = new T[shape.x * shape.y * shape.z * components];
         std::memcpy(array_buffer, data, shape.x * shape.y * shape.z * element_size);
-        capsule = py::capsule(array_buffer, [](void* py_data) {
+        capsule = nb::capsule(array_buffer, [](void* py_data) noexcept {
             delete[] static_cast<T*>(py_data);
         });
     }
     else {
         PyMemoryManager::register_memory_view(ptr, (void*)data);
-        capsule = py::capsule(data, [](void* py_data) {
+        capsule = nb::capsule(data, [](void* py_data) noexcept {
             PyMemoryManager::unregister_memory_view(py_data);
         });
         array_buffer = (void*)data;
     }
-
-    py::buffer_info info = py::buffer_info(
-        array_buffer,
-        sizeof(T),
-        py::format_descriptor<T>::format(),
-        static_cast<size_t>(4),  // ndim
-        target_shape,
-        strides
-    );
     
-    return py::array(info, capsule);
+    return nb::ndarray<T, nb::shape<-1, -1, -1, -1>, nb::numpy>(
+            array_buffer,
+            target_shape.size(),
+            target_shape.data(),
+            capsule,
+            strides.data()
+        ).cast();
 }
 
 template<typename T>
-py::array create_py_array(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr, bool copy_data) {
+nb::object create_py_array(const T* data, const glm::uvec3& shape, std::shared_ptr<void> ptr, bool copy_data) {
     return create_py_array_generic<T>(data, shape, ptr, copy_data, sizeof(T));
 }
 
 template<typename T>
-py::array create_py_array_generic(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
+nb::object create_py_array_generic(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
     size_t components = element_size / sizeof(T);
     std::array<size_t, 2> target_shape = {
         len,
         components
     };
-    const std::array<size_t, 2> strides = {
-        sizeof(T) * components,
-        sizeof(T)
+    const std::array<int64_t, 2> strides = {
+        static_cast<int64_t>(components),
+        static_cast<int64_t>(1)
     };
 
-    py::capsule capsule;
+    nb::capsule capsule;
     void* array_buffer = nullptr;
     if (copy_data) {
         array_buffer = new T[len];
         std::memcpy(array_buffer, data, len * sizeof(T));
-        capsule = py::capsule(array_buffer, [](void* py_data) {
+        capsule = nb::capsule(array_buffer, [](void* py_data) noexcept {
             delete[] static_cast<T*>(py_data);
         });
     }
     else {
         PyMemoryManager::register_memory_view(ptr, (void*)data);
-        capsule = py::capsule(data, [](void* py_data) {
+        capsule = nb::capsule(data, [](void* py_data) noexcept {
             PyMemoryManager::unregister_memory_view(py_data);
         });
         array_buffer = (void*)data;
     }
 
-    py::buffer_info info = py::buffer_info(
-        array_buffer,
-        sizeof(T),
-        py::format_descriptor<T>::format(),
-        2,  // ndim
-        target_shape,
-        strides
-    );
-
-    return py::array(info, capsule);
+    return nb::ndarray<T, nb::shape<-1, -1>, nb::numpy>(
+            array_buffer,
+            target_shape.size(),
+            target_shape.data(),
+            capsule,
+            strides.data()
+    ).cast();
 }
 
 template<typename T>
-py::array create_py_array(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data) {
+nb::object create_py_array(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data) {
     return create_py_array_generic<T>(data, len, ptr, copy_data, sizeof(T));
 }
 
 template<typename T>
-py::array create_py_array_generic(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
+nb::object create_py_array_generic(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data, size_t element_size) {
     const size_t components = static_cast<size_t>(element_size / sizeof(T));
     std::array<size_t, 3> target_shape = {
         static_cast<size_t>(shape.x),
@@ -371,47 +369,44 @@ py::array create_py_array_generic(const T* data, const glm::uvec2& shape, std::s
         static_cast<size_t>(components)
     };
     // strides to match PolarSegments implementation of linear mapping
-    const std::array<size_t, 3> strides = {
-        static_cast<size_t>(components * sizeof(T)),
-        static_cast<size_t>(shape.x * components * sizeof(T)),
-        static_cast<size_t>(sizeof(T))
+    const std::array<int64_t, 3> strides = {
+        static_cast<int64_t>(components),
+        static_cast<int64_t>(shape.x * components),
+        static_cast<int64_t>(1)
     };
 
-    py::capsule capsule;
+    nb::capsule capsule;
     void* array_buffer = nullptr;
     if (copy_data) {
         array_buffer = new T[shape.x * shape.y * components];
         std::memcpy(array_buffer, data, shape.x * shape.y * element_size);
-        capsule = py::capsule(array_buffer, [](void* py_data) {
+        capsule = nb::capsule(array_buffer, [](void* py_data) noexcept {
             delete[] static_cast<T*>(py_data);
         });
     }
     else {
         PyMemoryManager::register_memory_view(ptr, (void*)data);
-        capsule = py::capsule(data, [](void* py_data) {
+        capsule = nb::capsule(data, [](void* py_data) noexcept {
             PyMemoryManager::unregister_memory_view(py_data);
         });
         array_buffer = (void*)data;
     }
 
-    py::buffer_info info = py::buffer_info(
-        array_buffer,
-        sizeof(T),
-        py::format_descriptor<T>::format(),
-        static_cast<size_t>(3),  // ndim
-        target_shape,
-        strides
-    );
-
-    return py::array(info, capsule);
+    return nb::ndarray<T, nb::shape<-1, -1, -1>, nb::numpy>(
+            array_buffer,
+            target_shape.size(),
+            target_shape.data(),
+            capsule,
+            strides.data()
+        ).cast();
 }
 
 template<typename T>
-py::array create_py_array(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data) {
+nb::object create_py_array(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data) {
     return create_py_array_generic<T>(data, shape, ptr, copy_data, sizeof(T));
 }
 
-PYBIND11_MODULE(RadFiled3D, m) {
+NB_MODULE(RadFiled3D, m) {
     m.doc() = R"pbdoc(
         RadFiled3D for Python loading of RadiationFieldStores
         -----------------------
@@ -420,28 +415,28 @@ PYBIND11_MODULE(RadFiled3D, m) {
            :toctree: _generate
     )pbdoc";
 
-    py::register_exception<std::runtime_error>(m, "RuntimeError");
-	py::register_exception<std::invalid_argument>(m, "InvalidArgument");
-	py::register_exception<std::out_of_range>(m, "OutOfRange");
-	py::register_exception<std::exception>(m, "Exception");
-	py::register_exception<RadFiled3D::VoxelBufferException>(m, "VoxelBufferException");
-	py::register_exception<RadFiled3D::RadiationFieldStoreException>(m, "RadiationFieldStoreException");
+    nb::exception<std::runtime_error>(m, "RuntimeError");
+	nb::exception<std::invalid_argument>(m, "InvalidArgument");
+	nb::exception<std::out_of_range>(m, "OutOfRange");
+	nb::exception<std::exception>(m, "Exception");
+	nb::exception<RadFiled3D::VoxelBufferException>(m, "VoxelBufferException");
+	nb::exception<RadFiled3D::RadiationFieldStoreException>(m, "RadiationFieldStoreException");
 
-    py::class_<glm::uvec4>(m, "uvec4")
-        .def(py::init<unsigned int, unsigned int, unsigned int, unsigned int>())
-        .def_readwrite("x", &glm::uvec4::x)
-        .def_readwrite("y", &glm::uvec4::y)
-        .def_readwrite("z", &glm::uvec4::z)
-        .def_readwrite("w", &glm::uvec4::w)
-        .def(py::self + py::self)
-        .def(py::self += py::self)
-        .def(py::self - py::self)
-        .def(py::self -= py::self)
-        .def(py::self * py::self)
-        .def(py::self *= py::self)
-        .def(py::self / py::self)
-        .def(py::self /= py::self)
-        .def(py::self == py::self)
+    nb::class_<glm::uvec4>(m, "uvec4")
+        .def(nb::init<unsigned int, unsigned int, unsigned int, unsigned int>())
+        .def_rw("x", &glm::uvec4::x)
+        .def_rw("y", &glm::uvec4::y)
+        .def_rw("z", &glm::uvec4::z)
+        .def_rw("w", &glm::uvec4::w)
+        .def(nb::self + nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self -= nb::self)
+        .def(nb::self * nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self / nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self == nb::self)
         .def("__mul__",
             [](const glm::uvec4& a, unsigned int scalar) {
                 return a * scalar;
@@ -474,40 +469,34 @@ PYBIND11_MODULE(RadFiled3D, m) {
             [](const glm::uvec4& a, unsigned int scalar) {
                 return a - scalar;
             })
-		.def(py::pickle([](const glm::uvec4& a) {
-		    return UVec4PickleTuple(a.x, a.y, a.z, a.w);
-	    },
-			[](const UVec4PickleTuple& t) {
-				return glm::uvec4(std::get<0>(t), std::get<1>(t), std::get<2>(t), std::get<3>(t));
-		}))
-        .def(-py::self)
-        .def(py::pickle([](const glm::uvec4& a) {
-            return UVec4PickleTuple(a.x, a.y, a.z, a.w);
-        },
-            [](const UVec4PickleTuple& t) {
-                return glm::uvec4(std::get<0>(t), std::get<1>(t), std::get<2>(t), std::get<3>(t));
-        }))
+        .def("__getstate__", [](const glm::uvec4& a) {
+                return UVec4PickleTuple(a.x, a.y, a.z, a.w);
+            })
+		.def("__setstate__", [](const UVec4PickleTuple& t) {
+				    return glm::uvec4(std::get<0>(t), std::get<1>(t), std::get<2>(t), std::get<3>(t));
+		    })
+        .def(-nb::self)
         .def("__repr__",
             [](const glm::uvec4& a) {
                 return "<glm.uvec4 (" + std::to_string(a.x) + ", " + std::to_string(a.y) + ", " + std::to_string(a.z) + ", " + std::to_string(a.w) + ")>";
             });
 
-    py::class_<glm::vec4>(m, "vec4")
-        .def(py::init<float, float, float, float>())
-        .def_readwrite("x", &glm::vec4::x)
-        .def_readwrite("y", &glm::vec4::y)
-        .def_readwrite("z", &glm::vec4::z)
-        .def_readwrite("w", &glm::vec4::w)
-        .def(py::self + py::self)
-        .def(py::self += py::self)
-        .def(py::self - py::self)
-        .def(py::self -= py::self)
-        .def(py::self * py::self)
-        .def(py::self *= py::self)
-        .def(py::self / py::self)
-        .def(py::self /= py::self)
-        .def(py::self == py::self)
-        .def(-py::self)
+    nb::class_<glm::vec4>(m, "vec4")
+        .def(nb::init<float, float, float, float>())
+        .def_rw("x", &glm::vec4::x)
+        .def_rw("y", &glm::vec4::y)
+        .def_rw("z", &glm::vec4::z)
+        .def_rw("w", &glm::vec4::w)
+        .def(nb::self + nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self -= nb::self)
+        .def(nb::self * nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self / nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self == nb::self)
+        .def(-nb::self)
         .def("__mul__",
             [](const glm::vec4& a, float scalar) {
                 return a * scalar;
@@ -540,32 +529,32 @@ PYBIND11_MODULE(RadFiled3D, m) {
             [](const glm::vec4& a, float scalar) {
                 return a - scalar;
             })
-		.def(py::pickle([](const glm::vec4& a) {
-		    return Vec4PickleTuple(a.x, a.y, a.z, a.w);
-		},
-		[](const Vec4PickleTuple& t) {
-			return glm::vec4(std::get<0>(t), std::get<1>(t), std::get<2>(t), std::get<3>(t));
-		}))
+        .def("__getstate__", [](const glm::vec4& a) {
+                return Vec4PickleTuple(a.x, a.y, a.z, a.w);
+            })
+        .def("__setstate__", [](const Vec4PickleTuple& t) {
+                return glm::vec4(std::get<0>(t), std::get<1>(t), std::get<2>(t), std::get<3>(t));
+            })
         .def("__repr__",
             [](const glm::vec4& a) {
                 return "<glm.vec4 (" + std::to_string(a.x) + ", " + std::to_string(a.y) + ", " + std::to_string(a.z) + ", " + std::to_string(a.w) + ")>";
             });
 
-    py::class_<glm::uvec3>(m, "uvec3")
-        .def(py::init<unsigned int, unsigned int, unsigned int>())
-        .def_readwrite("x", &glm::uvec3::x)
-        .def_readwrite("y", &glm::uvec3::y)
-        .def_readwrite("z", &glm::uvec3::z)
-        .def(py::self + py::self)
-        .def(py::self += py::self)
-        .def(py::self - py::self)
-        .def(py::self -= py::self)
-        .def(py::self * py::self)
-        .def(py::self *= py::self)
-        .def(py::self / py::self)
-        .def(py::self /= py::self)
-        .def(py::self == py::self)
-        .def(-py::self)
+    nb::class_<glm::uvec3>(m, "uvec3")
+        .def(nb::init<unsigned int, unsigned int, unsigned int>())
+        .def_rw("x", &glm::uvec3::x)
+        .def_rw("y", &glm::uvec3::y)
+        .def_rw("z", &glm::uvec3::z)
+        .def(nb::self + nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self -= nb::self)
+        .def(nb::self * nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self / nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self == nb::self)
+        .def(-nb::self)
         .def("__mul__",
             [](const glm::uvec3& a, unsigned int scalar) {
                 return a * scalar;
@@ -598,32 +587,32 @@ PYBIND11_MODULE(RadFiled3D, m) {
             [](const glm::uvec3& a, unsigned int scalar) {
                 return a - scalar;
             })
-		.def(py::pickle([](const glm::uvec3& a) {
-		    return UVec3PickleTuple(a.x, a.y, a.z);
-		},
-	    [](const UVec3PickleTuple& t) {
-			return glm::uvec3(std::get<0>(t), std::get<1>(t), std::get<2>(t));
-		}))
+        .def("__getstate__", [](const glm::uvec3& a) {
+            return UVec3PickleTuple(a.x, a.y, a.z);
+        })
+        .def("__setstate__", [](const UVec3PickleTuple& t) {
+            return glm::uvec3(std::get<0>(t), std::get<1>(t), std::get<2>(t));
+        })
         .def("__repr__",
             [](const glm::uvec3& a) {
                 return "<glm.uvec3 (" + std::to_string(a.x) + ", " + std::to_string(a.y) + ", " + std::to_string(a.z) + ")>";
             });
 
-    py::class_<glm::vec3>(m, "vec3")
-        .def(py::init<float, float, float>())
-        .def_readwrite("x", &glm::vec3::x)
-        .def_readwrite("y", &glm::vec3::y)
-        .def_readwrite("z", &glm::vec3::z)
-        .def(py::self + py::self)
-        .def(py::self += py::self)
-        .def(py::self - py::self)
-        .def(py::self -= py::self)
-        .def(py::self * py::self)
-        .def(py::self *= py::self)
-        .def(py::self / py::self)
-        .def(py::self /= py::self)
-        .def(py::self == py::self)
-        .def(-py::self)
+    nb::class_<glm::vec3>(m, "vec3")
+        .def(nb::init<float, float, float>())
+        .def_rw("x", &glm::vec3::x)
+        .def_rw("y", &glm::vec3::y)
+        .def_rw("z", &glm::vec3::z)
+        .def(nb::self + nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self -= nb::self)
+        .def(nb::self * nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self / nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self == nb::self)
+        .def(-nb::self)
         .def("__mul__",
             [](const glm::vec3& a, float scalar) {
                 return a * scalar;
@@ -656,31 +645,31 @@ PYBIND11_MODULE(RadFiled3D, m) {
             [](const glm::vec3& a, float scalar) {
 				return a - scalar;
 		})
-		.def(py::pickle([](const glm::vec3& a) {
-		    return Vec3PickleTuple(a.x, a.y, a.z);
-		},
-		[](const Vec3PickleTuple& t) {
-                return glm::vec3(std::get<0>(t), std::get<1>(t), std::get<2>(t));
-	    }))
+        .def("__getstate__", [](const glm::vec3& a) {
+            return Vec3PickleTuple(a.x, a.y, a.z);
+        })
+        .def("__setstate__", [](const Vec3PickleTuple& t) {
+            return glm::vec3(std::get<0>(t), std::get<1>(t), std::get<2>(t));
+        })
         .def("__repr__",
             [](const glm::vec3& a) {
                 return "<glm.vec3 (" + std::to_string(a.x) + ", " + std::to_string(a.y) + ", " + std::to_string(a.z) + ")>";
         });
 
-    py::class_<glm::uvec2>(m, "uvec2")
-        .def(py::init<unsigned int, unsigned int>())
-        .def_readwrite("x", &glm::uvec2::x)
-        .def_readwrite("y", &glm::uvec2::y)
-        .def(py::self + py::self)
-        .def(py::self += py::self)
-        .def(py::self - py::self)
-        .def(py::self -= py::self)
-        .def(py::self * py::self)
-        .def(py::self *= py::self)
-        .def(py::self / py::self)
-        .def(py::self /= py::self)
-        .def(py::self == py::self)
-        .def(-py::self)
+    nb::class_<glm::uvec2>(m, "uvec2")
+        .def(nb::init<unsigned int, unsigned int>())
+        .def_rw("x", &glm::uvec2::x)
+        .def_rw("y", &glm::uvec2::y)
+        .def(nb::self + nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self -= nb::self)
+        .def(nb::self * nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self / nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self == nb::self)
+        .def(-nb::self)
         .def("__mul__",
             [](const glm::uvec2& a, unsigned int scalar) {
                 return a * scalar;
@@ -713,31 +702,31 @@ PYBIND11_MODULE(RadFiled3D, m) {
             [](const glm::uvec2& a, unsigned int scalar) {
                 return a - scalar;
             })
-		.def(py::pickle([](const glm::uvec2& a) {
-		    return UVec2PickleTuple(a.x, a.y);
-		},
-		[](const UVec2PickleTuple& t) {
-			return glm::uvec2(std::get<0>(t), std::get<1>(t));
-		}))
+        .def("__getstate__", [](const glm::uvec2& a) {
+            return UVec2PickleTuple(a.x, a.y);
+        })
+        .def("__setstate__", [](const UVec2PickleTuple& t) {
+            return glm::uvec2(std::get<0>(t), std::get<1>(t));
+        })
         .def("__repr__",
             [](const glm::uvec2& a) {
                 return "<glm.uvec2 (" + std::to_string(a.x) + ", " + std::to_string(a.y) + ")>";
             });
 
-    py::class_<glm::vec2>(m, "vec2")
-        .def(py::init<float, float>())
-        .def_readwrite("x", &glm::vec2::x)
-        .def_readwrite("y", &glm::vec2::y)
-        .def(py::self + py::self)
-        .def(py::self += py::self)
-        .def(py::self - py::self)
-        .def(py::self -= py::self)
-        .def(py::self * py::self)
-        .def(py::self *= py::self)
-        .def(py::self / py::self)
-        .def(py::self /= py::self)
-        .def(py::self == py::self)
-        .def(-py::self)
+    nb::class_<glm::vec2>(m, "vec2")
+        .def(nb::init<float, float>())
+        .def_rw("x", &glm::vec2::x)
+        .def_rw("y", &glm::vec2::y)
+        .def(nb::self + nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self - nb::self)
+        .def(nb::self -= nb::self)
+        .def(nb::self * nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self / nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self == nb::self)
+        .def(-nb::self)
         .def("__mul__",
             [](const glm::vec2& a, float scalar) {
                 return a * scalar;
@@ -770,23 +759,23 @@ PYBIND11_MODULE(RadFiled3D, m) {
             [](const glm::vec2& a, float scalar) {
                 return a - scalar;
             })
-		.def(py::pickle([](const glm::vec2& a) {
-		    return Vec2PickleTuple(a.x, a.y);
-	    },
-		[](const Vec2PickleTuple& t) {
-		    return glm::vec2(std::get<0>(t), std::get<1>(t));
-	    }))
+        .def("__getstate__", [](const glm::vec2& a) {
+            return Vec2PickleTuple(a.x, a.y);
+        })
+        .def("__setstate__", [](const Vec2PickleTuple& t) {
+            return glm::vec2(std::get<0>(t), std::get<1>(t));
+        })
         .def("__repr__",
             [](const glm::vec2& a) {
                 return "<glm.vec2 (" + std::to_string(a.x) + ", " + std::to_string(a.y) + ")>";
             });
 
-    py::class_<FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube>(m, "RadiationFieldXRayTubeMetadataV1")
-		.def(py::init<const glm::vec3&, const glm::vec3&, float, const std::string&>(), py::arg("radiation_direction"), py::arg("radiation_origin"), py::arg("max_energy_eV"), py::arg("tube_id"))
-		.def_readwrite("radiation_direction", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube::radiation_direction)
-		.def_readwrite("radiation_origin", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube::radiation_origin)
-		.def_readwrite("max_energy_eV", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube::max_energy_eV)
-		.def_property("tube_id",
+    nb::class_<FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube>(m, "RadiationFieldXRayTubeMetadataV1")
+		.def(nb::init<const glm::vec3&, const glm::vec3&, float, const std::string&>(), nb::arg("radiation_direction"), nb::arg("radiation_origin"), nb::arg("max_energy_eV"), nb::arg("tube_id"))
+		.def_rw("radiation_direction", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube::radiation_direction)
+		.def_rw("radiation_origin", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube::radiation_origin)
+		.def_rw("max_energy_eV", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube::max_energy_eV)
+		.def_prop_rw("tube_id",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube& self) -> std::string {
                 return std::string(self.tube_id);
             },
@@ -795,17 +784,17 @@ PYBIND11_MODULE(RadFiled3D, m) {
             }
         );
 
-    py::class_<FiledTypes::V1::RadiationFieldMetadataHeader::Simulation>(m, "RadiationFieldSimulationMetadataV1")
-        .def(py::init<size_t, const std::string&, const std::string&, const FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube&>(), py::arg("primary_particle_count"), py::arg("geometry"), py::arg("physics_list"), py::arg("tube"))
-		.def_readwrite("primary_particle_count", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::primary_particle_count)
-        .def_property("geometry",
+    nb::class_<FiledTypes::V1::RadiationFieldMetadataHeader::Simulation>(m, "RadiationFieldSimulationMetadataV1")
+        .def(nb::init<size_t, const std::string&, const std::string&, const FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube&>(), nb::arg("primary_particle_count"), nb::arg("geometry"), nb::arg("physics_list"), nb::arg("tube"))
+		.def_rw("primary_particle_count", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::primary_particle_count)
+        .def_prop_rw("geometry",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Simulation& self) -> std::string {
                 return std::string(self.geometry);
             },
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Simulation& self, const std::string& s) {
                 strncpy(self.geometry, s.c_str(), std::min(sizeof(self.geometry), s.length()));
             }
-        ).def_property("physics_list",
+        ).def_prop_rw("physics_list",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Simulation& self) -> std::string {
                 return std::string(self.physics_list);
             },
@@ -813,7 +802,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 strncpy(self.physics_list, s.c_str(), std::min(sizeof(self.physics_list), s.length()));
             }
         )
-		.def(py::pickle([](FiledTypes::V1::RadiationFieldMetadataHeader::Simulation& self) {
+		.def("__getstate__", [](FiledTypes::V1::RadiationFieldMetadataHeader::Simulation& self) {
 		    return MetadataHeaderSimulationPickleTuple(
 			    self.primary_particle_count,
 			    std::string(self.geometry),
@@ -833,8 +822,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				    std::string(self.tube.tube_id)
 			    )
 		    );
-		},
-			[](const MetadataHeaderSimulationPickleTuple& t) {
+		})
+        .def("__setstate__", [](const MetadataHeaderSimulationPickleTuple& t) {
                 FiledTypes::V1::RadiationFieldMetadataHeader::Simulation simulation;
 				simulation.primary_particle_count = std::get<0>(t);
 				strncpy(simulation.geometry, std::get<1>(t).c_str(), sizeof(simulation.geometry));
@@ -849,12 +838,12 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				simulation.tube.radiation_origin.z = std::get<2>(std::get<2>(tube));
 				strncpy(simulation.tube.tube_id, std::get<3>(tube).c_str(), sizeof(simulation.tube.tube_id));
 				return simulation;
-		}))
-        .def_readwrite("tube", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::tube);
+		})
+        .def_rw("tube", &FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::tube);
 
-    py::class_<FiledTypes::V1::RadiationFieldMetadataHeader::Software>(m, "RadiationFieldSoftwareMetadataV1")
-		.def(py::init([](const std::string& name, const std::string& version, const std::string& repository, const std::string& commit, const std::string& doi = "") { return FiledTypes::V1::RadiationFieldMetadataHeader::Software(name, version, repository, commit, doi); }), py::arg("name"), py::arg("version"), py::arg("repository"), py::arg("commit"), py::arg("doi") = std::string(""))
-        .def_property("name",
+    nb::class_<FiledTypes::V1::RadiationFieldMetadataHeader::Software>(m, "RadiationFieldSoftwareMetadataV1")
+		.def(nb::init<const std::string&, const std::string&, const std::string&, const std::string&, const std::string&>(), nb::arg("name"), nb::arg("version"), nb::arg("repository"), nb::arg("commit"), nb::arg("doi") = std::string(""))
+        .def_prop_rw("name",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) -> std::string {
                 return std::string(self.name);
             },
@@ -862,7 +851,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 strncpy(self.name, s.c_str(), std::min(sizeof(self.name), s.length()));
             }
         )
-        .def_property("version",
+        .def_prop_rw("version",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) -> std::string {
                 return std::string(self.version);
             },
@@ -870,7 +859,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 strncpy(self.version, s.c_str(), std::min(sizeof(self.version), s.length()));
             }
         )
-        .def_property("repository",
+        .def_prop_rw("repository",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) -> std::string {
                 return std::string(self.repository);
             },
@@ -878,7 +867,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 strncpy(self.repository, s.c_str(), std::min(sizeof(self.repository), s.length()));
             }
         )
-        .def_property("commit",
+        .def_prop_rw("commit",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) -> std::string {
                 return std::string(self.commit);
             },
@@ -886,7 +875,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 strncpy(self.commit, s.c_str(), std::min(sizeof(self.commit), s.length()));
             }
         )
-		.def(py::pickle([](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) {
+        .def("__getstate__", [](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) {
 		    return MetadataHeaderSoftwarePickleTuple(
 			    std::tuple(
 				    std::string(self.name),
@@ -896,8 +885,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				    std::string(self.doi)
 			    )
 		    );
-		},
-			[](const MetadataHeaderSoftwarePickleTuple& t) {
+		})
+		.def("__setstate__", [](const MetadataHeaderSoftwarePickleTuple& t) {
                 FiledTypes::V1::RadiationFieldMetadataHeader::Software software;
 				strncpy(software.name, std::get<0>(t).c_str(), std::min(sizeof(software.name), std::get<0>(t).length()));
 				strncpy(software.version, std::get<1>(t).c_str(), std::min(sizeof(software.version), std::get<1>(t).length()));
@@ -905,8 +894,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				strncpy(software.commit, std::get<3>(t).c_str(), std::min(sizeof(software.commit), std::get<3>(t).length()));
 				strncpy(software.doi, std::get<4>(t).c_str(), std::min(sizeof(software.doi), std::get<4>(t).length()));
 				return software;
-	    }))
-        .def_property("doi",
+	    })
+        .def_prop_rw("doi",
             [](FiledTypes::V1::RadiationFieldMetadataHeader::Software& self) -> std::string {
                 return std::string(self.doi);
             },
@@ -915,11 +904,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
             }
         );
 
-    py::class_<FiledTypes::V1::RadiationFieldMetadataHeader>(m, "RadiationFieldMetadataHeaderV1")
-		.def(py::init<FiledTypes::V1::RadiationFieldMetadataHeader::Simulation, FiledTypes::V1::RadiationFieldMetadataHeader::Software>(), py::arg("simulation"), py::arg("software"))
-		.def_readwrite("simulation", &FiledTypes::V1::RadiationFieldMetadataHeader::simulation)
-        .def_readwrite("software", &FiledTypes::V1::RadiationFieldMetadataHeader::software)
-        .def(py::pickle([](FiledTypes::V1::RadiationFieldMetadataHeader& header) {
+    nb::class_<FiledTypes::V1::RadiationFieldMetadataHeader>(m, "RadiationFieldMetadataHeaderV1")
+		.def(nb::init<FiledTypes::V1::RadiationFieldMetadataHeader::Simulation, FiledTypes::V1::RadiationFieldMetadataHeader::Software>(), nb::arg("simulation"), nb::arg("software"))
+		.def_rw("simulation", &FiledTypes::V1::RadiationFieldMetadataHeader::simulation)
+        .def_rw("software", &FiledTypes::V1::RadiationFieldMetadataHeader::software)
+        .def("__getstate__", [](FiledTypes::V1::RadiationFieldMetadataHeader& header) {
 		    return MetadataHeaderPickleTuple(
 				std::tuple(
                     header.simulation.primary_particle_count,
@@ -948,8 +937,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     std::string(header.software.doi)
                 )
             );
-        },
-		[](const MetadataHeaderPickleTuple& t) {
+        })
+		.def("__setstate__", [](const MetadataHeaderPickleTuple& t) {
             FiledTypes::V1::RadiationFieldMetadataHeader header;
 		    auto simulation = std::get<0>(t);
 		    auto software = std::get<1>(t);
@@ -971,30 +960,30 @@ PYBIND11_MODULE(RadFiled3D, m) {
 		    strncpy(header.software.commit, std::get<3>(software).c_str(), sizeof(header.software.commit));
 		    strncpy(header.software.doi, std::get<4>(software).c_str(), sizeof(header.software.doi));
             return header;
-	    }));
+	    });
 
-    py::class_<IVoxel, std::shared_ptr<IVoxel>>(m, "Voxel")
+    nb::class_<IVoxel>(m, "Voxel")
 		.def("__repr__",
 			[](const IVoxel& a) {
 				return "<RadFiled3D.IVoxel>";
 			});
 
-    py::class_<Storage::RadiationFieldMetadata, std::shared_ptr<Storage::RadiationFieldMetadata>>(m, "RadiationFieldMetadata");
+    nb::class_<Storage::RadiationFieldMetadata>(m, "RadiationFieldMetadata");
 
-    py::class_<Storage::V1::RadiationFieldMetadata, std::shared_ptr<Storage::V1::RadiationFieldMetadata>, Storage::RadiationFieldMetadata>(m, "RadiationFieldMetadataV1")
-        .def(py::init<Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation, Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software>(), py::arg("simulation"), py::arg("software"))
+    nb::class_<Storage::V1::RadiationFieldMetadata, Storage::RadiationFieldMetadata>(m, "RadiationFieldMetadataV1")
+        .def(nb::init<Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation, Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software>(), nb::arg("simulation"), nb::arg("software"))
         .def("get_header", &Storage::V1::RadiationFieldMetadata::get_header)
         .def("set_header", &Storage::V1::RadiationFieldMetadata::set_header)
         .def("get_dynamic_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key) {
             IVoxel* voxel = self.get_dynamic_metadata().at(key);
             return VOXEL_REFERENCE(voxel);
-        }, py::arg("key"), py::return_value_policy::reference)
+        }, nb::arg("key"), nb::rv_policy::reference)
         .def("get_dynamic_metadata_keys", &Storage::V1::RadiationFieldMetadata::get_dynamic_metadata_keys)
         .def("add_dynamic_histogram_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key, size_t bins, float bin_width) {
             self.set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel>(key, RadFiled3D::HistogramVoxel(bins, bin_width, nullptr));
 			IVoxel* voxel = self.get_dynamic_metadata().at(key);
             return VOXEL_REFERENCE(voxel);
-		}, py::arg("key"), py::arg("bins"), py::arg("bin_width"), py::return_value_policy::reference)
+		}, nb::arg("key"), nb::arg("bins"), nb::arg("bin_width"), nb::rv_policy::reference)
         .def("add_dynamic_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key, Typing::DType dtype) {
             switch (dtype) {
 		    case Typing::DType::Float:
@@ -1028,12 +1017,12 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				self.add_dynamic_metadata<glm::vec4>(key, glm::vec4(0.f, 0.f, 0.f, 0.f));
                 break;
             case Typing::DType::Hist:
-				throw py::value_error("Histograms are not supported by this method please use the explicit histogram metadata method.");
+				throw nb::value_error("Histograms are not supported by this method please use the explicit histogram metadata method.");
             }
 
             IVoxel* voxel = self.get_dynamic_metadata().at(key);
             return VOXEL_REFERENCE(voxel);
-        }, py::arg("key"), py::arg("dtype"), py::return_value_policy::reference);
+        }, nb::arg("key"), nb::arg("dtype"), nb::rv_policy::reference);
 
     // TODO: SWITCH TO USING DECLARE_SCALAR_VOXEL(...) makro
 
@@ -1062,122 +1051,124 @@ PYBIND11_MODULE(RadFiled3D, m) {
 	DECLARE_OWNING_SCALAR_VOXEL(m, int64_t, "OwningInt64Voxel", ScalarVoxel<int64_t>);
 #endif
 
-    py::class_<ScalarVoxel<glm::vec2>, std::shared_ptr<ScalarVoxel<glm::vec2>>, IVoxel>(m, "Vec2Voxel")
-        .def("get_data", &ScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference)
+    nb::class_<ScalarVoxel<glm::vec2>, IVoxel>(m, "Vec2Voxel")
+        .def("get_data", &ScalarVoxel<glm::vec2>::get_data, nb::rv_policy::reference)
         .def("set_data", [](ScalarVoxel<glm::vec2>& v, const glm::vec2& value) {
             v = value;
         })
-        .def(py::self == py::self)
-        .def(py::self /= py::self)
-        .def(py::self *= py::self)
-        .def(py::self += py::self)
-        .def(py::self -= py::self)
+        .def(nb::self == nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self -= nb::self)
         .def("__repr__",
             [](const ScalarVoxel<glm::vec2>& a) {
                 return "<RadFiled3D.Vec2Voxel (" + std::to_string(a.get_data().x) + ", " + std::to_string(a.get_data().y) + ")>";
             }
         );
 
-	py::class_<OwningScalarVoxel<glm::vec2>, std::shared_ptr<OwningScalarVoxel<glm::vec2>>, ScalarVoxel<glm::vec2>>(m, "OwningVec2Voxel")
-		.def("get_data", &OwningScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference)
+	nb::class_<OwningScalarVoxel<glm::vec2>, ScalarVoxel<glm::vec2>>(m, "OwningVec2Voxel")
+		.def("get_data", &OwningScalarVoxel<glm::vec2>::get_data, nb::rv_policy::reference)
 		.def("set_data", &OwningScalarVoxel<glm::vec2>::set_data)
-		.def(py::self == py::self)
-		.def(py::self /= py::self)
-		.def(py::self *= py::self)
-		.def(py::self += py::self)
-		.def(py::self -= py::self)
+		.def(nb::self == nb::self)
+		.def(nb::self /= nb::self)
+		.def(nb::self *= nb::self)
+		.def(nb::self += nb::self)
+		.def(nb::self -= nb::self)
 		.def("__repr__",
 			[](const OwningScalarVoxel<glm::vec2>& a) {
 				return "<RadFiled3D.OwningVec2Voxel (" + std::to_string(a.get_data().x) + ", " + std::to_string(a.get_data().y) + ")>";
 			}
 		);
 
-    py::class_<ScalarVoxel<glm::vec3>, std::shared_ptr<ScalarVoxel<glm::vec3>>, IVoxel>(m, "Vec3Voxel")
-        .def("get_data", &ScalarVoxel<glm::vec3>::get_data, py::return_value_policy::reference)
+    nb::class_<ScalarVoxel<glm::vec3>, IVoxel>(m, "Vec3Voxel")
+        .def("get_data", &ScalarVoxel<glm::vec3>::get_data, nb::rv_policy::reference)
         .def("set_data", [](ScalarVoxel<glm::vec3>& v, const glm::vec3& value) {
             v = value;
         })
-        .def(py::self == py::self)
-        .def(py::self /= py::self)
-        .def(py::self *= py::self)
-        .def(py::self += py::self)
-        .def(py::self -= py::self)
+        .def(nb::self == nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self -= nb::self)
         .def("__repr__",
             [](const ScalarVoxel<glm::vec3>& a) {
                 return "<RadFiled3D.Vec3Voxel (" + std::to_string(a.get_data().x) + ", " + std::to_string(a.get_data().y) + ", " + std::to_string(a.get_data().z) + ")>";
             }
         );
 
-	py::class_<OwningScalarVoxel<glm::vec3>, std::shared_ptr<OwningScalarVoxel<glm::vec3>>, ScalarVoxel<glm::vec3>>(m, "OwningVec3Voxel")
-		.def("get_data", &OwningScalarVoxel<glm::vec3>::get_data, py::return_value_policy::reference)
+	nb::class_<OwningScalarVoxel<glm::vec3>, ScalarVoxel<glm::vec3>>(m, "OwningVec3Voxel")
+		.def("get_data", &OwningScalarVoxel<glm::vec3>::get_data, nb::rv_policy::reference)
 		.def("set_data", &OwningScalarVoxel<glm::vec3>::set_data)
-		.def(py::self == py::self)
-		.def(py::self /= py::self)
-		.def(py::self *= py::self)
-		.def(py::self += py::self)
-		.def(py::self -= py::self)
+		.def(nb::self == nb::self)
+		.def(nb::self /= nb::self)
+		.def(nb::self *= nb::self)
+		.def(nb::self += nb::self)
+		.def(nb::self -= nb::self)
 		.def("__repr__",
 			[](const OwningScalarVoxel<glm::vec3>& a) {
 				return "<RadFiled3D.OwningVec3Voxel (" + std::to_string(a.get_data().x) + ", " + std::to_string(a.get_data().y) + ", " + std::to_string(a.get_data().z) + ")>";
 			}
 		);
 
-    py::class_<ScalarVoxel<glm::vec4>, std::shared_ptr<ScalarVoxel<glm::vec4>>, IVoxel>(m, "Vec4Voxel")
-        .def("get_data", &ScalarVoxel<glm::vec4>::get_data, py::return_value_policy::reference)
+    nb::class_<ScalarVoxel<glm::vec4>, IVoxel>(m, "Vec4Voxel")
+        .def("get_data", &ScalarVoxel<glm::vec4>::get_data, nb::rv_policy::reference)
         .def("set_data", [](ScalarVoxel<glm::vec4>& v, const glm::vec4& value) {
             v = value;
         })
-        .def(py::self == py::self)
-        .def(py::self /= py::self)
-        .def(py::self *= py::self)
-        .def(py::self += py::self)
-        .def(py::self -= py::self)
+        .def(nb::self == nb::self)
+        .def(nb::self /= nb::self)
+        .def(nb::self *= nb::self)
+        .def(nb::self += nb::self)
+        .def(nb::self -= nb::self)
         .def("__repr__",
             [](const ScalarVoxel<glm::vec4>& a) {
                 return "<RadFiled3D.Vec4Voxel (" + std::to_string(a.get_data().x) + ", " + std::to_string(a.get_data().y) + ", " + std::to_string(a.get_data().z) + ", " + std::to_string(a.get_data().w) + ")>";
             }
         );
 
-	py::class_<OwningScalarVoxel<glm::vec4>, std::shared_ptr<OwningScalarVoxel<glm::vec4>>, ScalarVoxel<glm::vec4>>(m, "OwningVec4Voxel")
-		.def("get_data", &OwningScalarVoxel<glm::vec4>::get_data, py::return_value_policy::reference)
+	nb::class_<OwningScalarVoxel<glm::vec4>, ScalarVoxel<glm::vec4>>(m, "OwningVec4Voxel")
+		.def("get_data", &OwningScalarVoxel<glm::vec4>::get_data, nb::rv_policy::reference)
 		.def("set_data", &OwningScalarVoxel<glm::vec4>::set_data)
-		.def(py::self == py::self)
-		.def(py::self /= py::self)
-		.def(py::self *= py::self)
-		.def(py::self += py::self)
-		.def(py::self -= py::self)
+		.def(nb::self == nb::self)
+		.def(nb::self /= nb::self)
+		.def(nb::self *= nb::self)
+		.def(nb::self += nb::self)
+		.def(nb::self -= nb::self)
 		.def("__repr__",
 			[](const OwningScalarVoxel<glm::vec4>& a) {
 				return "<RadFiled3D.OwningVec4Voxel (" + std::to_string(a.get_data().x) + ", " + std::to_string(a.get_data().y) + ", " + std::to_string(a.get_data().z) + ", " + std::to_string(a.get_data().w) + ")>";
 			}
 		);
 
-    py::class_<HistogramVoxel, std::shared_ptr<HistogramVoxel>, IVoxel>(m, "HistogramVoxel")
+    nb::class_<HistogramVoxel, IVoxel>(m, "HistogramVoxel")
         .def("get_histogram_bin_width", &HistogramVoxel::get_histogram_bin_width)
         .def("get_bins", &HistogramVoxel::get_bins)
         .def("get_histogram", [](const HistogramVoxel& a) {
             auto histogram = a.get_histogram();
-            py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { static_cast<size_t>(histogram.size()) },  // shape
-                { sizeof(float) },  // strides
+            nb::capsule cap(histogram.data(), [](void* data) noexcept { /* No deletion */ });
+            std::vector<size_t> shape = { static_cast<size_t>(histogram.size()) };
+            return nb::ndarray<float, nb::shape<-1>, nb::numpy>(
                 histogram.data(),
+                shape.size(),
+                shape.data(),
                 cap
             );
-        }, py::return_value_policy::reference)
+        }, nb::rv_policy::reference)
         .def("get_data", [](const HistogramVoxel& a) {
             auto histogram = a.get_histogram();
-            py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { static_cast<size_t>(histogram.size()) },  // shape
-                { sizeof(float) },  // strides
+            nb::capsule cap(histogram.data(), [](void* data) noexcept { /* No deletion */ });
+			std::vector<size_t> shape = { static_cast<size_t>(histogram.size()) };
+            return nb::ndarray<float, nb::shape<-1>, nb::numpy>(
                 histogram.data(),
+                shape.size(),
+                shape.data(),
                 cap
             );
-        }, py::return_value_policy::reference)
+        }, nb::rv_policy::reference)
         .def("add_value", &HistogramVoxel::add_value)
         .def("normalize", &HistogramVoxel::normalize)
-        .def(py::self == py::self)
+        .def(nb::self == nb::self)
         .def("__repr__",
             [](const HistogramVoxel& a) {
                 const size_t bins = a.get_bins();
@@ -1186,32 +1177,34 @@ PYBIND11_MODULE(RadFiled3D, m) {
             }
         );
 
-	py::class_<OwningHistogramVoxel, std::shared_ptr<OwningHistogramVoxel>, HistogramVoxel>(m, "OwningHistogramVoxel")
+	nb::class_<OwningHistogramVoxel, HistogramVoxel>(m, "OwningHistogramVoxel")
 		.def("get_histogram_bin_width", &OwningHistogramVoxel::get_histogram_bin_width)
 		.def("get_bins", &OwningHistogramVoxel::get_bins)
 		.def("get_histogram", [](const OwningHistogramVoxel& a) {
 		    auto histogram = a.get_histogram();
-		    py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
-		    return py::array_t<float>(
-			    { static_cast<size_t>(histogram.size()) },  // shape
-			    { sizeof(float) },  // strides
-			    histogram.data(),
-			    cap
-		    );
-		}, py::return_value_policy::reference)
-        .def("get_data", [](const OwningHistogramVoxel& a) {
-            auto histogram = a.get_histogram();
-            py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { static_cast<size_t>(histogram.size()) },  // shape
-                { sizeof(float) },  // strides
+		    nb::capsule cap(histogram.data(), [](void* data) noexcept { /* No deletion */ });
+            std::vector<size_t> shape = { static_cast<size_t>(histogram.size()) };
+            return nb::ndarray<float, nb::shape<-1>, nb::numpy>(
                 histogram.data(),
+                shape.size(),
+                shape.data(),
                 cap
             );
-        }, py::return_value_policy::reference)
+		}, nb::rv_policy::reference)
+        .def("get_data", [](const OwningHistogramVoxel& a) {
+            auto histogram = a.get_histogram();
+            nb::capsule cap(histogram.data(), [](void* data) noexcept { /* No deletion */ });
+            std::vector<size_t> shape = { static_cast<size_t>(histogram.size()) };
+            return nb::ndarray<float, nb::shape<-1>, nb::numpy>(
+                histogram.data(),
+                shape.size(),
+                shape.data(),
+                cap
+            );
+        }, nb::rv_policy::reference)
 		.def("add_value", &OwningHistogramVoxel::add_value)
 		.def("normalize", &OwningHistogramVoxel::normalize)
-		.def(py::self == py::self)
+		.def(nb::self == nb::self)
 		.def("__repr__",
 			[](const OwningHistogramVoxel& a) {
 				const size_t bins = a.get_bins();
@@ -1220,17 +1213,17 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			}
 		);
 
-    py::enum_<GridTracerAlgorithm>(m, "GridTracerAlgorithm")
+    nb::enum_<GridTracerAlgorithm>(m, "GridTracerAlgorithm")
         .value("SAMPLING", GridTracerAlgorithm::SAMPLING)
 		.value("BRESENHAM", GridTracerAlgorithm::BRESENHAM)
         .value("LINETRACING", GridTracerAlgorithm::LINETRACING);
 
-    py::enum_<Typing::FieldShape>(m, "FieldShape")
+    nb::enum_<Typing::FieldShape>(m, "FieldShape")
         .value("CONE", Typing::FieldShape::Cone)
         .value("RECTANGLE", Typing::FieldShape::Rectangle)
         .value("ELLIPSIS", Typing::FieldShape::Ellipsis);
 
-    py::enum_<Typing::DType>(m, "DType")
+    nb::enum_<Typing::DType>(m, "DType")
         .value("FLOAT32", Typing::DType::Float)
         .value("FLOAT64", Typing::DType::Double)
         .value("INT32", Typing::DType::Int)
@@ -1243,7 +1236,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("UINT32", Typing::DType::UInt32)
         .value("BYTE", Typing::DType::Byte);
 
-    py::enum_<FieldJoinMode>(m, "FieldJoinMode")
+    nb::enum_<FieldJoinMode>(m, "FieldJoinMode")
         .value("IDENTITY", FieldJoinMode::Identity)
         .value("ADD", FieldJoinMode::Add)
         .value("MEAN", FieldJoinMode::Mean)
@@ -1252,11 +1245,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("MULTIPLY", FieldJoinMode::Multiply)
         .value("ADD_WEIGHTED", FieldJoinMode::AddWeighted);
 
-    py::enum_<FieldType>(m, "FieldType")
+    nb::enum_<FieldType>(m, "FieldType")
         .value("CARTESIAN", FieldType::Cartesian)
         .value("POLAR", FieldType::Polar);
 
-    py::enum_<FieldJoinCheckMode>(m, "FieldJoinCheckMode")
+    nb::enum_<FieldJoinCheckMode>(m, "FieldJoinCheckMode")
         .value("STRICT", FieldJoinCheckMode::Strict)
         .value("METADATA_SIMULATION_SIMILAR", FieldJoinCheckMode::MetadataSimulationSimilar)
         .value("METADATA_SOFTWARE_EQUAL", FieldJoinCheckMode::MetadataSoftwareEqual)
@@ -1265,7 +1258,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("FIELD_UNITS_ONLY", FieldJoinCheckMode::FieldUnitsOnly)
         .value("NO_CHECKS", FieldJoinCheckMode::NoChecks);
 
-    py::class_<VoxelBuffer, std::shared_ptr<VoxelBuffer>>(m, "VoxelBuffer")
+    nb::class_<VoxelBuffer>(m, "VoxelBuffer")
         .def("get_voxel_count", &VoxelBuffer::get_voxel_count)
         .def("get_layers", &VoxelBuffer::get_layers)
 		.def("has_layer", &VoxelBuffer::has_layer)
@@ -1310,16 +1303,16 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 default:
                     throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(dtype)));
             }
-            }, py::arg("name"), py::arg("unit"), py::arg("dtype"))
+            }, nb::arg("name"), nb::arg("unit"), nb::arg("dtype"))
             .def("add_histogram_layer", [](VoxelBuffer& self, const std::string& name, size_t bins, float bin_width, const std::string& unit) {
                 self.add_custom_layer<HistogramVoxel>(name, HistogramVoxel(bins, bin_width, nullptr), 0.f, unit);
-            }, py::arg("name"), py::arg("bins"), py::arg("bin_width"), py::arg("unit"));
+            }, nb::arg("name"), nb::arg("bins"), nb::arg("bin_width"), nb::arg("unit"));
 
-        py::class_<VoxelGridBuffer, std::shared_ptr<VoxelGridBuffer>, VoxelBuffer>(m, "VoxelGridBuffer")
+        nb::class_<VoxelGridBuffer, VoxelBuffer>(m, "VoxelGridBuffer")
             .def("get_voxel_counts", &VoxelGridBuffer::get_voxel_counts)
             .def("get_voxel_dimensions", &VoxelGridBuffer::get_voxel_dimensions)
 			.def("get_voxel_idx_by_coord", &VoxelGridBuffer::get_voxel_idx_by_coord)
-			.def("get_voxel_idx", &VoxelGridBuffer::get_voxel_idx, py::arg("x"), py::arg("y"), py::arg("z"))
+			.def("get_voxel_idx", &VoxelGridBuffer::get_voxel_idx, nb::arg("x"), nb::arg("y"), nb::arg("z"))
             .def("get_voxel_flat", [](VoxelGridBuffer& self, const std::string& layer_name, size_t idx) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1348,7 +1341,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::arg("layer_name"), py::arg("idx"), py::return_value_policy::reference)
+            }, nb::arg("layer_name"), nb::arg("idx"), nb::rv_policy::reference)
             .def("get_voxel", [](VoxelGridBuffer& self, const std::string& layer_name, size_t x, size_t y, size_t z) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1377,7 +1370,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, nb::rv_policy::reference)
             .def("get_voxel_by_coord", [](VoxelGridBuffer& self, const std::string& layer_name, float x, float y, float z) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1406,7 +1399,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, nb::rv_policy::reference)
             .def("get_layer_as_ndarray", [](std::shared_ptr<VoxelGridBuffer>& self, const std::string& layer, bool copy) {
                 try {
                     const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
@@ -1437,7 +1430,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				catch (const std::exception& e) {
 					throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
 				}
-            }, py::arg("layer"), py::arg("copy") = false)
+            }, nb::arg("layer"), nb::arg("copy") = false)
             .def("__repr__", [](const VoxelGridBuffer& self) {
                 auto voxel_dim = self.get_voxel_dimensions();
                 auto voxel_count = self.get_voxel_counts();
@@ -1445,7 +1438,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return "<RadFiled3D.VoxelGridBuffer (" + std::to_string(voxel_dim.x) + " m, " + std::to_string(voxel_dim.y) + " m, " + std::to_string(voxel_dim.z) + " m) x (" + std::to_string(voxel_count.x) + ", " + std::to_string(voxel_count.y) + ", " + std::to_string(voxel_count.z) + ") numpy_refs: " + std::to_string(mem_refs) + ">";
             });
 
-            py::class_<VoxelLayer, std::shared_ptr<VoxelLayer>>(m, "VoxelLayer")
+            nb::class_<VoxelLayer>(m, "VoxelLayer")
                 .def("get_voxel_flat", [](VoxelLayer& self, size_t idx) {
                     const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(0).get_type());
                     switch (type) {
@@ -1474,19 +1467,19 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::arg("idx"), py::return_value_policy::reference)
+                }, nb::arg("idx"), nb::rv_policy::reference)
                 .def("get_unit", &VoxelLayer::get_unit)
                 .def("get_statistical_error", &VoxelLayer::get_statistical_error)
                 .def("get_voxel_count", &VoxelLayer::get_voxel_count);
 
-            py::class_<VoxelGrid, std::shared_ptr<VoxelGrid>>(m, "VoxelGrid")
-                .def(py::init([](const glm::vec3& field_dimensions, const glm::vec3& voxel_dimensions, std::shared_ptr<VoxelLayer> layer) {
+            nb::class_<VoxelGrid>(m, "VoxelGrid")
+                .def("__new__", [](nb::handle, const glm::vec3& field_dimensions, const glm::vec3& voxel_dimensions, std::shared_ptr<VoxelLayer> layer) {
                     return std::make_shared<VoxelGrid>(field_dimensions, voxel_dimensions, layer);
-                }), py::arg("field_dimensions"), py::arg("voxel_dimensions"), py::arg("dimensions") = std::shared_ptr<VoxelLayer>(nullptr))
+                }, nb::arg("field_dimensions"), nb::arg("voxel_dimensions"), nb::arg("layer") = std::shared_ptr<VoxelLayer>(nullptr))
                 .def("get_voxel_dimensions", &VoxelGrid::get_voxel_dimensions)
                 .def("get_voxel_counts", &VoxelGrid::get_voxel_counts)
-                .def("get_voxel_idx", &VoxelGrid::get_voxel_idx, py::arg("x"), py::arg("y"), py::arg("z"))
-                .def("get_voxel_idx_by_coord", &VoxelGrid::get_voxel_idx_by_coord, py::arg("x"), py::arg("y"), py::arg("z"))
+                .def("get_voxel_idx", &VoxelGrid::get_voxel_idx, nb::arg("x"), nb::arg("y"), nb::arg("z"))
+                .def("get_voxel_idx_by_coord", &VoxelGrid::get_voxel_idx_by_coord, nb::arg("x"), nb::arg("y"), nb::arg("z"))
                 .def("get_voxel", [](const VoxelGrid& self, size_t x, size_t y, size_t z) {
                     const Typing::DType type = Typing::Helper::get_dtype(self.get_layer()->get_voxel_flat<IVoxel>(0).get_type());
                     switch (type) {
@@ -1515,7 +1508,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference)
+                }, nb::arg("x"), nb::arg("y"), nb::arg("z"), nb::rv_policy::reference)
                 .def("get_voxel_by_coord", [](const VoxelGrid& self, float x, float y, float z) {
                     const Typing::DType type = Typing::Helper::get_dtype(self.get_layer()->get_voxel_flat<IVoxel>(0).get_type());
                     switch (type) {
@@ -1544,10 +1537,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference)
+                }, nb::arg("x"), nb::arg("y"), nb::arg("z"), nb::rv_policy::reference)
                 .def("get_layer", &VoxelGrid::get_layer)
 				.def("__enter__", [](std::shared_ptr<VoxelGrid>& self) { return self; })
-                .def("__exit__", [](std::shared_ptr<VoxelGrid>& r, py::object exc_type, py::object exc_value, py::object traceback) {
+                .def("__exit__", [](std::shared_ptr<VoxelGrid>& r, nb::object exc_type, nb::object exc_value, nb::object traceback) {
                     r.reset();
 			    })
                 .def("__repr__", [](const VoxelGrid& self) {
@@ -1586,12 +1579,12 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				    catch (const std::exception& e) {
 					    throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
 				    }
-                }, py::arg("copy") = false);
+                }, nb::arg("copy") = false);
 
-        py::class_<PolarSegments, std::shared_ptr<PolarSegments>>(m, "PolarSegments")
-			.def(py::init([](const glm::uvec2& segments_counts, std::shared_ptr<VoxelLayer> layer) {
+        nb::class_<PolarSegments>(m, "PolarSegments")
+            .def("__new__", [](nb::handle, const glm::uvec2& segments_counts, std::shared_ptr<VoxelLayer> layer) {
 		        return std::make_shared<PolarSegments>(segments_counts, layer);
-			}), py::arg("segments_counts"), py::arg("layer") = std::shared_ptr<VoxelLayer>(nullptr))
+			}, nb::arg("segments_counts"), nb::arg("layer") = std::shared_ptr<VoxelLayer>(nullptr))
 			.def("get_segments_count", &PolarSegments::get_segments_count)
 			.def("get_segment_idx_by_coord", &PolarSegments::get_segment_idx_by_coord)
 			.def("get_segment_idx", &PolarSegments::get_segment_idx)
@@ -1623,7 +1616,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    default:
 				    throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 			    }
-			}, py::return_value_policy::reference)
+			}, nb::rv_policy::reference)
 			.def("get_segment_by_coord", [](PolarSegments& self, float phi, float theta) {
 			    const Typing::DType type = Typing::Helper::get_dtype(self.get_layer()->get_voxel_flat<IVoxel>(0).get_type());
 			    switch (type) {
@@ -1652,10 +1645,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    default:
 				    throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 			    }
-			}, py::return_value_policy::reference)
+			}, nb::rv_policy::reference)
 			.def("get_layer", &PolarSegments::get_layer)
 			.def("__enter__", [](std::shared_ptr<PolarSegments>& self) { return self; })
-			.def("__exit__", [](std::shared_ptr<PolarSegments>& r, py::object exc_type, py::object exc_value, py::object traceback) {
+			.def("__exit__", [](std::shared_ptr<PolarSegments>& r, nb::object exc_type, nb::object exc_value, nb::object traceback) {
 			    r.reset();
 		    })
             .def("get_as_ndarray", [](std::shared_ptr<PolarSegments>& self, bool copy) {
@@ -1688,9 +1681,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 catch (const std::exception& e) {
                     throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
                 }
-			}, py::arg("copy") = false);
+			}, nb::arg("copy") = false);
 
-        py::class_<PolarSegmentsBuffer, std::shared_ptr<PolarSegmentsBuffer>, VoxelBuffer>(m, "PolarSegmentsBuffer")
+        nb::class_<PolarSegmentsBuffer, VoxelBuffer>(m, "PolarSegmentsBuffer")
             .def("get_segments_count", &PolarSegmentsBuffer::get_segments_count)
             .def("get_segment_idx_by_coord", &PolarSegmentsBuffer::get_segment_idx_by_coord)
             .def("get_segment_idx", &PolarSegmentsBuffer::get_segment_idx)
@@ -1722,7 +1715,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, nb::rv_policy::reference)
             .def("get_segment_by_coord", [](const PolarSegmentsBuffer& self, const std::string& layer, float phi, float theta) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_segment_flat<IVoxel>(layer, 0).get_type());
                 switch (type) {
@@ -1751,7 +1744,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, nb::rv_policy::reference)
             .def("get_segment", [](const PolarSegmentsBuffer& self, const std::string& layer, size_t x, size_t y) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer, 0).get_type());
                 switch (type) {
@@ -1780,7 +1773,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 default:
                     throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, nb::rv_policy::reference)
             .def("get_layer_as_ndarray", [](std::shared_ptr<PolarSegmentsBuffer>& self, const std::string& layer, bool copy) {
                 const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
                 const Typing::DType type = Typing::Helper::get_dtype(layer_info.get_type());
@@ -1806,7 +1799,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 					const size_t element_size = layer_info.get_bytes();
 					const float* data = self->get_layer<float>(layer);
 
-					return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
+                    return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
                 }
                 else {
 					throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
@@ -1816,9 +1809,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 const float* data = self->get_layer<float>(layer);
 
 				return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
-            }, py::arg("layer"), py::arg("copy") = false);
+            }, nb::arg("layer"), nb::arg("copy") = false);
 
-        py::class_<IRadiationField, std::shared_ptr<IRadiationField>>(m, "RadiationField")
+        nb::class_<IRadiationField>(m, "RadiationField")
             .def("get_typename", &IRadiationField::get_typename)
             .def("get_channels", &IRadiationField::get_channels)
             .def("get_channel_names", &IRadiationField::get_channel_names)
@@ -1827,9 +1820,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def("add_channel", &IRadiationField::add_channel)
             .def("__exit__",
                 [&](std::shared_ptr<IRadiationField>& r,
-                    const std::optional<pybind11::type>& exc_type,
-                    const std::optional<pybind11::object>& exc_value,
-                    const std::optional<pybind11::object>& traceback)
+                    nb::handle exc_type,
+                    nb::handle exc_value,
+                    nb::handle traceback)
                 {
                     r.reset();
                 },
@@ -1837,8 +1830,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			.def("__enter__", [](std::shared_ptr<IRadiationField>& r) { return r; })
             .def("copy", &IRadiationField::copy);
 
-        py::class_<CartesianRadiationField, std::shared_ptr<CartesianRadiationField>, IRadiationField>(m, "CartesianRadiationField")
-            .def(py::init<const glm::vec3&, const glm::vec3&>())
+        nb::class_<CartesianRadiationField, IRadiationField>(m, "CartesianRadiationField")
+            .def(nb::init<const glm::vec3&, const glm::vec3&>())
             .def("add_channel", [](CartesianRadiationField& self, const std::string& name) {
                 return std::static_pointer_cast<VoxelGridBuffer>(self.add_channel(name));
             })
@@ -1859,9 +1852,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def("copy", &CartesianRadiationField::copy)
             .def("__exit__",
                 [&](std::shared_ptr<CartesianRadiationField>& r,
-                    const std::optional<pybind11::type>& exc_type,
-                    const std::optional<pybind11::object>& exc_value,
-                    const std::optional<pybind11::object>& traceback)
+                    nb::handle exc_type,
+                    nb::handle exc_value,
+                    nb::handle traceback)
                 {
                     r.reset();
                 },
@@ -1877,8 +1870,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 }
              );
 
-        py::class_<PolarRadiationField, std::shared_ptr<PolarRadiationField>, IRadiationField>(m, "PolarRadiationField")
-            .def(py::init<const glm::uvec2&>())
+        nb::class_<PolarRadiationField, IRadiationField>(m, "PolarRadiationField")
+            .def(nb::init<const glm::uvec2&>())
             .def("get_channels", [](CartesianRadiationField& self) {
                 auto channels = self.get_channels();
                 std::vector<std::pair<std::string, std::shared_ptr<PolarSegmentsBuffer>>> result;
@@ -1897,9 +1890,9 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def("copy", &PolarRadiationField::copy)
             .def("__exit__",
                 [&](std::shared_ptr<PolarRadiationField>& r,
-                    const std::optional<pybind11::type>& exc_type,
-                    const std::optional<pybind11::object>& exc_value,
-                    const std::optional<pybind11::object>& traceback)
+                    nb::handle exc_type,
+                    nb::handle exc_value,
+                    nb::handle traceback)
                 {
                     r.reset();
                 },
@@ -1913,36 +1906,36 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 }
             );
 
-        py::enum_<Storage::StoreVersion>(m, "StoreVersion")
+        nb::enum_<Storage::StoreVersion>(m, "StoreVersion")
             .value("V1", Storage::StoreVersion::V1);
 
-        py::class_<RadFiled3D::Storage::FieldAccessor, std::shared_ptr<FieldAccessor>>(m, "FieldAccessor")
-			.def(py::pickle(    // general fallback for all FieldAccessor types. No explicit testing if the type python is expecting matches the unpickle procedure loaded, but should be fine for future accessors.
+        nb::class_<RadFiled3D::Storage::FieldAccessor>(m, "FieldAccessor")
+			.def("__getstate__",    // general fallback for all FieldAccessor types. No explicit testing if the type python is expecting matches the unpickle procedure loaded, but should be fine for future accessors.
                 [](const Storage::FieldAccessor& self) {
                     auto data = FieldAccessor::Serialize(&self);
                     return FieldAccessorPickleTuple(self.getFieldType(), data);
-                },
-                [](const FieldAccessorPickleTuple& t) {
+                })
+            .def("__setstate__", [](const FieldAccessorPickleTuple& t) {
                     FieldType type = std::get<0>(t);
                     if (std::get<1>(t).size() == 0) {
                         throw std::runtime_error("Empty data");
                     }
                     return FieldAccessor::Deserialize(std::get<1>(t));
                 }
-            ))
+            )
             .def("get_field_type", [](const FieldAccessor& self) {
                 return self.getFieldType();
             })
-            .def("access_field_from_buffer", [](const FieldAccessor& self, const py::bytes& bytes) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_field_from_buffer", [](const FieldAccessor& self, const nb::bytes& bytes) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return self.accessField(stream);
             })
             .def("access_field", [](const FieldAccessor& self, const std::string& file) {
 			    std::ifstream stream(file, std::ios::binary);
                 return self.accessField(stream);
             })
-			.def_static("get_store_version", [](const py::bytes& bytes) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+			.def_static("get_store_version", [](const nb::bytes& bytes) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return FieldAccessor::getStoreVersion(stream);
 			})
             .def("get_voxel_count", [](const FieldAccessor& self) {
@@ -1967,13 +1960,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 std::ifstream stream(file, std::ios::binary);
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             })
-            .def("access_voxel_flat_from_buffer", [](const FieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_voxel_flat_from_buffer", [](const FieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             });
 
-        py::class_<Storage::CartesianFieldAccessor, std::shared_ptr<CartesianFieldAccessor>, RadFiled3D::Storage::FieldAccessor>(m, "CartesianFieldAccessor")
-			.def(py::init([](const std::shared_ptr<FieldAccessor>& base) { return std::dynamic_pointer_cast<Storage::CartesianFieldAccessor>(base); }))
+        nb::class_<Storage::CartesianFieldAccessor, RadFiled3D::Storage::FieldAccessor>(m, "CartesianFieldAccessor")
+            .def("__new__", [](nb::handle, const std::shared_ptr<FieldAccessor>& base) { return std::dynamic_pointer_cast<Storage::CartesianFieldAccessor>(base); })
             .def("access_voxel_flat", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, size_t idx) {
 			    std::ifstream stream(file, std::ios::binary);
 			    return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
@@ -1984,20 +1977,20 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def("get_voxel_count", [](const CartesianFieldAccessor& self) {
                 return self.getVoxelCount();
             })
-			.def("access_voxel_flat_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+			.def("access_voxel_flat_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
 			})
             .def("access_field", [](const Storage::CartesianFieldAccessor& self, const std::string& file) {
 			    std::ifstream stream(file, std::ios::binary);
 			    return self.accessField(stream);
 		    })
-			.def("access_field_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+			.def("access_field_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes) {
+			    std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return self.accessField(stream);
 			})
-            .def("access_layer_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_layer_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return self.accessLayer(stream, channel_name, layer_name);
 			})
 			.def("access_layer", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name) {
@@ -2008,32 +2001,32 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    std::ifstream stream(file, std::ios::binary);
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
-            .def("access_layer_across_channels_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& layer_name) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_layer_across_channels_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& layer_name) {
+			    std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
 			.def("access_channel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name) {
 			    std::ifstream stream(file, std::ios::binary);
 			    return self.accessChannel(stream, channel_name);
 			})
-            .def("access_channel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_channel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return self.accessChannel(stream, channel_name);
             })
 			.def("access_voxel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
 			    std::ifstream stream(static_cast<std::string>(file), std::ios::binary);
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 			})
-            .def("access_voxel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_voxel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
             })
 			.def("__repr__", [](const Storage::CartesianFieldAccessor& self) {
                 auto voxels = self.getVoxelCount();
 			    return std::string("<RadFiled3D.CartesianFieldAccessor (voxels: ") + std::to_string(voxels) + std::string(")>");
 			})
-			.def("access_voxel_by_coord_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+			.def("access_voxel_by_coord_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_by_coord", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
@@ -2041,13 +2034,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
             });
         
-		py::class_<Storage::V1::CartesianFieldAccessor, std::shared_ptr<Storage::V1::CartesianFieldAccessor>, Storage::CartesianFieldAccessor>(m, "CartesianFieldAccessorV1")
-            .def(py::pickle(
+		nb::class_<Storage::V1::CartesianFieldAccessor, Storage::CartesianFieldAccessor>(m, "CartesianFieldAccessorV1")
+            .def("__getstate__",
                 [](const Storage::V1::CartesianFieldAccessor& self) {
                     auto data = FieldAccessor::Serialize(&self);
                     return FieldAccessorPickleTuple(self.getFieldType(), data);
-                },
-                [](const FieldAccessorPickleTuple& t) {
+                })
+            .def("__setstate__", [](const FieldAccessorPickleTuple& t) {
                     FieldType type = std::get<0>(t);
                     if (type != FieldType::Cartesian) {
                         throw std::runtime_error("Unsupported field type: " + std::to_string(static_cast<int>(type)));
@@ -2057,8 +2050,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     }
                     return std::dynamic_pointer_cast<Storage::V1::CartesianFieldAccessor>(FieldAccessor::Deserialize(std::get<1>(t)));
                 }
-            ))
-            .def(py::init([](const std::shared_ptr<FieldAccessor>& base) { return std::dynamic_pointer_cast<Storage::V1::CartesianFieldAccessor>(base); }))
+            )
+            .def("__new__", [](nb::handle, const std::shared_ptr<FieldAccessor>& base) { return std::dynamic_pointer_cast<Storage::V1::CartesianFieldAccessor>(base); })
             .def("get_voxel_count", [](const V1::CartesianFieldAccessor& self) {
 			    return self.getVoxelCount();
 			})
@@ -2070,37 +2063,37 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				return std::string("<RadFiled3D.CartesianFieldAccessorV1 (voxels: ") + std::to_string(voxels) + std::string(")>");
 			});
 
-		py::class_<Storage::PolarFieldAccessor, std::shared_ptr<PolarFieldAccessor>, Storage::FieldAccessor>(m, "PolarFieldAccessor")
+		nb::class_<Storage::PolarFieldAccessor, Storage::FieldAccessor>(m, "PolarFieldAccessor")
             .def("get_voxel_count", [](const PolarFieldAccessor& self) {
                 return self.getVoxelCount();
             })
             .def("get_field_type", [](const PolarFieldAccessor& self) {
                 return self.getFieldType();
             })
-            .def("access_layer", [](const PolarFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+            .def("access_layer", [](const PolarFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return self.accessLayer(stream, channel_name, layer_name);
             })
-			.def("access_voxel", [](const PolarFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec2& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+			.def("access_voxel", [](const PolarFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec2& coord) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 		    })
 			.def("__repr__", [](const PolarFieldAccessor& a) {
 			    auto voxels = a.getVoxelCount();
 			    return std::string("<RadFiled3D.PolarFieldAccessor (voxels: ") + std::to_string(voxels) + std::string(")>");
 		    })
-			.def("access_voxel_by_coord", [](const PolarFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec2& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+			.def("access_voxel_by_coord", [](const PolarFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec2& coord) {
+                std::istringstream stream((const char*)bytes.data(), bytes.size());
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			});
 
-		py::class_<V1::PolarFieldAccessor, std::shared_ptr<V1::PolarFieldAccessor>, Storage::PolarFieldAccessor>(m, "PolarFieldAccessorV1")
-            .def(py::pickle(
+		nb::class_<V1::PolarFieldAccessor, Storage::PolarFieldAccessor>(m, "PolarFieldAccessorV1")
+            .def("__getstate__",
                 [](const Storage::V1::PolarFieldAccessor& self) {
                     auto data = FieldAccessor::Serialize(&self);
                     return FieldAccessorPickleTuple(self.getFieldType(), data);
-                },
-                [](const FieldAccessorPickleTuple& t) {
+                })
+            .def("__setstate__", [](const FieldAccessorPickleTuple& t) {
                     FieldType type = std::get<0>(t);
                     if (type != FieldType::Polar) {
                         throw std::runtime_error("Unsupported field type: " + std::to_string(static_cast<int>(type)));
@@ -2110,7 +2103,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     }
                     return std::dynamic_pointer_cast<Storage::V1::PolarFieldAccessor>(FieldAccessor::Deserialize(std::get<1>(t)));
                 }
-            ))
+            )
             .def("get_voxel_count", [](const V1::PolarFieldAccessor& self) {
                 return self.getVoxelCount();
             })
@@ -2122,7 +2115,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return std::string("<RadFiled3D.PolarFieldAccessorV1 (voxels: ") + std::to_string(voxels) + std::string(")>");
 			});
 
-        py::class_<Storage::FieldStore>(m, "FieldStore")
+        nb::class_<Storage::FieldStore>(m, "FieldStore")
             .def_static("init_store_instance", &Storage::FieldStore::init_store_instance)
             .def_static("enable_file_lock_syncronization", &Storage::FieldStore::enable_file_lock_syncronization)
             .def_static("get_store_version", static_cast<Storage::StoreVersion(*)(const std::string&)>(&Storage::FieldStore::get_store_version))
@@ -2141,15 +2134,15 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 std::istringstream stream(bytes);
                 return FieldStore::peek_metadata(stream);
             })
-            .def_static("store", &FieldStore::store, py::arg("field"), py::arg("metadata"), py::arg("file"), py::arg("version") = StoreVersion::V1)
-            .def_static("join", &FieldStore::join, py::arg("field"), py::arg("metadata"), py::arg("file"), py::arg("join_mode") = FieldJoinMode::Add, py::arg("check_mode") = FieldJoinCheckMode::MetadataSimulationSimilar, py::arg("fallback_version") = StoreVersion::V1)
+            .def_static("store", &FieldStore::store, nb::arg("field"), nb::arg("metadata"), nb::arg("file"), nb::arg("version") = StoreVersion::V1)
+            .def_static("join", &FieldStore::join, nb::arg("field"), nb::arg("metadata"), nb::arg("file"), nb::arg("join_mode") = FieldJoinMode::Add, nb::arg("check_mode") = FieldJoinCheckMode::MetadataSimulationSimilar, nb::arg("fallback_version") = StoreVersion::V1)
             .def_static("peek_field_type", &FieldStore::peek_field_type)
             .def_static("construct_field_accessor", [](const std::string& file) {
 			    std::ifstream stream(file, std::ios::binary);
                 return FieldStore::construct_accessor(stream);
             })
-            .def_static("construct_field_accessor_from_buffer", [](const py::bytes& bytes) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+            .def_static("construct_field_accessor_from_buffer", [](const nb::bytes& bytes) {
+			    std::istringstream stream((const char*)bytes.data(), bytes.size());
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("load_single_grid_layer", [](const std::string& file, const std::string& channel_name, const std::string& layer_name) -> std::shared_ptr<VoxelGrid> {
@@ -2191,19 +2184,19 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				}
 
 			    return std::dynamic_pointer_cast<PolarFieldAccessor>(accessor)->accessLayer(stream, channel_name, layer_name);
-			}, py::arg("bytes"), py::arg("channel_name"), py::arg("layer_name"));
+			}, nb::arg("bytes"), nb::arg("channel_name"), nb::arg("layer_name"));
 
 
         // Datasets helper bindings
-        py::class_<VoxelCollectionRequest>(m, "VoxelCollectionRequest")
-            .def(py::init<const std::string&, const std::vector<size_t>&>(), py::arg("file_path"), py::arg("voxel_indices"))
-            .def_readonly("file_path", &VoxelCollectionRequest::filePath)
-            .def_readonly("voxel_indices", &VoxelCollectionRequest::voxelIndices)
+        nb::class_<VoxelCollectionRequest>(m, "VoxelCollectionRequest")
+            .def(nb::init<const std::string&, const std::vector<size_t>&>(), nb::arg("file_path"), nb::arg("voxel_indices"))
+            .def_ro("file_path", &VoxelCollectionRequest::filePath)
+            .def_ro("voxel_indices", &VoxelCollectionRequest::voxelIndices)
             .def("__repr__", [](const VoxelCollectionRequest& a) {
                 return std::string("<RadFiled3D.VoxelCollectionRequest (requested voxels per layer: ") + std::to_string(a.voxelIndices.size()) + std::string(")>");
             });
 
-        py::class_<VoxelCollection, std::shared_ptr<VoxelCollection>>(m, "VoxelCollection")
+        nb::class_<VoxelCollection>(m, "VoxelCollection")
             .def("get_as_ndarray", [](std::shared_ptr<VoxelCollection>& self, const std::string& channel, const std::string& layer, bool copy) {
 			    auto channel_it = self->channels.find(channel);
                 if (channel_it == self->channels.end())
@@ -2234,8 +2227,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 }
 
                 const size_t element_size = layer_it->second.voxels[0]->get_bytes();
-                return create_py_array_generic<float>((float*)data_buffer, voxel_count, self, copy, element_size);
-            }, py::arg("channel"), py::arg("layer"), py::arg("copy") = false)
+                return create_py_array_generic<char>(data_buffer, voxel_count, self, copy, element_size);
+            }, nb::arg("channel"), nb::arg("layer"), nb::arg("copy") = false)
             .def("__repr__", [](const VoxelCollection& a) {
                 size_t vx_count = 0;
                 for (auto itr = a.channels.begin(); itr != a.channels.end(); ++itr) {
@@ -2246,23 +2239,23 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return std::string("<RadFiled3D.VoxelCollection (voxels: ") + std::to_string(vx_count) + std::string(")>");
             });
 
-        py::class_<VoxelCollectionAccessor>(m, "VoxelCollectionAccessor")
-            .def(py::init<std::shared_ptr<Storage::FieldAccessor>, const std::vector<std::string>&, const std::vector<std::string>&>(), py::arg("accessor"), py::arg("channels"), py::arg("layers"))
-            .def("access", &VoxelCollectionAccessor::access, py::arg("requests"));
+        nb::class_<VoxelCollectionAccessor>(m, "VoxelCollectionAccessor")
+            .def(nb::init<std::shared_ptr<Storage::FieldAccessor>, const std::vector<std::string>&, const std::vector<std::string>&>(), nb::arg("accessor"), nb::arg("channels"), nb::arg("layers"))
+            .def("access", &VoxelCollectionAccessor::access, nb::arg("requests"));
 
 
-        py::class_<GridTracer, std::shared_ptr<GridTracer>>(m, "GridTracer")
-            .def("trace", &GridTracer::trace, py::arg("p1"), py::arg("p2"));
+        nb::class_<GridTracer>(m, "GridTracer")
+            .def("trace", &GridTracer::trace, nb::arg("p1"), nb::arg("p2"));
 
-		py::class_<SamplingGridTracer, std::shared_ptr<SamplingGridTracer>, GridTracer>(m, "SamplingGridTracer")
-			.def("trace", &SamplingGridTracer::trace, py::arg("p1"), py::arg("p2"));
+		nb::class_<SamplingGridTracer, GridTracer>(m, "SamplingGridTracer")
+			.def("trace", &SamplingGridTracer::trace, nb::arg("p1"), nb::arg("p2"));
 
-		py::class_<BresenhamGridTracer, std::shared_ptr<BresenhamGridTracer>, GridTracer>(m, "BresenhamGridTracer")
-			.def("trace", &BresenhamGridTracer::trace, py::arg("p1"), py::arg("p2"));
+		nb::class_<BresenhamGridTracer, GridTracer>(m, "BresenhamGridTracer")
+			.def("trace", &BresenhamGridTracer::trace, nb::arg("p1"), nb::arg("p2"));
 
-		py::class_<LinetracingGridTracer, std::shared_ptr<LinetracingGridTracer>, GridTracer>(m, "LinetracingGridTracer")
-			.def("trace", &LinetracingGridTracer::trace, py::arg("p1"), py::arg("p2"));
+		nb::class_<LinetracingGridTracer, GridTracer>(m, "LinetracingGridTracer")
+			.def("trace", &LinetracingGridTracer::trace, nb::arg("p1"), nb::arg("p2"));
 
-		py::class_<PyGridTracerFactory>(m, "GridTracerFactory")
-			.def_static("construct", &PyGridTracerFactory::construct, py::arg("field"), py::arg("algorithm") = GridTracerAlgorithm::SAMPLING);
+		nb::class_<PyGridTracerFactory>(m, "GridTracerFactory")
+			.def_static("construct", &PyGridTracerFactory::construct, nb::arg("field"), nb::arg("algorithm") = GridTracerAlgorithm::SAMPLING);
 }
