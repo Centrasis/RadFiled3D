@@ -1927,7 +1927,7 @@ NB_MODULE(RadFiled3D, m) {
                 return self.getFieldType();
             })
             .def("access_field_from_buffer", [](const FieldAccessor& self, const nb::bytes& bytes) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
                 return self.accessField(stream);
             })
             .def("access_field", [](const FieldAccessor& self, const std::string& file) {
@@ -1935,7 +1935,7 @@ NB_MODULE(RadFiled3D, m) {
                 return self.accessField(stream);
             })
 			.def_static("get_store_version", [](const nb::bytes& bytes) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
 			    return FieldAccessor::getStoreVersion(stream);
 			})
             .def("get_voxel_count", [](const FieldAccessor& self) {
@@ -1961,7 +1961,7 @@ NB_MODULE(RadFiled3D, m) {
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             })
             .def("access_voxel_flat_from_buffer", [](const FieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             });
 
@@ -1978,7 +1978,7 @@ NB_MODULE(RadFiled3D, m) {
                 return self.getVoxelCount();
             })
 			.def("access_voxel_flat_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
 			})
             .def("access_field", [](const Storage::CartesianFieldAccessor& self, const std::string& file) {
@@ -1986,11 +1986,11 @@ NB_MODULE(RadFiled3D, m) {
 			    return self.accessField(stream);
 		    })
 			.def("access_field_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes) {
-			    std::istringstream stream((const char*)bytes.data(), bytes.size());
+			    std::istringstream stream(std::string((const char*)bytes.data()));
 			    return self.accessField(stream);
 			})
             .def("access_layer_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
 			    return self.accessLayer(stream, channel_name, layer_name);
 			})
 			.def("access_layer", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name) {
@@ -2002,7 +2002,7 @@ NB_MODULE(RadFiled3D, m) {
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
             .def("access_layer_across_channels_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& layer_name) {
-			    std::istringstream stream((const char*)bytes.data(), bytes.size());
+			    std::istringstream stream(std::string((const char*)bytes.data()));
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
 			.def("access_channel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name) {
@@ -2010,7 +2010,7 @@ NB_MODULE(RadFiled3D, m) {
 			    return self.accessChannel(stream, channel_name);
 			})
             .def("access_channel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
                 return self.accessChannel(stream, channel_name);
             })
 			.def("access_voxel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
@@ -2018,7 +2018,7 @@ NB_MODULE(RadFiled3D, m) {
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
                 return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
             })
 			.def("__repr__", [](const Storage::CartesianFieldAccessor& self) {
@@ -2026,7 +2026,7 @@ NB_MODULE(RadFiled3D, m) {
 			    return std::string("<RadFiled3D.CartesianFieldAccessor (voxels: ") + std::to_string(voxels) + std::string(")>");
 			})
 			.def("access_voxel_by_coord_from_buffer", [](const Storage::CartesianFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_by_coord", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
@@ -2071,11 +2071,11 @@ NB_MODULE(RadFiled3D, m) {
                 return self.getFieldType();
             })
             .def("access_layer", [](const PolarFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
                 return self.accessLayer(stream, channel_name, layer_name);
             })
 			.def("access_voxel", [](const PolarFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec2& coord) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 		    })
 			.def("__repr__", [](const PolarFieldAccessor& a) {
@@ -2083,7 +2083,7 @@ NB_MODULE(RadFiled3D, m) {
 			    return std::string("<RadFiled3D.PolarFieldAccessor (voxels: ") + std::to_string(voxels) + std::string(")>");
 		    })
 			.def("access_voxel_by_coord", [](const PolarFieldAccessor& self, const nb::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec2& coord) {
-                std::istringstream stream((const char*)bytes.data(), bytes.size());
+                std::istringstream stream(std::string((const char*)bytes.data()));
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			});
 
@@ -2142,7 +2142,7 @@ NB_MODULE(RadFiled3D, m) {
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("construct_field_accessor_from_buffer", [](const nb::bytes& bytes) {
-			    std::istringstream stream((const char*)bytes.data(), bytes.size());
+			    std::istringstream stream(std::string((const char*)bytes.data()));
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("load_single_grid_layer", [](const std::string& file, const std::string& channel_name, const std::string& layer_name) -> std::shared_ptr<VoxelGrid> {
