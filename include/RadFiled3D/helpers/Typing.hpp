@@ -55,3 +55,17 @@ namespace RadFiled3D {
 		};
 	}
 }
+
+#if defined(_WIN32)
+/*
+#  if defined(RADFILED_Build_PyBindings)
+#    define RADFILED_API __declspec(dllexport)
+#  else
+#    define RADFILED_API __declspec(dllimport)
+#  endif
+*/
+
+#    define RADFILED_API __declspec(dllexport)
+#else
+#  define RADFILED_API
+#endif

@@ -70,7 +70,7 @@ namespace RadFiled3D {
 		* The FieldAccessor will be initialized from a template buffer in order to speed up loading of subsequent fields of the same structure e.g. files from the same dataset.
 		* A new FieldAccessor requires adding FieldAccessorBuilder as a friend class, as FieldAccessors are created through it.
 		*/
-		class FieldAccessor {
+		class RADFILED_API FieldAccessor : public std::enable_shared_from_this<FieldAccessor> {
 			friend class RadFiled3D::Storage::FieldAccessorBuilder;
 		public:
 #pragma pack(push, 4)
@@ -204,7 +204,7 @@ namespace RadFiled3D {
 			virtual SerializationData* generateSerializationBuffer() const = 0;
 		};
 
-		class CartesianFieldAccessor : virtual public RadFiled3D::Storage::FieldAccessor {
+		class RADFILED_API CartesianFieldAccessor : virtual public RadFiled3D::Storage::FieldAccessor, public std::enable_shared_from_this<CartesianFieldAccessor> {
 		public:
 #pragma pack(push, 4)
 			struct SerializationData : public FieldAccessor::SerializationData {
@@ -270,7 +270,7 @@ namespace RadFiled3D {
 			}
 		};
 
-		class PolarFieldAccessor : virtual public RadFiled3D::Storage::FieldAccessor {
+		class RADFILED_API PolarFieldAccessor : virtual public RadFiled3D::Storage::FieldAccessor, public std::enable_shared_from_this<PolarFieldAccessor> {
 		public:
 #pragma pack(push, 4)
 			struct SerializationData : public FieldAccessor::SerializationData {
@@ -347,7 +347,7 @@ namespace RadFiled3D {
 			};
 
 
-			class CartesianFieldAccessor : public RadFiled3D::Storage::CartesianFieldAccessor, public FileParser {
+			class RADFILED_API CartesianFieldAccessor : public RadFiled3D::Storage::CartesianFieldAccessor, public FileParser, public std::enable_shared_from_this<CartesianFieldAccessor> {
 			public:
 #pragma pack(push, 4)
 				struct SerializationData : public RadFiled3D::Storage::CartesianFieldAccessor::SerializationData {
@@ -391,7 +391,7 @@ namespace RadFiled3D {
 				virtual ~CartesianFieldAccessor() {};
 			};
 
-			class PolarFieldAccessor : public RadFiled3D::Storage::PolarFieldAccessor, public FileParser {
+			class RADFILED_API PolarFieldAccessor : public RadFiled3D::Storage::PolarFieldAccessor, public FileParser, public std::enable_shared_from_this<PolarFieldAccessor> {
 			public:
 #pragma pack(push, 4)
 				struct SerializationData : public RadFiled3D::Storage::PolarFieldAccessor::SerializationData {
@@ -438,7 +438,7 @@ namespace RadFiled3D {
 			};
 		};
 
-		class FieldAccessorBuilder {
+		class RADFILED_API FieldAccessorBuilder {
 		public:
 			/** Construct a field accessor from a buffer
 			* @param buffer The buffer to construct the field accessor from

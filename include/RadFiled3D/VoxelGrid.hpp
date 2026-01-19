@@ -6,7 +6,7 @@
 
 namespace RadFiled3D
 {
-	class VoxelGrid {
+	class RADFILED_API VoxelGrid: public std::enable_shared_from_this<VoxelGrid> {
 	protected:
 		const glm::vec3 voxel_dimensions;
 		const glm::uvec3 voxel_counts;
@@ -105,7 +105,7 @@ namespace RadFiled3D
 
 	/** A 3D grid of equally sized voxels using cartesian coordinates starting at (0, 0, 0) and going to (field_dimensions.x, field_dimensions.y, field_dimensions.z)
 	*/
-	class VoxelGridBuffer : public VoxelBuffer {
+	class RADFILED_API VoxelGridBuffer : public VoxelBuffer, public std::enable_shared_from_this<VoxelGridBuffer> {
 	protected:
 		VoxelGrid voxel_grid;
 	public:

@@ -2139,7 +2139,8 @@ NB_MODULE(RadFiled3D, m) {
             .def_static("peek_field_type", &FieldStore::peek_field_type)
             .def_static("construct_field_accessor", [](const std::string& file) {
 			    std::ifstream stream(file, std::ios::binary);
-                return FieldStore::construct_accessor(stream);
+                auto accessor = FieldStore::construct_accessor(stream);
+				return accessor;
             })
             .def_static("construct_field_accessor_from_buffer", [](const nb::bytes& bytes) {
 			    std::istringstream stream(std::string((const char*)bytes.data()));

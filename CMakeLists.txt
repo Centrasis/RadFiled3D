@@ -122,6 +122,8 @@ if(RADFILED_Build_PyBindings)
     target_link_libraries(RadFiled3D PRIVATE libRadFiled3D stdc++fs)
   endif()
   set_target_properties(RadFiled3D PROPERTIES FOLDER "Library")
+  target_compile_definitions(RadFiled3D PRIVATE RADFILED_Build_PyBindings=1)
+  target_compile_definitions(libRadFiled3D PRIVATE RADFILED_Build_PyBindings=1)
 endif()
 
 if(RADFILED_BUILD_TESTS MATCHES ON)

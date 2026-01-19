@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <memory>
 #include <glm/vec3.hpp>
 #include "RadFiled3D/helpers/Typing.hpp"
 #include <cstring>
@@ -16,7 +17,7 @@ namespace RadFiled3D {
 	* that data. The VoxelBuffer class is responsible for allocating and deallocating the data, and the Voxel class is only responsible
 	* for reading and writing the data.
 	*/
-	class IVoxel {
+	class RADFILED_API IVoxel: public std::enable_shared_from_this<IVoxel> {
 	public:
 #pragma pack(push, 4)
 		struct VoxelBaseHeader {
@@ -79,7 +80,7 @@ namespace RadFiled3D {
 	* @tparam T The type of the scalar value to store in the voxel
 	*/
 	template<typename T = float>
-	class ScalarVoxel : public IVoxel {
+	class RADFILED_API ScalarVoxel : public IVoxel, public std::enable_shared_from_this<ScalarVoxel<T>> {
 		friend class VoxelBuffer;
 		friend class VoxelLayer;
 	protected:
@@ -378,8 +379,10 @@ namespace RadFiled3D {
 		}
 	};
 
+	/*template<typename T>
+	IVoxel::VoxelBaseHeader ScalarVoxel<T>::voxel_header = IVoxel::VoxelBaseHeader(Typing::Helper::get_plain_type_name<T>());*/
 	template<typename T>
-	IVoxel::VoxelBaseHeader ScalarVoxel<T>::voxel_header = IVoxel::VoxelBaseHeader(Typing::Helper::get_plain_type_name<T>());
+	IVoxel::VoxelBaseHeader ScalarVoxel<T>::voxel_header = IVoxel::VoxelBaseHeader();
 
 	/** An OwningScalarVoxel is a ScalarVoxel that owns the data it points to. It is a simple wrapper around a single value, and is used to
 	* represent a single value in a VoxelBuffer. It provides a simple interface for reading and writing the value, and can be used
@@ -387,7 +390,7 @@ namespace RadFiled3D {
 	* managing the data, and will automatically deallocate the data when the OwningScalarVoxel is destroyed.
 	*/
 	template<typename T = float>
-	class OwningScalarVoxel : public ScalarVoxel<T> {
+	class RADFILED_API OwningScalarVoxel : public ScalarVoxel<T>, public std::enable_shared_from_this<OwningScalarVoxel<T>> {
 	protected:
 		T physical_data;
 	public:
@@ -416,7 +419,7 @@ namespace RadFiled3D {
 	* represent a histogram in a VoxelBuffer. It provides a simple interface for reading and writing the histogram, and can be used
 	* in conjunction with the VoxelBuffer class to store and manipulate voxel data.
 	*/
-	class HistogramVoxel : public ScalarVoxel<float> {
+	class RADFILED_API HistogramVoxel : public ScalarVoxel<float>, public std::enable_shared_from_this<HistogramVoxel> {
 	public:
 #pragma pack(push, 4)
 		struct HistogramDefinition : VoxelBaseHeader {
@@ -738,7 +741,7 @@ namespace RadFiled3D {
 
 	/** Owning version of the HistogramVoxel class. This class owns the data it points to, and will automatically deallocate the data when the OwningHistogramVoxel is destroyed.
 	*/
-	class OwningHistogramVoxel : public HistogramVoxel {
+	class RADFILED_API OwningHistogramVoxel : public HistogramVoxel, public std::enable_shared_from_this<OwningHistogramVoxel> {
 	public:
 		OwningHistogramVoxel(size_t bins = 0, float histogram_bin_width = 0.f) : HistogramVoxel(bins, histogram_bin_width, (bins > 0) ? new float[bins] : nullptr) {}
 

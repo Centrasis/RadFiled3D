@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory>
 #include <map>
 #include <cstring>
 #include "RadFiled3D/Voxel.hpp"
@@ -9,7 +10,7 @@
 
 
 namespace RadFiled3D {
-	class VoxelBufferException : public std::runtime_error {
+	class RADFILED_API VoxelBufferException : public std::runtime_error {
 	public:
 		VoxelBufferException(const std::string& message) : std::runtime_error("VoxelBufferException: " + message) {}
 	};
@@ -19,7 +20,7 @@ namespace RadFiled3D {
 	* It is NOT intendet to be used directly, but rather through the VoxelBuffer class.
 	* @see VoxelBuffer
 	*/
-	class VoxelLayer {
+	class RADFILED_API VoxelLayer: public std::enable_shared_from_this<VoxelLayer> {
 		friend class VoxelBuffer;
 		friend class PolarSegmentsBuffer;
 		friend class VoxelGridBuffer;
@@ -151,7 +152,7 @@ namespace RadFiled3D {
 		}
 	};
 
-	class VoxelBuffer {
+	class RADFILED_API VoxelBuffer: public std::enable_shared_from_this<VoxelBuffer> {
 	protected:
 		std::map<std::string, VoxelLayer> layers;
 		const size_t voxel_count;

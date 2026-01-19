@@ -5,13 +5,13 @@
 
 namespace RadFiled3D {
 
-	enum class GridTracerAlgorithm {
+	enum class RADFILED_API GridTracerAlgorithm {
 		SAMPLING = 0,
 		BRESENHAM = 1,
 		LINETRACING = 2
 	};
 
-	class GridTracer {
+	class RADFILED_API GridTracer: public std::enable_shared_from_this<GridTracer> {
 	protected:
 		VoxelGridBuffer& buffer;
 		const glm::vec3 field_dimensions;
@@ -29,7 +29,7 @@ namespace RadFiled3D {
 		If the line segment is longer than the minimum sampling size, which is half the L2-Norm of the voxel size, the line is divided into segments of the minimum sampling size.
 		This approach counts the hits if the line segment is incident to a voxel, only!
 		*/
-	class SamplingGridTracer : public GridTracer {
+	class RADFILED_API SamplingGridTracer : public GridTracer, public std::enable_shared_from_this<SamplingGridTracer> {
 	public:
 		SamplingGridTracer(VoxelGridBuffer& buffer) : GridTracer(buffer) {}
 
@@ -39,7 +39,7 @@ namespace RadFiled3D {
 	/** Traces a line between two points in the grid using the Bresenham algorithm.
 		This algorithm is a line rasterization algorithm that is used to trace a line between two points in a grid. The starting point is excluded as this can only exit a voxel.
 		*/
-	class BresenhamGridTracer : public GridTracer {
+	class RADFILED_API BresenhamGridTracer : public GridTracer, public std::enable_shared_from_this<BresenhamGridTracer> {
 	public:
 		BresenhamGridTracer(VoxelGridBuffer& buffer) : GridTracer(buffer) {}
 
@@ -51,7 +51,7 @@ namespace RadFiled3D {
 	/** This class traces a line between two points in the grid using a combination of the sampling tracer and a line tracing algorithm.
 		First the lossy sampling tracer is used to trace the line. Then all adjacent voxels to the voxels that were hit are tested using a line-segment intersection test algorithm.
 		*/
-	class LinetracingGridTracer : public GridTracer {
+	class RADFILED_API LinetracingGridTracer : public GridTracer, public std::enable_shared_from_this<LinetracingGridTracer> {
 	protected:
 		const glm::vec3 gridDimensions;
 		SamplingGridTracer lossyTracer;

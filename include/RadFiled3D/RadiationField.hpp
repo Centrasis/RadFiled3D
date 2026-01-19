@@ -22,7 +22,7 @@ namespace RadFiled3D
 	* The radiation field is responsible for providing the channels.
 	* The radiation field is responsible for providing the type name of the concrete class.
 	*/
-	class IRadiationField {
+	class RADFILED_API IRadiationField : public std::enable_shared_from_this<IRadiationField> {
 	public:
 		/** Get a channel by name
 		* @param channel_name The name of the channel to get
@@ -65,7 +65,7 @@ namespace RadFiled3D
 	};
 
 	template<class BufferT>
-	class RadiationField : public IRadiationField {
+	class RADFILED_API RadiationField : public IRadiationField, public std::enable_shared_from_this<RadiationField<BufferT>> {
 	protected:
 		std::map<std::string, std::shared_ptr<BufferT>> channels;
 	public:
@@ -121,7 +121,7 @@ namespace RadFiled3D
 	* The field is defined by the dimensions of the field and the dimensions of a voxel.
 	* The field is responsible for creating channels of voxels.
 	*/
-	class CartesianRadiationField : public RadiationField<VoxelGridBuffer> {
+	class RADFILED_API CartesianRadiationField : public RadiationField<VoxelGridBuffer>, public std::enable_shared_from_this<CartesianRadiationField> {
 	protected:
 		const glm::vec3 voxel_dimensions;
 		const glm::uvec3 voxel_counts;
@@ -186,7 +186,7 @@ namespace RadFiled3D
 	* The field is defined by the number of segments in each dimension.
 	* The field is responsible for creating channels of voxels.
 	*/
-	class PolarRadiationField : public RadiationField<PolarSegmentsBuffer> {
+	class RADFILED_API PolarRadiationField : public RadiationField<PolarSegmentsBuffer>, public std::enable_shared_from_this<PolarRadiationField> {
 	protected:
 		const glm::uvec2 segments_count;
 	public:

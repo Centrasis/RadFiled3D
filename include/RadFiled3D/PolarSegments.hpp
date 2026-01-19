@@ -7,7 +7,7 @@
 
 namespace RadFiled3D
 {
-	class PolarSegments {
+	class RADFILED_API PolarSegments: public std::enable_shared_from_this<PolarSegments> {
 	protected:
 		const glm::uvec2 segments_count;
 		std::shared_ptr<VoxelLayer> layer;
@@ -71,7 +71,7 @@ namespace RadFiled3D
 		};
 	};
 
-	class PolarSegmentsBuffer : public VoxelBuffer {
+	class RADFILED_API PolarSegmentsBuffer : public VoxelBuffer, public std::enable_shared_from_this<PolarSegmentsBuffer> {
 	protected:
 		PolarSegments segments;
 	public:

@@ -17,7 +17,7 @@ namespace RadFiled3D::Dataset {
 	/** A request to load a collection of voxels from a file.
 	* Use with VoxelCollectionAccessor to access a collection of voxels from a file.
 	*/
-	struct VoxelCollectionRequest {
+	struct RADFILED_API VoxelCollectionRequest {
 		const std::string filePath;
 		const std::vector<size_t> voxelIndices;
 
@@ -30,13 +30,13 @@ namespace RadFiled3D::Dataset {
 	* Returned by VoxelCollectionAccessor::access.
 	* Provides a way to extract a dense data buffer from a specific channel and layer.
 	*/
-	struct VoxelCollection {
-		struct Layer {
+	struct RADFILED_API VoxelCollection {
+		struct RADFILED_API Layer {
 			std::string name;
 			std::vector<std::shared_ptr<IVoxel>> voxels;
 		};
 
-		struct Channel {
+		struct RADFILED_API Channel {
 			std::map<std::string, Layer> layers;
 		};
 
@@ -57,7 +57,7 @@ namespace RadFiled3D::Dataset {
 		char* extract_data_buffer_from(const std::string& channel, const std::string& layer);
 	};
 
-	class VoxelCollectionAccessor {
+	class RADFILED_API VoxelCollectionAccessor {
 	protected:
 		std::shared_ptr<Storage::FieldAccessor> accessor;
 		std::vector<std::string> channels;

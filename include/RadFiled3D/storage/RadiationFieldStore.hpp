@@ -23,7 +23,7 @@ namespace RadFiled3D {
 		* Devide: Devide the values of the target field by the values of the additional source field
 		* Multiply: Multiply the values of the target field by the values of the additional source field
 		*/
-		enum class FieldJoinMode {
+		enum class RADFILED_API FieldJoinMode {
 			/* Use the value of the target field */
 			Identity = 0,
 			/* Add the values of the target and the additional source field */
@@ -51,7 +51,7 @@ namespace RadFiled3D {
 		* FieldUnitsOnly: Check if the fields layers share the same units. If not, throw an exception
 		* NoChecks: Do not perform any semantic checks. Technical checks will still be performed
 		*/
-		enum class FieldJoinCheckMode {
+		enum class RADFILED_API FieldJoinCheckMode {
 			/* Check if the metadata and field structure is equal. If not, throw an exception */
 			Strict = 0,
 			/* Check if the metadata is similar (e.g. Geometry, Radiation-Direction, xray-tube). If not, throw an exception */
@@ -68,7 +68,7 @@ namespace RadFiled3D {
 			NoChecks = 6
 		};
 
-		class ExporterHelpers {
+		class RADFILED_API ExporterHelpers {
 		public:
 			/** Perform the actual merge of the fields
 			* @param target The target field
@@ -115,7 +115,7 @@ namespace RadFiled3D {
 			}
 		};
 
-		class IRadiationFieldExporter {
+		class RADFILED_API IRadiationFieldExporter {
 		public:
 			/** Store the radiation field to a file
 			* @param field The radiation field to store
@@ -142,7 +142,7 @@ namespace RadFiled3D {
 			virtual void join(std::shared_ptr<IRadiationField> target, std::shared_ptr<IRadiationField> additional_source, FieldJoinMode join_mode, FieldJoinCheckMode check_mode, float ratio = 0.f) const = 0;
 		};
 
-		class IRadiationFieldImporter {
+		class RADFILED_API IRadiationFieldImporter {
 		public:
 			/** Load the radiation field from a file
 			* @param file The file to load the radiation field from
@@ -203,7 +203,7 @@ namespace RadFiled3D {
 			virtual FieldType peek_field_type(std::istream& file_stream) const = 0;
 		};
 
-		class BasicFieldStore : public IRadiationFieldExporter, public IRadiationFieldImporter {
+		class RADFILED_API BasicFieldStore : public IRadiationFieldExporter, public IRadiationFieldImporter {
 		private:
 			std::string file_version;
 			RadFiled3D::Storage::MetadataSerializer* metadata_serializer;
@@ -269,7 +269,7 @@ namespace RadFiled3D {
 		};
 
 		namespace V1 {
-			class FieldStore : public BasicFieldStore {
+			class RADFILED_API FieldStore : public BasicFieldStore {
 			public:
 				FieldStore() : BasicFieldStore(
 					"1.0",
@@ -299,7 +299,7 @@ namespace RadFiled3D {
 		* It will automatically detect the version of the file and use the correct store to load the radiation field.
 		* When using the same versions multiple times, the class will cache the store to avoid unnecessary reinitialization.
 		*/
-		class FieldStore {
+		class RADFILED_API FieldStore {
 		protected:
 			static std::shared_ptr<BasicFieldStore> store_instance;
 			static StoreVersion store_version;

@@ -1,10 +1,11 @@
 #pragma once
 #include <string>
 #include <stdexcept>
+#include "RadFiled3D/helpers/Typing.hpp"
 
 
 namespace RadFiled3D {
-    class FileLockException : public std::runtime_error {
+    class RADFILED_API FileLockException : public std::runtime_error {
     public:
         FileLockException(const std::string& message) : std::runtime_error("FileLockException: " + message) {}
     };

@@ -9,7 +9,7 @@ namespace RadFiled3D {
 	class IRadiationField;
 
 	namespace Storage {
-		class BinayFieldBlockHandler {
+		class RADFILED_API BinayFieldBlockHandler {
 		public:
 			/** Serializes a radiation field to a binary string
 			* @param field The radiation field
@@ -48,7 +48,7 @@ namespace RadFiled3D {
 		};
 
 		namespace V1 {
-			class BinayFieldBlockHandler : public RadFiled3D::Storage::BinayFieldBlockHandler {
+			class RADFILED_API BinayFieldBlockHandler : public RadFiled3D::Storage::BinayFieldBlockHandler {
 			protected:
 				/** Adds a histogram layer to the voxel buffer
 				* @param field The voxel buffer
