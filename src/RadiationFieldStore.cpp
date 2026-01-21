@@ -302,6 +302,10 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 StoreVersion RadFiled3D::Storage::FieldStore::get_store_version(const std::string& file)
 {
 	std::ifstream buffer(file, std::ios::in | std::ios::binary);
+	if (!buffer.is_open()) {
+		std::string msg = "File " + file + " does not exist!";
+		throw RadiationFieldStoreException(msg.c_str());
+	}
 	return FieldAccessor::getStoreVersion(buffer);
 }
 

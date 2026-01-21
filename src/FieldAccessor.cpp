@@ -163,7 +163,9 @@ std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldAccessor::Deserialize(c
 
 StoreVersion RadFiled3D::Storage::FieldAccessor::getStoreVersion(std::istream& buffer)
 {
+	static_assert(std::is_trivially_copyable_v<VersionHeader>);
 	VersionHeader version;
+	buffer.clear();
 	buffer.seekg(0, std::ios::beg);
 	buffer.read((char*)&version, sizeof(VersionHeader));
 
