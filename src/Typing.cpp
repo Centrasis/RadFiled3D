@@ -53,6 +53,9 @@ Typing::DType Typing::Helper::get_dtype(const std::string& dtype)
 	if (dtype == std::string("histogram")) {
 		return Typing::DType::Hist;
 	}
+	if (dtype == std::string("spherical")) {
+		return Typing::DType::Spherical;
+	}
 
 	std::string vec_prefix = "glm::vec<";
 	const std::string struct_prefix = "struct ";
@@ -110,6 +113,8 @@ size_t RadFiled3D::Typing::Helper::get_bytes_of_dtype(Typing::DType dtype)
 	case Typing::DType::Byte:
 		return sizeof(uint8_t);
 	case Typing::DType::Hist:
+		return sizeof(float);
+	case Typing::DType::Spherical:
 		return sizeof(float);
 	default:
 		throw std::runtime_error("Unknown data type");

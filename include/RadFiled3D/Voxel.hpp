@@ -4,6 +4,7 @@
 #include <glm/vec3.hpp>
 #include "RadFiled3D/helpers/Typing.hpp"
 #include <cstring>
+#include <cmath>
 #include <span>
 
 
@@ -777,6 +778,266 @@ namespace RadFiled3D {
 
 		virtual void set_data(void* data) override {
 			memcpy(this->data, data, this->histogram_definition.bins * sizeof(float));
+		}
+	};
+
+	class SphericalVoxel : public ScalarVoxel<float> {
+	public:
+#pragma pack(push, 4)
+		struct SphericalDefinition : VoxelBaseHeader {
+			size_t phi_segments;
+			size_t theta_segments;
+
+			SphericalDefinition(size_t phi_segments = 0, size_t theta_segments = 0) : phi_segments(phi_segments), theta_segments(theta_segments) {}
+		};
+#pragma pack(pop)
+
+	protected:
+		SphericalDefinition spherical_definition;
+
+		/** Compute flat index from phi/theta grid indices */
+		inline size_t calc_segment_idx(size_t phi_idx, size_t theta_idx) const {
+			return theta_idx * this->spherical_definition.phi_segments + phi_idx;
+		}
+
+		/** Compute flat index from phi/theta in standard spherical coordinates (linear mapping)
+		* @param phi Azimuthal angle in radians [0, 2*pi]
+		* @param theta Polar angle in radians [0, pi]
+		*/
+		inline size_t calc_segment_idx_by_coord(float phi, float theta) const {
+			const float pi = 3.14159265358979323846f;
+			// Wrap phi to [0, 2*pi]
+			if (phi < 0.f) phi += 2.f * pi;
+			if (phi >= 2.f * pi) phi -= 2.f * pi;
+			// Clamp theta to [0, pi]
+			if (theta < 0.f) theta = 0.f;
+			if (theta > pi) theta = pi;
+
+			size_t phi_idx = static_cast<size_t>(phi / (2.f * pi) * this->spherical_definition.phi_segments);
+			size_t theta_idx = static_cast<size_t>(theta / pi * this->spherical_definition.theta_segments);
+
+			if (phi_idx >= this->spherical_definition.phi_segments) phi_idx = this->spherical_definition.phi_segments - 1;
+			if (theta_idx >= this->spherical_definition.theta_segments) theta_idx = this->spherical_definition.theta_segments - 1;
+
+			return calc_segment_idx(phi_idx, theta_idx);
+		}
+
+	public:
+		/** Create a new SphericalVoxel with an empty data buffer */
+		SphericalVoxel() noexcept : ScalarVoxel<float>(nullptr), spherical_definition(SphericalDefinition()) {}
+
+		/** Create a new SphericalVoxel with the given data buffer */
+		SphericalVoxel(size_t phi_segments, size_t theta_segments, float* buffer) : ScalarVoxel<float>(buffer), spherical_definition(phi_segments, theta_segments) {}
+
+		/** Move constructor */
+		SphericalVoxel(SphericalVoxel&& buffer) noexcept : ScalarVoxel<float>(buffer.data), spherical_definition(buffer.spherical_definition) {
+			buffer.data = nullptr;
+		}
+
+		/** Copy constructor */
+		SphericalVoxel(const SphericalVoxel& buffer) noexcept : ScalarVoxel<float>(buffer.data), spherical_definition(buffer.spherical_definition) {}
+
+		/** Returns the total number of segments (phi * theta) */
+		inline size_t get_total_segments() const { return this->spherical_definition.phi_segments * this->spherical_definition.theta_segments; }
+
+		/** Returns the number of phi segments */
+		inline size_t get_phi_segments() const { return this->spherical_definition.phi_segments; }
+
+		/** Returns the number of theta segments */
+		inline size_t get_theta_segments() const { return this->spherical_definition.theta_segments; }
+
+		/** Returns a span containing all segment data */
+		inline std::span<float> get_segments_data() const {
+			return std::span<float>(this->data, this->get_total_segments());
+		}
+
+		/** Access a segment value by spherical coordinates
+		* @param phi The phi coordinate in radians
+		* @param theta The theta coordinate in radians
+		* @return Reference to the segment value
+		*/
+		inline float& get_value_by_coord(float phi, float theta) const {
+			return this->data[this->calc_segment_idx_by_coord(phi, theta)];
+		}
+
+		/** Access a segment value by grid indices
+		* @param phi_idx The phi index [0, phi_segments - 1]
+		* @param theta_idx The theta index [0, theta_segments - 1]
+		* @return Reference to the segment value
+		*/
+		inline float& get_value(size_t phi_idx, size_t theta_idx) const {
+			return this->data[this->calc_segment_idx(phi_idx, theta_idx)];
+		}
+
+		/** Returns the type of the voxel as a string */
+		virtual std::string get_type() const override {
+			return "spherical";
+		}
+
+		/** Returns the size of the voxel object in bytes, excluding the data */
+		virtual size_t get_voxel_bytes() const override { return sizeof(SphericalVoxel); }
+
+		/** Returns the size of the data in bytes */
+		virtual size_t get_bytes() const override { return sizeof(float) * this->get_total_segments(); }
+
+		/** Returns the reference to the first element in the data buffer */
+		inline float& get_data() const { return *this->data; }
+
+		/** Returns a raw pointer to the data buffer */
+		virtual void* get_raw() const override { return this->data; }
+
+		/** Default assignment operator */
+		SphericalVoxel& operator=(const SphericalVoxel& other) = default;
+
+		/** Inplace add two SphericalVoxels */
+		SphericalVoxel& operator+=(const SphericalVoxel& other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] += other.data[i];
+			return *this;
+		}
+
+		SphericalVoxel operator+(const SphericalVoxel& other) const {
+			SphericalVoxel result = *this;
+			result += other;
+			return result;
+		}
+
+		/** Inplace subtract two SphericalVoxels */
+		SphericalVoxel& operator-=(const SphericalVoxel& other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] -= other.data[i];
+			return *this;
+		}
+
+		SphericalVoxel operator-(const SphericalVoxel& other) const {
+			SphericalVoxel result = *this;
+			result -= other;
+			return result;
+		}
+
+		/** Inplace multiply two SphericalVoxels */
+		SphericalVoxel& operator*=(const SphericalVoxel& other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] *= other.data[i];
+			return *this;
+		}
+
+		SphericalVoxel operator*(const SphericalVoxel& other) const {
+			SphericalVoxel result = *this;
+			result *= other;
+			return result;
+		}
+
+		/** Inplace divide two SphericalVoxels */
+		SphericalVoxel& operator/=(const SphericalVoxel& other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++) {
+				if (other.data[i] == 0.f) {
+					this->data[i] = 0.f;
+					continue;
+				}
+				this->data[i] /= other.data[i];
+			}
+			return *this;
+		}
+
+		SphericalVoxel operator/(const SphericalVoxel& other) const {
+			SphericalVoxel result = *this;
+			result /= other;
+			return result;
+		}
+
+		/** Scalar arithmetic operators */
+		SphericalVoxel& operator+=(float other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] += other;
+			return *this;
+		}
+
+		SphericalVoxel& operator-=(float other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] -= other;
+			return *this;
+		}
+
+		SphericalVoxel& operator*=(float other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] *= other;
+			return *this;
+		}
+
+		SphericalVoxel& operator/=(float other) {
+			for (size_t i = 0; i < this->get_total_segments(); i++)
+				this->data[i] /= other;
+			return *this;
+		}
+
+		/** Returns the header for serialization */
+		virtual VoxelBaseHeader get_header() const override {
+			return VoxelBaseHeader(sizeof(SphericalDefinition), (void*)&this->spherical_definition);
+		}
+
+		/** Initializes the Voxel from a header block (deserialization) */
+		virtual void init_from_header(const void* header) override {
+			SphericalDefinition* sph_def = (SphericalDefinition*)header;
+			this->spherical_definition = *sph_def;
+		}
+
+		/** Adds a value at the given spherical direction
+		* @param phi The phi coordinate in radians
+		* @param theta The theta coordinate in radians
+		* @param value The value to add
+		*/
+		void add_value(float phi, float theta, float value = 1.f) {
+			this->data[this->calc_segment_idx_by_coord(phi, theta)] += value;
+		}
+
+		/** Clears all segments to 0 */
+		void clear() {
+			std::fill(this->data, this->data + this->get_total_segments(), 0.0f);
+		}
+	};
+
+	/** Owning version of the SphericalVoxel class. Owns the data buffer and frees it on destruction. */
+	class OwningSphericalVoxel : public SphericalVoxel {
+	public:
+		OwningSphericalVoxel(size_t phi_segments = 0, size_t theta_segments = 0) : SphericalVoxel(phi_segments, theta_segments, (phi_segments * theta_segments > 0) ? new float[phi_segments * theta_segments]() : nullptr) {}
+
+		OwningSphericalVoxel(size_t phi_segments, size_t theta_segments, float* buffer) : SphericalVoxel(phi_segments, theta_segments, (phi_segments * theta_segments > 0) ? new float[phi_segments * theta_segments] : nullptr) {
+			if (phi_segments * theta_segments > 0)
+				memcpy(this->data, buffer, phi_segments * theta_segments * sizeof(float));
+		}
+
+		OwningSphericalVoxel(const OwningSphericalVoxel& buffer) : SphericalVoxel(buffer) {
+			size_t total = this->get_total_segments();
+			if (total > 0) {
+				this->data = new float[total];
+				memcpy(this->data, buffer.data, total * sizeof(float));
+			}
+		}
+
+		OwningSphericalVoxel(OwningSphericalVoxel&& buffer) noexcept : SphericalVoxel(buffer) {
+			size_t total = this->get_total_segments();
+			if (total > 0) {
+				this->data = new float[total];
+				memcpy(this->data, buffer.data, total * sizeof(float));
+			}
+		}
+
+		~OwningSphericalVoxel() {
+			if (this->data != nullptr)
+				delete[] this->data;
+		}
+
+		virtual void init_from_header(const void* header) override {
+			SphericalDefinition* sph_def = (SphericalDefinition*)header;
+			this->spherical_definition = *sph_def;
+			if (this->data != nullptr)
+				delete[] this->data;
+			this->data = new float[sph_def->phi_segments * sph_def->theta_segments];
+		}
+
+		virtual void set_data(void* data) override {
+			memcpy(this->data, data, this->get_total_segments() * sizeof(float));
 		}
 	};
 };

@@ -161,6 +161,17 @@ if(BUILD_TESTS MATCHES ON)
 
   set_target_properties(AccessorTest PROPERTIES FOLDER "Tests")
 
+  add_executable(SphericalTest ${PROJECT_SOURCE_DIR}/tests/spherical_test.cpp)
+  target_include_directories(SphericalTest PUBLIC include PRIVATE src)
+  if (MSVC)
+    target_link_libraries(SphericalTest glm libRadFiled3D GTest::gtest_main)
+  else()
+    target_link_libraries(SphericalTest glm libRadFiled3D GTest::gtest_main stdc++fs)
+  endif()
+  set_property(TARGET SphericalTest PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
+  gtest_discover_tests(SphericalTest)
+  set_target_properties(SphericalTest PROPERTIES FOLDER "Tests")
+
   include(GoogleTest)
 endif()
 
