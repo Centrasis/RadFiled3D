@@ -896,6 +896,10 @@ namespace RadFiled3D {
 			return *this;
 		}
 
+		/** Adds two SphericalVoxels together
+		* @param other The other SphericalVoxel to add
+		* @return The sum of the two SphericalVoxels
+		*/
 		SphericalVoxel operator+(const SphericalVoxel& other) const {
 			SphericalVoxel result = *this;
 			result += other;
@@ -909,6 +913,10 @@ namespace RadFiled3D {
 			return *this;
 		}
 
+		/** Subtracts a SphericalVoxel from another
+		* @param other The other SphericalVoxel to subtract
+		* @return The difference of the two SphericalVoxels
+		*/
 		SphericalVoxel operator-(const SphericalVoxel& other) const {
 			SphericalVoxel result = *this;
 			result -= other;
@@ -922,6 +930,10 @@ namespace RadFiled3D {
 			return *this;
 		}
 
+		/** Multiplies two SphericalVoxels together
+		* @param other The other SphericalVoxel to multiply
+		* @return The product of the two SphericalVoxels
+		*/
 		SphericalVoxel operator*(const SphericalVoxel& other) const {
 			SphericalVoxel result = *this;
 			result *= other;
@@ -940,36 +952,52 @@ namespace RadFiled3D {
 			return *this;
 		}
 
+		/** Divides a SphericalVoxel by another
+		* @param other The other SphericalVoxel to divide by
+		* @return The quotient of the two SphericalVoxels
+		*/
 		SphericalVoxel operator/(const SphericalVoxel& other) const {
 			SphericalVoxel result = *this;
 			result /= other;
 			return result;
 		}
 
-		/** Scalar arithmetic operators */
+		/** Inplace adds a scalar value to all segments
+		* @param other The scalar value to add
+		* @return The modified SphericalVoxel
+		*/
 		SphericalVoxel& operator+=(float other) {
 			for (size_t i = 0; i < this->get_total_segments(); i++)
 				this->data[i] += other;
 			return *this;
 		}
 
+		/** Inplace subtracts a scalar value from all segments */
 		SphericalVoxel& operator-=(float other) {
 			for (size_t i = 0; i < this->get_total_segments(); i++)
 				this->data[i] -= other;
 			return *this;
 		}
 
+		/** Inplace multiplies all segments by a scalar value */
 		SphericalVoxel& operator*=(float other) {
 			for (size_t i = 0; i < this->get_total_segments(); i++)
 				this->data[i] *= other;
 			return *this;
 		}
 
+		/** Inplace divides all segments by a scalar value */
 		SphericalVoxel& operator/=(float other) {
 			for (size_t i = 0; i < this->get_total_segments(); i++)
 				this->data[i] /= other;
 			return *this;
 		}
+
+		/** Non-inplace scalar arithmetic operators */
+		SphericalVoxel operator+(float other) const { SphericalVoxel r = *this; r += other; return r; }
+		SphericalVoxel operator-(float other) const { SphericalVoxel r = *this; r -= other; return r; }
+		SphericalVoxel operator*(float other) const { SphericalVoxel r = *this; r *= other; return r; }
+		SphericalVoxel operator/(float other) const { SphericalVoxel r = *this; r /= other; return r; }
 
 		/** Returns the header for serialization */
 		virtual VoxelBaseHeader get_header() const override {

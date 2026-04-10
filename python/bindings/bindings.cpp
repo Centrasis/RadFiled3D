@@ -102,6 +102,8 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
         return VOXEL_CAPSULE(vx, ScalarVoxel<glm::vec4>);
     case Typing::DType::Hist:
         return VOXEL_CAPSULE(vx, HistogramVoxel);
+    case Typing::DType::Spherical:
+        return VOXEL_CAPSULE(vx, SphericalVoxel);
     case Typing::DType::UInt64:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint64_t>);
     case Typing::DType::UInt32:
@@ -1220,6 +1222,75 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			}
 		);
 
+    py::class_<SphericalVoxel, std::shared_ptr<SphericalVoxel>, IVoxel>(m, "SphericalVoxel")
+        .def("get_phi_segments", &SphericalVoxel::get_phi_segments)
+        .def("get_theta_segments", &SphericalVoxel::get_theta_segments)
+        .def("get_total_segments", &SphericalVoxel::get_total_segments)
+        .def("get_segments_data", [](const SphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { static_cast<size_t>(data.size()) },
+                { sizeof(float) },
+                data.data(),
+                cap
+            );
+        }, py::return_value_policy::reference)
+        .def("get_data", [](const SphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { a.get_theta_segments(), a.get_phi_segments() },
+                { sizeof(float) * a.get_phi_segments(), sizeof(float) },
+                data.data(),
+                cap
+            );
+        }, py::return_value_policy::reference)
+        .def("get_value", &SphericalVoxel::get_value, py::arg("phi_idx"), py::arg("theta_idx"), py::return_value_policy::reference)
+        .def("get_value_by_coord", &SphericalVoxel::get_value_by_coord, py::arg("phi"), py::arg("theta"), py::return_value_policy::reference)
+        .def("add_value", &SphericalVoxel::add_value, py::arg("phi"), py::arg("theta"), py::arg("value") = 1.f)
+        .def("clear", &SphericalVoxel::clear)
+        .def(py::self == py::self)
+        .def("__repr__",
+            [](const SphericalVoxel& a) {
+                return "<RadFiled3D.SphericalVoxel (" + std::to_string(a.get_phi_segments()) + "phi x " + std::to_string(a.get_theta_segments()) + "theta)>";
+            }
+        );
+
+    py::class_<OwningSphericalVoxel, std::shared_ptr<OwningSphericalVoxel>, SphericalVoxel>(m, "OwningSphericalVoxel")
+        .def(py::init<size_t, size_t>(), py::arg("phi_segments"), py::arg("theta_segments"))
+        .def("get_phi_segments", &OwningSphericalVoxel::get_phi_segments)
+        .def("get_theta_segments", &OwningSphericalVoxel::get_theta_segments)
+        .def("get_total_segments", &OwningSphericalVoxel::get_total_segments)
+        .def("get_segments_data", [](const OwningSphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { static_cast<size_t>(data.size()) },
+                { sizeof(float) },
+                data.data(),
+                cap
+            );
+        }, py::return_value_policy::reference)
+        .def("get_data", [](const OwningSphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { a.get_theta_segments(), a.get_phi_segments() },
+                { sizeof(float) * a.get_phi_segments(), sizeof(float) },
+                data.data(),
+                cap
+            );
+        }, py::return_value_policy::reference)
+        .def("add_value", &OwningSphericalVoxel::add_value, py::arg("phi"), py::arg("theta"), py::arg("value") = 1.f)
+        .def("clear", &OwningSphericalVoxel::clear)
+        .def(py::self == py::self)
+        .def("__repr__",
+            [](const OwningSphericalVoxel& a) {
+                return "<RadFiled3D.OwningSphericalVoxel (" + std::to_string(a.get_phi_segments()) + "phi x " + std::to_string(a.get_theta_segments()) + "theta)>";
+            }
+        );
+
     py::enum_<GridTracerAlgorithm>(m, "GridTracerAlgorithm")
         .value("SAMPLING", GridTracerAlgorithm::SAMPLING)
 		.value("BRESENHAM", GridTracerAlgorithm::BRESENHAM)
@@ -1341,6 +1412,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec4>>(layer_name, idx));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel>(layer_name, idx));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<SphericalVoxel>(layer_name, idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(layer_name, idx));
                     case Typing::DType::UInt32:
@@ -1370,6 +1443,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<glm::vec4>>(layer_name, x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel<HistogramVoxel>(layer_name, x, y, z));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel<SphericalVoxel>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
                     case Typing::DType::UInt32:
@@ -1399,6 +1474,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<glm::vec4>>(layer_name, x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<HistogramVoxel>(layer_name, x, y, z));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<SphericalVoxel>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
                     case Typing::DType::UInt32:
@@ -1467,6 +1544,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec4>>(idx));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel>(idx));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<SphericalVoxel>(idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(idx));
                     case Typing::DType::UInt32:

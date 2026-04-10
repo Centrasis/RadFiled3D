@@ -289,10 +289,21 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 		break;
 	case Typing::DType::Hist:
 		break;
+	case Typing::DType::Spherical:
+		break;
 	}
 
 	if (voxel == nullptr && dtype == Typing::DType::Hist) {
 		OwningHistogramVoxel* vx = new OwningHistogramVoxel();
+		if (voxel_header_data != nullptr) {
+			vx->init_from_header(voxel_header_data);
+		}
+		vx->set_data(data_buffer);
+		voxel = vx;
+	}
+
+	if (voxel == nullptr && dtype == Typing::DType::Spherical) {
+		OwningSphericalVoxel* vx = new OwningSphericalVoxel();
 		if (voxel_header_data != nullptr) {
 			vx->init_from_header(voxel_header_data);
 		}
