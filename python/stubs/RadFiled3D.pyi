@@ -378,6 +378,97 @@ class HistogramVoxel(Voxel):
         ...
 
 
+class SphericalVoxel(Voxel):
+    def get_phi_segments(self) -> int:
+        """
+        Returns the number of phi (azimuthal) segments.
+
+        :return: The number of phi segments.
+        """
+        ...
+
+    def get_theta_segments(self) -> int:
+        """
+        Returns the number of theta (polar) segments.
+
+        :return: The number of theta segments.
+        """
+        ...
+
+    def get_total_segments(self) -> int:
+        """
+        Returns the total number of segments (phi * theta).
+
+        :return: The total number of segments.
+        """
+        ...
+
+    def get_segments_data(self) -> np.ndarray:
+        """
+        Returns all segment values as a flat numpy array.
+
+        :return: Flat array of shape (phi_segments * theta_segments,).
+        """
+        ...
+
+    def get_data(self) -> np.ndarray:
+        """
+        Returns segment values as a 2D numpy array.
+
+        :return: Array of shape (theta_segments, phi_segments).
+        """
+        ...
+
+    def get_value(self, phi_idx: int, theta_idx: int) -> float:
+        """
+        Access a segment value by grid indices.
+
+        :param phi_idx: The phi index [0, phi_segments - 1].
+        :param theta_idx: The theta index [0, theta_segments - 1].
+        :return: The segment value.
+        """
+        ...
+
+    def get_value_by_coord(self, phi: float, theta: float) -> float:
+        """
+        Access a segment value by spherical coordinates.
+
+        :param phi: Azimuthal angle in radians [0, 2*pi].
+        :param theta: Polar angle in radians [0, pi].
+        :return: The segment value.
+        """
+        ...
+
+    def add_value(self, phi: float, theta: float, value: float = 1.0) -> None:
+        """
+        Adds a value at the given spherical direction.
+
+        :param phi: Azimuthal angle in radians [0, 2*pi].
+        :param theta: Polar angle in radians [0, pi].
+        :param value: The value to add (default 1.0).
+        """
+        ...
+
+    def clear(self) -> None:
+        """
+        Clears all segments to 0.
+        """
+        ...
+
+    def __eq__(self, value: "SphericalVoxel") -> bool: ...
+
+
+class OwningSphericalVoxel(SphericalVoxel):
+    def __init__(self, phi_segments: int, theta_segments: int) -> None:
+        """
+        Creates a new OwningSphericalVoxel with the given segment resolution.
+
+        :param phi_segments: Number of azimuthal segments.
+        :param theta_segments: Number of polar segments.
+        """
+        ...
+
+
 class VoxelBuffer(object):
     def get_voxel_count(self) -> int:
         """

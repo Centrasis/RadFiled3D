@@ -1226,25 +1226,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_phi_segments", &SphericalVoxel::get_phi_segments)
         .def("get_theta_segments", &SphericalVoxel::get_theta_segments)
         .def("get_total_segments", &SphericalVoxel::get_total_segments)
-        .def("get_segments_data", [](const SphericalVoxel& a) {
-            auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { static_cast<size_t>(data.size()) },
-                { sizeof(float) },
-                data.data(),
-                cap
-            );
+        .def("get_segments_data", [](std::shared_ptr<SphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array<float>(data.data(), data.size(), a, false);
         }, py::return_value_policy::reference)
-        .def("get_data", [](const SphericalVoxel& a) {
-            auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { a.get_theta_segments(), a.get_phi_segments() },
-                { sizeof(float) * a.get_phi_segments(), sizeof(float) },
-                data.data(),
-                cap
-            );
+        .def("get_data", [](std::shared_ptr<SphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array_generic<float>(data.data(), glm::uvec2(a->get_phi_segments(), a->get_theta_segments()), a, false, sizeof(float));
         }, py::return_value_policy::reference)
         .def("get_value", &SphericalVoxel::get_value, py::arg("phi_idx"), py::arg("theta_idx"), py::return_value_policy::reference)
         .def("get_value_by_coord", &SphericalVoxel::get_value_by_coord, py::arg("phi"), py::arg("theta"), py::return_value_policy::reference)
@@ -1262,25 +1250,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_phi_segments", &OwningSphericalVoxel::get_phi_segments)
         .def("get_theta_segments", &OwningSphericalVoxel::get_theta_segments)
         .def("get_total_segments", &OwningSphericalVoxel::get_total_segments)
-        .def("get_segments_data", [](const OwningSphericalVoxel& a) {
-            auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { static_cast<size_t>(data.size()) },
-                { sizeof(float) },
-                data.data(),
-                cap
-            );
+        .def("get_segments_data", [](std::shared_ptr<OwningSphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array<float>(data.data(), data.size(), a, false);
         }, py::return_value_policy::reference)
-        .def("get_data", [](const OwningSphericalVoxel& a) {
-            auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
-            return py::array_t<float>(
-                { a.get_theta_segments(), a.get_phi_segments() },
-                { sizeof(float) * a.get_phi_segments(), sizeof(float) },
-                data.data(),
-                cap
-            );
+        .def("get_data", [](std::shared_ptr<OwningSphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array_generic<float>(data.data(), glm::uvec2(a->get_phi_segments(), a->get_theta_segments()), a, false, sizeof(float));
         }, py::return_value_policy::reference)
         .def("add_value", &OwningSphericalVoxel::add_value, py::arg("phi"), py::arg("theta"), py::arg("value") = 1.f)
         .def("clear", &OwningSphericalVoxel::clear)
@@ -1384,7 +1360,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
             }, py::arg("name"), py::arg("unit"), py::arg("dtype"))
             .def("add_histogram_layer", [](VoxelBuffer& self, const std::string& name, size_t bins, float bin_width, const std::string& unit) {
                 self.add_custom_layer<HistogramVoxel>(name, HistogramVoxel(bins, bin_width, nullptr), 0.f, unit);
-            }, py::arg("name"), py::arg("bins"), py::arg("bin_width"), py::arg("unit"));
+            }, py::arg("name"), py::arg("bins"), py::arg("bin_width"), py::arg("unit"))
+            .def("add_spherical_layer", [](VoxelBuffer& self, const std::string& name, size_t phi_segments, size_t theta_segments, const std::string& unit) {
+                self.add_custom_layer<SphericalVoxel>(name, SphericalVoxel(phi_segments, theta_segments, nullptr), 0.f, unit);
+            }, py::arg("name"), py::arg("phi_segments"), py::arg("theta_segments"), py::arg("unit"));
 
         py::class_<VoxelGridBuffer, std::shared_ptr<VoxelGridBuffer>, VoxelBuffer>(m, "VoxelGridBuffer")
             .def("get_voxel_counts", &VoxelGridBuffer::get_voxel_counts)
