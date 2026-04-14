@@ -294,6 +294,9 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 				case Typing::DType::Hist:
 					target_channel->merge_voxel_buffer<HistogramVoxel>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<HistogramVoxel, float>(join_mode, ratio));
 					break;
+				case Typing::DType::Spherical:
+					target_channel->merge_voxel_buffer<SphericalVoxel>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<SphericalVoxel, float>(join_mode, ratio));
+					break;
 			}
 		}
 	}

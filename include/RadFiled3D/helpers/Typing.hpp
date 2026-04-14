@@ -23,6 +23,7 @@ namespace RadFiled3D {
 			Vec3,
 			Vec4,
 			Hist,
+			Spherical,
 			UInt64,
 			UInt32,
 			Byte
