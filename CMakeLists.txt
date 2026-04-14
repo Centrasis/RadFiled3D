@@ -51,7 +51,7 @@ if(RS_Build_PyBindings)
     FetchContent_Declare(
       fetch_pybind
       GIT_REPOSITORY https://github.com/pybind/pybind11.git
-      GIT_TAG        v3.0.1 # v2.13.6
+      GIT_TAG        v3.0.3 # v2.13.6
     )
     FetchContent_GetProperties(fetch_pybind)
     if(NOT fetch_pybind_POPULATED)
@@ -160,6 +160,17 @@ if(BUILD_TESTS MATCHES ON)
   gtest_discover_tests(AccessorTest)
 
   set_target_properties(AccessorTest PROPERTIES FOLDER "Tests")
+
+  add_executable(SphericalTest ${PROJECT_SOURCE_DIR}/tests/spherical_test.cpp)
+  target_include_directories(SphericalTest PUBLIC include PRIVATE src)
+  if (MSVC)
+    target_link_libraries(SphericalTest glm libRadFiled3D GTest::gtest_main)
+  else()
+    target_link_libraries(SphericalTest glm libRadFiled3D GTest::gtest_main stdc++fs)
+  endif()
+  set_property(TARGET SphericalTest PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
+  gtest_discover_tests(SphericalTest)
+  set_target_properties(SphericalTest PROPERTIES FOLDER "Tests")
 
   include(GoogleTest)
 endif()

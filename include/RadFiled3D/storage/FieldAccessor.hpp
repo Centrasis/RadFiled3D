@@ -4,11 +4,13 @@
 #include "RadFiled3D/storage/FieldSerializer.hpp"
 #include <stdexcept>
 #include <map>
+#include "RadFiled3D/storage/Registry.hpp"
 
 
 namespace RadFiled3D {
 	namespace Storage {
 		class FieldAccessorBuilder;
+		class BasicFieldStore;
 
 		namespace AccessorTypes {
 			typedef struct MemoryBlockDefinition {

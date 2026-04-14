@@ -102,6 +102,8 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
         return VOXEL_CAPSULE(vx, ScalarVoxel<glm::vec4>);
     case Typing::DType::Hist:
         return VOXEL_CAPSULE(vx, HistogramVoxel);
+    case Typing::DType::Spherical:
+        return VOXEL_CAPSULE(vx, SphericalVoxel);
     case Typing::DType::UInt64:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint64_t>);
     case Typing::DType::UInt32:
@@ -1220,6 +1222,51 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			}
 		);
 
+    py::class_<SphericalVoxel, std::shared_ptr<SphericalVoxel>, IVoxel>(m, "SphericalVoxel")
+        .def("get_phi_segments", &SphericalVoxel::get_phi_segments)
+        .def("get_theta_segments", &SphericalVoxel::get_theta_segments)
+        .def("get_total_segments", &SphericalVoxel::get_total_segments)
+        .def("get_segments_data", [](std::shared_ptr<SphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array<float>(data.data(), data.size(), a, false);
+        }, py::return_value_policy::reference)
+        .def("get_data", [](std::shared_ptr<SphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array_generic<float>(data.data(), glm::uvec2(a->get_phi_segments(), a->get_theta_segments()), a, false, sizeof(float));
+        }, py::return_value_policy::reference)
+        .def("get_value", &SphericalVoxel::get_value, py::arg("phi_idx"), py::arg("theta_idx"), py::return_value_policy::reference)
+        .def("get_value_by_coord", &SphericalVoxel::get_value_by_coord, py::arg("phi"), py::arg("theta"), py::return_value_policy::reference)
+        .def("add_value", &SphericalVoxel::add_value, py::arg("phi"), py::arg("theta"), py::arg("value") = 1.f)
+        .def("clear", &SphericalVoxel::clear)
+        .def(py::self == py::self)
+        .def("__repr__",
+            [](const SphericalVoxel& a) {
+                return "<RadFiled3D.SphericalVoxel (" + std::to_string(a.get_phi_segments()) + "phi x " + std::to_string(a.get_theta_segments()) + "theta)>";
+            }
+        );
+
+    py::class_<OwningSphericalVoxel, std::shared_ptr<OwningSphericalVoxel>, SphericalVoxel>(m, "OwningSphericalVoxel")
+        .def(py::init<size_t, size_t>(), py::arg("phi_segments"), py::arg("theta_segments"))
+        .def("get_phi_segments", &OwningSphericalVoxel::get_phi_segments)
+        .def("get_theta_segments", &OwningSphericalVoxel::get_theta_segments)
+        .def("get_total_segments", &OwningSphericalVoxel::get_total_segments)
+        .def("get_segments_data", [](std::shared_ptr<OwningSphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array<float>(data.data(), data.size(), a, false);
+        }, py::return_value_policy::reference)
+        .def("get_data", [](std::shared_ptr<OwningSphericalVoxel> a) {
+            auto data = a->get_segments_data();
+            return create_py_array_generic<float>(data.data(), glm::uvec2(a->get_phi_segments(), a->get_theta_segments()), a, false, sizeof(float));
+        }, py::return_value_policy::reference)
+        .def("add_value", &OwningSphericalVoxel::add_value, py::arg("phi"), py::arg("theta"), py::arg("value") = 1.f)
+        .def("clear", &OwningSphericalVoxel::clear)
+        .def(py::self == py::self)
+        .def("__repr__",
+            [](const OwningSphericalVoxel& a) {
+                return "<RadFiled3D.OwningSphericalVoxel (" + std::to_string(a.get_phi_segments()) + "phi x " + std::to_string(a.get_theta_segments()) + "theta)>";
+            }
+        );
+
     py::enum_<GridTracerAlgorithm>(m, "GridTracerAlgorithm")
         .value("SAMPLING", GridTracerAlgorithm::SAMPLING)
 		.value("BRESENHAM", GridTracerAlgorithm::BRESENHAM)
@@ -1313,7 +1360,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
             }, py::arg("name"), py::arg("unit"), py::arg("dtype"))
             .def("add_histogram_layer", [](VoxelBuffer& self, const std::string& name, size_t bins, float bin_width, const std::string& unit) {
                 self.add_custom_layer<HistogramVoxel>(name, HistogramVoxel(bins, bin_width, nullptr), 0.f, unit);
-            }, py::arg("name"), py::arg("bins"), py::arg("bin_width"), py::arg("unit"));
+            }, py::arg("name"), py::arg("bins"), py::arg("bin_width"), py::arg("unit"))
+            .def("add_spherical_layer", [](VoxelBuffer& self, const std::string& name, size_t phi_segments, size_t theta_segments, const std::string& unit) {
+                self.add_custom_layer<SphericalVoxel>(name, SphericalVoxel(phi_segments, theta_segments, nullptr), 0.f, unit);
+            }, py::arg("name"), py::arg("phi_segments"), py::arg("theta_segments"), py::arg("unit"));
 
         py::class_<VoxelGridBuffer, std::shared_ptr<VoxelGridBuffer>, VoxelBuffer>(m, "VoxelGridBuffer")
             .def("get_voxel_counts", &VoxelGridBuffer::get_voxel_counts)
@@ -1341,6 +1391,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec4>>(layer_name, idx));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel>(layer_name, idx));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<SphericalVoxel>(layer_name, idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(layer_name, idx));
                     case Typing::DType::UInt32:
@@ -1370,6 +1422,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<glm::vec4>>(layer_name, x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel<HistogramVoxel>(layer_name, x, y, z));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel<SphericalVoxel>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
                     case Typing::DType::UInt32:
@@ -1399,6 +1453,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<glm::vec4>>(layer_name, x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<HistogramVoxel>(layer_name, x, y, z));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<SphericalVoxel>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
                     case Typing::DType::UInt32:
@@ -1467,6 +1523,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec4>>(idx));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel>(idx));
+                    case Typing::DType::Spherical:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<SphericalVoxel>(idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(idx));
                     case Typing::DType::UInt32:
@@ -2123,7 +2181,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			});
 
         py::class_<Storage::FieldStore>(m, "FieldStore")
-            .def_static("init_store_instance", &Storage::FieldStore::init_store_instance)
+            .def_static("ensure_registered_stores", &Storage::FieldStore::ensure_registered_stores)
             .def_static("enable_file_lock_syncronization", &Storage::FieldStore::enable_file_lock_syncronization)
             .def_static("get_store_version", static_cast<Storage::StoreVersion(*)(const std::string&)>(&Storage::FieldStore::get_store_version))
             .def_static("load", static_cast<std::shared_ptr<IRadiationField>(*)(const std::string&)>(&FieldStore::load))

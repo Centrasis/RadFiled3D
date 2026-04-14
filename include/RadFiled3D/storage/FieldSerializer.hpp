@@ -58,6 +58,7 @@ namespace RadFiled3D {
 				* @param unit The unit of the histogram
 				*/
 				static void add_hist_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, float max_energy_eV, const std::string& unit, void* header_data);
+				static void add_spherical_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data);
 			public:
 				BinayFieldBlockHandler() = default;
 

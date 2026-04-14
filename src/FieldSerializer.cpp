@@ -101,7 +101,8 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 	Typing::DType dtype = Typing::Helper::get_dtype(std::string(layer_desc.dtype));
 	VoxelLayer* layer = nullptr;
 	HistogramVoxel hist_template;
-	
+	SphericalVoxel sph_template;
+
 	switch (dtype)
 	{
 	case Typing::DType::Float:
@@ -136,6 +137,11 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 		if (header_data != nullptr)
 			hist_template.init_from_header(header_data);
 		layer = VoxelLayer::ConstructFromBufferRaw<float, HistogramVoxel>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, hist_template);
+		break;
+	case Typing::DType::Spherical:
+		if (header_data != nullptr)
+			sph_template.init_from_header(header_data);
+		layer = VoxelLayer::ConstructFromBufferRaw<float, SphericalVoxel>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, sph_template);
 		break;
 	case Typing::DType::UInt64:
 #if defined(__x86_64__) || defined(_M_X64)
@@ -200,6 +206,9 @@ std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeCha
 			case Typing::DType::Hist:
 				Storage::V1::BinayFieldBlockHandler::add_hist_layer(destination, std::string(layer_desc.name), layer_desc.bytes_per_element, 0, layer_desc.unit, header_data);
 				break;
+			case Typing::DType::Spherical:
+				Storage::V1::BinayFieldBlockHandler::add_spherical_layer(destination, std::string(layer_desc.name), layer_desc.bytes_per_element, layer_desc.unit, header_data);
+				break;
 			case Typing::DType::UInt64:
 #if defined(__x86_64__) || defined(_M_X64)
 				destination->add_layer<uint64_t>(std::string(layer_desc.name), 0, layer_desc.unit);
@@ -234,6 +243,14 @@ void Storage::V1::BinayFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBu
 	if (header_data != nullptr)
 		hist.init_from_header(header_data);
 	field->add_custom_layer<HistogramVoxel, float>(layer, hist, 0.f, unit);
+}
+
+void Storage::V1::BinayFieldBlockHandler::add_spherical_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data)
+{
+	SphericalVoxel sph;
+	if (header_data != nullptr)
+		sph.init_from_header(header_data);
+	field->add_custom_layer<SphericalVoxel, float>(layer, sph, 0.f, unit);
 }
 
 std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::BinayFieldBlockHandler::deserializeField(std::istream& buffer) const
