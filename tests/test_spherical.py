@@ -84,22 +84,6 @@ def test_spherical_store_and_load():
     os.remove(filename)
 
 
-def test_spherical_numpy_while_field_alive():
-    """Test that numpy arrays are valid while the field is still in scope.
-    Note: Like HistogramVoxel, voxel-level numpy views are not safe after
-    the parent field goes out of scope. Use get_layer_as_ndarray for that."""
-    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
-    field.add_channel("beam")
-    ch = field.get_channel("beam")
-    ch.add_spherical_layer("angular", 6, 3, "")
-    sph = ch.get_voxel_flat("angular", 0)
-    sph.add_value(1.0, 0.5, 42.0)
-
-    data = sph.get_segments_data()
-    assert data.sum() == 42.0
-    assert data.shape == (18,)
-
-
 def test_owning_spherical_voxel():
     """Test OwningSphericalVoxel creation and numpy export."""
     voxel = OwningSphericalVoxel(12, 6)
@@ -133,3 +117,29 @@ def test_spherical_get_layer_as_ndarray():
     array_copy = ch.get_layer_as_ndarray("angular", copy=True)
     assert array_copy.shape == (12, 6, 2, 2, 2)
     assert array_copy.sum() == 5.0
+
+
+def test_spherical_shared_buffer_references():
+    """Test that multiple voxels reference the same underlying buffer and write-through works."""
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
+    field.add_channel("beam")
+    ch = field.get_channel("beam")
+    ch.add_spherical_layer("angular", 6, 3, "")
+
+    # Two references to same voxel see each other's changes
+    sph1 = ch.get_voxel_flat("angular", 0)
+    sph2 = ch.get_voxel_flat("angular", 0)
+    sph1.add_value(1.0, 0.5, 42.0)
+    assert sph2.get_segments_data().sum() == 42.0, "sph2 should see sph1 changes"
+
+    # Different voxels are independent
+    sph_a = ch.get_voxel_flat("angular", 0)
+    sph_b = ch.get_voxel_flat("angular", 1)
+    sph_b.add_value(2.0, 1.0, 99.0)
+    assert sph_a.get_segments_data().sum() == 42.0, "Voxel 0 should be unchanged"
+    assert sph_b.get_segments_data().sum() == 99.0, "Voxel 1 should have 99"
+
+    # Write-through via numpy array
+    data = sph_a.get_segments_data()
+    data[0] = 100.0
+    assert sph_a.get_segments_data()[0] == 100.0, "Write-through should work"
