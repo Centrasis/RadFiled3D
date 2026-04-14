@@ -1226,13 +1226,25 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_phi_segments", &SphericalVoxel::get_phi_segments)
         .def("get_theta_segments", &SphericalVoxel::get_theta_segments)
         .def("get_total_segments", &SphericalVoxel::get_total_segments)
-        .def("get_segments_data", [](std::shared_ptr<SphericalVoxel> a) {
-            auto data = a->get_segments_data();
-            return create_py_array<float>(data.data(), data.size(), a, false);
+        .def("get_segments_data", [](const SphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { static_cast<size_t>(data.size()) },
+                { sizeof(float) },
+                data.data(),
+                cap
+            );
         }, py::return_value_policy::reference)
-        .def("get_data", [](std::shared_ptr<SphericalVoxel> a) {
-            auto data = a->get_segments_data();
-            return create_py_array_generic<float>(data.data(), glm::uvec2(a->get_phi_segments(), a->get_theta_segments()), a, false, sizeof(float));
+        .def("get_data", [](const SphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { a.get_theta_segments(), a.get_phi_segments() },
+                { sizeof(float) * a.get_phi_segments(), sizeof(float) },
+                data.data(),
+                cap
+            );
         }, py::return_value_policy::reference)
         .def("get_value", &SphericalVoxel::get_value, py::arg("phi_idx"), py::arg("theta_idx"), py::return_value_policy::reference)
         .def("get_value_by_coord", &SphericalVoxel::get_value_by_coord, py::arg("phi"), py::arg("theta"), py::return_value_policy::reference)
@@ -1250,13 +1262,25 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_phi_segments", &OwningSphericalVoxel::get_phi_segments)
         .def("get_theta_segments", &OwningSphericalVoxel::get_theta_segments)
         .def("get_total_segments", &OwningSphericalVoxel::get_total_segments)
-        .def("get_segments_data", [](std::shared_ptr<OwningSphericalVoxel> a) {
-            auto data = a->get_segments_data();
-            return create_py_array<float>(data.data(), data.size(), a, false);
+        .def("get_segments_data", [](const OwningSphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { static_cast<size_t>(data.size()) },
+                { sizeof(float) },
+                data.data(),
+                cap
+            );
         }, py::return_value_policy::reference)
-        .def("get_data", [](std::shared_ptr<OwningSphericalVoxel> a) {
-            auto data = a->get_segments_data();
-            return create_py_array_generic<float>(data.data(), glm::uvec2(a->get_phi_segments(), a->get_theta_segments()), a, false, sizeof(float));
+        .def("get_data", [](const OwningSphericalVoxel& a) {
+            auto data = a.get_segments_data();
+            py::capsule cap(data.data(), [](void* data) { /* No deletion */ });
+            return py::array_t<float>(
+                { a.get_theta_segments(), a.get_phi_segments() },
+                { sizeof(float) * a.get_phi_segments(), sizeof(float) },
+                data.data(),
+                cap
+            );
         }, py::return_value_policy::reference)
         .def("add_value", &OwningSphericalVoxel::add_value, py::arg("phi"), py::arg("theta"), py::arg("value") = 1.f)
         .def("clear", &OwningSphericalVoxel::clear)
@@ -1483,6 +1507,31 @@ PYBIND11_MODULE(RadFiled3D, m) {
 							return create_py_array<uint64_t>(self->get_layer<uint64_t>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::UInt32:
                             return create_py_array<unsigned long>(self->get_layer<unsigned long>(layer), self->get_voxel_counts(), self, copy);
+                        case Typing::DType::Spherical:
+                        {
+                            const auto& sph = self->get_voxel_flat<SphericalVoxel>(layer, 0);
+                            const size_t phi = sph.get_phi_segments();
+                            const size_t theta = sph.get_theta_segments();
+                            const float* data = self->get_layer<float>(layer);
+                            const auto vc = self->get_voxel_counts();
+                            const std::array<size_t, 5> shape = { phi, theta, static_cast<size_t>(vc.x), static_cast<size_t>(vc.y), static_cast<size_t>(vc.z) };
+                            const std::array<size_t, 5> strides = {
+                                sizeof(float),
+                                sizeof(float) * phi,
+                                sizeof(float) * phi * theta,
+                                sizeof(float) * phi * theta * vc.x,
+                                sizeof(float) * phi * theta * vc.x * vc.y
+                            };
+                            if (copy) {
+                                auto* buf = new float[phi * theta * vc.x * vc.y * vc.z];
+                                memcpy(buf, data, phi * theta * vc.x * vc.y * vc.z * sizeof(float));
+                                py::capsule free_buf(buf, [](void* p) { delete[] static_cast<float*>(p); });
+                                return py::array(py::array_t<float>(shape, strides, buf, free_buf));
+                            }
+                            PyMemoryManager::register_memory_view(self, (void*)data);
+                            py::capsule cap(data, [](void* p) { PyMemoryManager::unregister_memory_view(p); });
+                            return py::array(py::array_t<float>(shape, strides, data, cap));
+                        }
                     }
 
                     const size_t element_size = layer_info.get_bytes();

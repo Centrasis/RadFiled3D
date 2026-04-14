@@ -49,9 +49,7 @@ def test_spherical_numpy_export_2d():
     data = sph.get_data()
     assert isinstance(data, np.ndarray)
     assert data.dtype == np.float32
-    # Shape is (phi, theta, 1) due to create_py_array_generic components dimension
-    assert data.shape[0] == 12  # phi
-    assert data.shape[1] == 6   # theta
+    assert data.shape == (6, 12)  # (theta, phi)
     assert data.sum() == 7.0
 
 
@@ -86,20 +84,20 @@ def test_spherical_store_and_load():
     os.remove(filename)
 
 
-def test_spherical_memory_safety():
-    """Test that numpy arrays remain valid after the field goes out of scope."""
-    def get_data():
-        field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
-        field.add_channel("beam")
-        ch = field.get_channel("beam")
-        ch.add_spherical_layer("angular", 6, 3, "")
-        sph = ch.get_voxel_flat("angular", 0)
-        sph.add_value(1.0, 0.5, 42.0)
-        return sph.get_segments_data()
+def test_spherical_numpy_while_field_alive():
+    """Test that numpy arrays are valid while the field is still in scope.
+    Note: Like HistogramVoxel, voxel-level numpy views are not safe after
+    the parent field goes out of scope. Use get_layer_as_ndarray for that."""
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
+    field.add_channel("beam")
+    ch = field.get_channel("beam")
+    ch.add_spherical_layer("angular", 6, 3, "")
+    sph = ch.get_voxel_flat("angular", 0)
+    sph.add_value(1.0, 0.5, 42.0)
 
-    data = get_data()
+    data = sph.get_segments_data()
     assert data.sum() == 42.0
-    assert data.shape[0] == 18
+    assert data.shape == (18,)
 
 
 def test_owning_spherical_voxel():
@@ -113,3 +111,25 @@ def test_owning_spherical_voxel():
     data = voxel.get_segments_data()
     assert isinstance(data, np.ndarray)
     assert data.sum() == 3.0
+
+
+def test_spherical_get_layer_as_ndarray():
+    """Test that get_layer_as_ndarray returns shape (phi, theta, x, y, z) for SphericalVoxel layers."""
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
+    field.add_channel("beam")
+    ch = field.get_channel("beam")
+    ch.add_spherical_layer("angular", 12, 6, "")
+
+    sph = ch.get_voxel_flat("angular", 0)
+    sph.add_value(1.0, 0.5, 5.0)
+
+    array = ch.get_layer_as_ndarray("angular", copy=False)
+    assert isinstance(array, np.ndarray)
+    assert array.dtype == np.float32
+    assert array.shape == (12, 6, 2, 2, 2)  # phi, theta, x, y, z
+    assert array.sum() == 5.0
+
+    # Verify copy mode works too
+    array_copy = ch.get_layer_as_ndarray("angular", copy=True)
+    assert array_copy.shape == (12, 6, 2, 2, 2)
+    assert array_copy.sum() == 5.0
