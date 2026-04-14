@@ -203,30 +203,56 @@ namespace RadFiled3D {
 			virtual FieldType peek_field_type(std::istream& file_stream) const = 0;
 		};
 
+		/**
+		* Data class for storing the valid range of file versions that a FieldStore can handle.
+		*/
+		struct FieldStoreVersionValidityRange {
+			struct {
+				char min;
+				char max;
+			} major;
+
+			struct {
+				char min;
+				char max;
+			} minor;
+
+			/**
+			* Constructs the Version range from pairs.
+			* @param major_range (min, max)
+			* @param minor_range (min, max)
+			*/
+			FieldStoreVersionValidityRange(const std::pair<char, char>& major_range, const std::pair<char, char>& minor_range)
+				: major{ major_range.first, major_range.second },
+				  minor{ minor_range.first, minor_range.second }
+			{}
+		};
+
 		class BasicFieldStore : public IRadiationFieldExporter, public IRadiationFieldImporter {
 		private:
 			std::string file_version;
+			FieldStoreVersionValidityRange validity_range;
 			RadFiled3D::Storage::MetadataSerializer* metadata_serializer;
 			RadFiled3D::Storage::BinayFieldBlockHandler* field_serializer;
 			RadFiled3D::Storage::MetadataAccessor* metadata_accessor;
 
 		protected:
+			/**
+			* @param file_version The file version string to paste into each file.
+			* @param validity_range The range of file versions that can be loaded by this store (All major versions of rnage and the minor version range applying to the max major versions)
+			*/
 			BasicFieldStore(
 				const std::string& file_version,
+				const FieldStoreVersionValidityRange& validity_range,
 				RadFiled3D::Storage::MetadataSerializer* metadata_serializer,
 				RadFiled3D::Storage::BinayFieldBlockHandler* field_serializer,
 				RadFiled3D::Storage::MetadataAccessor* metadata_accessor
 			) : file_version(file_version),
+				validity_range(validity_range),
 				metadata_serializer(metadata_serializer),
 				field_serializer(field_serializer),
 				metadata_accessor(metadata_accessor)
 			{}
-
-			~BasicFieldStore() {
-				delete this->metadata_serializer;
-				delete this->field_serializer;
-				delete this->metadata_accessor;
-			}
 
 			inline MetadataSerializer& get_metadata_serializer() const {
 				return *this->metadata_serializer;
@@ -241,6 +267,12 @@ namespace RadFiled3D {
 			}
 
 		public:
+			virtual ~BasicFieldStore() {
+				delete this->metadata_serializer;
+				delete this->field_serializer;
+				delete this->metadata_accessor;
+			}
+
 			/** Serialize the radiation field to a stream
 			* @param stream The stream to serialize the radiation field to
 			* @param field The radiation field to serialize
@@ -266,13 +298,40 @@ namespace RadFiled3D {
 			virtual std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> peek_metadata(std::istream& buffer) const override;
 
 			FieldType peek_field_type(std::istream& file_stream) const override;
+
+			/**
+			* Checks, if the version_str (x.y) is supported by this field store according to the FieldStoreVersionValidityRange.
+			* @param version_str version string of the form "x.y"
+			* @return true, if major version in range or, if major version == max major version, if additionally checks if the minor version is in range
+			*/
+			inline bool check_version_string_validity(const std::string& version_str) const {
+				size_t location_of_dot = version_str.find(".");
+				if (location_of_dot == std::string::npos || location_of_dot >= version_str.length() - 1)
+					throw RadiationFieldStoreException("Found version string: '" + version_str + "' was invalid!");
+
+				int major_version = std::stoi(version_str.substr(0, location_of_dot));
+				int minor_version = std::stoi(version_str.substr(location_of_dot + 1));
+
+				// check if major version is in range. If major version < max major version --> assume all minor versions are valid.
+				bool is_supported = (major_version >= this->validity_range.major.min && major_version <= this->validity_range.major.max);
+				is_supported &= (minor_version >= this->validity_range.minor.min && minor_version <= this->validity_range.minor.max) || (major_version < this->validity_range.major.max);
+				return is_supported;
+			}
 		};
 
 		namespace V1 {
 			class FieldStore : public BasicFieldStore {
 			public:
 				FieldStore() : BasicFieldStore(
-					"1.0",
+					/**
+					* Version 1.0: Basic Version used for papers: RadFiled3D and RadField3D-NN
+					* Version 1.1: Downward compatible adding of spherical voxels
+					*/
+					"1.1",
+					FieldStoreVersionValidityRange(
+						{1, 1},		// major version == 1
+						{0, 1}		// minor version in [0..1]
+					),
 					new V1::MetadataSerializer(),
 					(RadFiled3D::Storage::BinayFieldBlockHandler*)new RadFiled3D::Storage::V1::BinayFieldBlockHandler(),
 					new V1::MetadataAccessor()
@@ -301,10 +360,15 @@ namespace RadFiled3D {
 		*/
 		class FieldStore {
 		protected:
-			static std::shared_ptr<BasicFieldStore> store_instance;
-			static StoreVersion store_version;
 			static bool file_lock_syncronization;
+
+			static const BasicFieldStore* get_store_by(std::istream& buffer);
+			static const BasicFieldStore* get_store_by(StoreVersion version);
 		public:
+			/** Initialize the store instance on first use.
+			*/
+			static void ensure_registered_stores();
+
 			/** Enable or disable file transaction synchronization. This will make sure, that only one process can perform transactions such as joining on a file at a time and that other processes are queued.
 			* Default is disabled
 			* @param enable Enable or disable the synchronization
@@ -313,11 +377,6 @@ namespace RadFiled3D {
 			static void enable_file_lock_syncronization(bool enable) {
 				FieldStore::file_lock_syncronization = enable;
 			}
-
-			/** Initialize the store instance. Optional: Will be called on load and store operations if not called manually.
-			* @param version The version of the store to use
-			*/
-			static void init_store_instance(StoreVersion version);
 
 			/** Get the version of the store that created a buffer
 			* @param buffer The buffer to get the store version from

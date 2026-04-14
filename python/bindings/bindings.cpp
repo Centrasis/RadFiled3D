@@ -2181,7 +2181,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			});
 
         py::class_<Storage::FieldStore>(m, "FieldStore")
-            .def_static("init_store_instance", &Storage::FieldStore::init_store_instance)
+            .def_static("ensure_registered_stores", &Storage::FieldStore::ensure_registered_stores)
             .def_static("enable_file_lock_syncronization", &Storage::FieldStore::enable_file_lock_syncronization)
             .def_static("get_store_version", static_cast<Storage::StoreVersion(*)(const std::string&)>(&Storage::FieldStore::get_store_version))
             .def_static("load", static_cast<std::shared_ptr<IRadiationField>(*)(const std::string&)>(&FieldStore::load))

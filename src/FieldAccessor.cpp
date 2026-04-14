@@ -5,9 +5,11 @@
 #include "RadFiled3D/PolarSegments.hpp"
 #include "RadFiled3D/storage/FieldSerializer.hpp"
 #include "RadFiled3D/storage/MetadataAccessor.hpp"
+#include "RadFiled3D/storage/RadiationFieldStore.hpp"
 #include <istream>
 #include <fstream>
 #include <memory>
+#include "RadFiled3D/storage/Registry.hpp"
 
 
 using namespace RadFiled3D;
@@ -168,11 +170,9 @@ StoreVersion RadFiled3D::Storage::FieldAccessor::getStoreVersion(std::istream& b
 	buffer.clear();
 	buffer.seekg(0, std::ios::beg);
 	buffer.read((char*)&version, sizeof(VersionHeader));
+	std::string version_str = std::string(version.version);
 
-	if (strcmp(version.version, "1.0") == 0)
-		return StoreVersion::V1;
-
-	throw RadiationFieldStoreException(std::string("Unsupported file version: ") + std::string(version.version));
+	return RadFiled3D::Storage::Registry::get_highest_supported_version_by(version_str);
 }
 
 void RadFiled3D::Storage::FieldAccessor::verifyBuffer(std::istream& buffer) const

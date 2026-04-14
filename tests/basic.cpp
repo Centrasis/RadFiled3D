@@ -8,7 +8,6 @@
 #include <chrono>
 #include <fstream>
 #include "gtest/gtest.h"
-#include <fstream>
 #include <cstdio>
 #include <thread>
 #include <shared_mutex>
@@ -27,11 +26,6 @@ namespace {
 			}
 		}
 	};
-
-	TEST(LoadSpecific, low_res_low_count) {
-		std::shared_ptr<CartesianRadiationField> field = std::dynamic_pointer_cast<CartesianRadiationField>(FieldStore::load("Z:/Datasets/Tristan_Cardio/fields/low_res_low_count.rf3"));
-
-	}
 
 	TEST(FieldCreationTest, Dimensions) {
 		std::shared_ptr<CartesianRadiationField> field = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f));

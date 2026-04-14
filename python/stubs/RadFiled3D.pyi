@@ -564,6 +564,17 @@ class VoxelBuffer(object):
         """
         ...
 
+    def add_spherical_layer(self, layer_name: str, phi_segments: int, theta_segments: int, unit: str) -> None:
+        """
+        Adds a new spherical layer with direction seperated bins to the buffer.
+
+        :param layer_name: The name of the layer.
+        :param phi_segments: The number of bins along phi angle.
+        :param theta_segments: The number of bins along theta angle.
+        :param unit: The unit of the layer.
+        """
+        ...
+
 
 class VoxelLayer(object):
     """
@@ -1244,11 +1255,10 @@ class FieldStore:
     
 
     @staticmethod
-    def init_store_instance(version: StoreVersion) -> None:
+    def ensure_registered_stores() -> None:
         """
-        Initialize the store instance with a specific version.
-
-        :param version: The version to initialize the store instance with.
+        Initialize the store instance for all existing store versions to make sure they are registered and available for use.
+        This method will be automatically called before any store operation, but can be called manually to ensure that all stores are registered before performing any store operations.
         """
         ...
 

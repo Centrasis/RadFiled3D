@@ -107,7 +107,7 @@ namespace {
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
 
-		std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
+		auto result = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
 		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
 			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(

@@ -18,6 +18,7 @@ namespace fs = std::experimental::filesystem;
 #endif
 #include <stdexcept>
 #include "RadFiled3D/storage/FieldSerializer.hpp"
+#include "RadFiled3D/storage/Registry.hpp"
 #include <RadFiled3D/helpers/FileLock.hpp>
 
 
@@ -25,8 +26,6 @@ using namespace RadFiled3D;
 using namespace RadFiled3D::Storage::FiledTypes;
 using namespace RadFiled3D::Storage;
 
-std::shared_ptr<BasicFieldStore> FieldStore::store_instance = std::shared_ptr<BasicFieldStore>(nullptr);
-StoreVersion FieldStore::store_version = StoreVersion::V1;
 bool FieldStore::file_lock_syncronization = false;
 
 
@@ -91,8 +90,10 @@ void RadFiled3D::Storage::BasicFieldStore::valdiate_file_version(std::istream& s
 	Storage::FiledTypes::VersionHeader version;
 	stream.read((char*)&version, sizeof(Storage::FiledTypes::VersionHeader));
 
-	if (strcmp(version.version, this->file_version.c_str()) != 0) {
-		std::string msg = "File version mismatch! This loader supports version: " + this->file_version + ", but target file was written with version: " + std::string(version.version);
+	std::string version_str = std::string(version.version);
+	if (!this->check_version_string_validity(version_str)) {
+		std::string version_range = std::to_string(this->validity_range.major.min) + "." + std::to_string(this->validity_range.minor.min) + " <= x.y <= " + std::to_string(this->validity_range.major.max) + "." + std::to_string(this->validity_range.minor.max);
+		std::string msg = "File version mismatch! '" + std::string(version.version) + "' was not within the supported range for this field store. Valid range would have been: " + version_range;
 		throw RadiationFieldStoreException(msg.c_str());
 	}
 }
@@ -109,12 +110,7 @@ FieldType Storage::BasicFieldStore::peek_field_type(std::istream& file_stream) c
 
 FieldType RadFiled3D::Storage::FieldStore::peek_field_type(std::istream& file_stream)
 {
-	if (FieldStore::store_instance.get() == nullptr) {
-		StoreVersion version = FieldAccessor::getStoreVersion(file_stream);
-		FieldStore::init_store_instance(version);
-	}
-
-	return FieldStore::store_instance->peek_field_type(file_stream);
+	return FieldStore::get_store_by(file_stream)->peek_field_type(file_stream);
 }
 
 std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldStore::construct_accessor(const std::string& file)
@@ -125,6 +121,7 @@ std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldStore::construct_access
 
 std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldStore::construct_accessor(std::istream& buffer)
 {
+	FieldStore::ensure_registered_stores();
 	return FieldAccessorBuilder::Construct(buffer);
 }
 
@@ -317,86 +314,62 @@ StoreVersion RadFiled3D::Storage::FieldStore::get_store_version(std::istream& bu
 	return FieldAccessor::getStoreVersion(buffer);
 }
 
-void FieldStore::init_store_instance(StoreVersion version)
+void FieldStore::ensure_registered_stores()
 {
-	switch (version) {
-		case StoreVersion::V1:
-			FieldStore::store_instance = std::make_shared<Storage::V1::FieldStore>();
-			FieldStore::store_version = version;
-			break;
-		default:
-			throw RadiationFieldStoreException("Unimplemented file version!");
-	}
+	// exec initialization once
+	static const bool initialize = []() {
+		RadFiled3D::Storage::Registry::register_store(StoreVersion::V1, std::move(std::make_unique<Storage::V1::FieldStore>()));
+		return true;
+	}();
 }
 
 void FieldStore::store(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, StoreVersion version)
 {
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
-	FieldStore::store_instance->store(field, metadata, file);
+	FieldStore::get_store_by(version)->store(field, metadata, file);
 }
 
 void FieldStore::serialize(std::ostream& stream, std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, StoreVersion version)
 {
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
-	FieldStore::store_instance->serialize(stream, field, metadata);
+	FieldStore::get_store_by(version)->serialize(stream, field, metadata);
 }
 
 std::shared_ptr<IRadiationField> FieldStore::load(const std::string& file)
 {
-	StoreVersion version = FieldStore::get_store_version(file);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-	
 	std::ifstream buffer(file, std::ios::in | std::ios::binary);
-	return FieldStore::store_instance->load(buffer);
+	return FieldStore::get_store_by(buffer)->load(buffer);
 }
 
 std::shared_ptr<IRadiationField> FieldStore::load(std::istream& buffer)
 {
-	StoreVersion version = FieldStore::get_store_version(buffer);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
-	return FieldStore::store_instance->load(buffer);
+	return FieldStore::get_store_by(buffer)->load(buffer);
 }
 
 std::shared_ptr<RadiationFieldMetadata> FieldStore::load_metadata(const std::string& file)
 {
-	StoreVersion version = FieldStore::get_store_version(file);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
 	std::ifstream buffer(file, std::ios::in | std::ios::binary);
-	return FieldStore::store_instance->load_metadata(buffer);
+	return FieldStore::get_store_by(buffer)->load_metadata(buffer);
 }
 
 std::shared_ptr<RadiationFieldMetadata> FieldStore::load_metadata(std::istream& buffer)
 {
-	StoreVersion version = FieldStore::get_store_version(buffer);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
+	return FieldStore::get_store_by(buffer)->load_metadata(buffer);
+}
 
-	return FieldStore::store_instance->load_metadata(buffer);
+const BasicFieldStore* RadFiled3D::Storage::FieldStore::get_store_by(std::istream& buffer)
+{
+	FieldStore::ensure_registered_stores();
+	return Registry::get_store_by(FieldAccessor::getStoreVersion(buffer));
+}
+
+const BasicFieldStore* RadFiled3D::Storage::FieldStore::get_store_by(StoreVersion version)
+{
+	FieldStore::ensure_registered_stores();
+	return Registry::get_store_by(version);
 }
 
 std::shared_ptr<VoxelLayer> FieldStore::load_single_layer(std::istream& buffer, const std::string& channel, const std::string& layer)
 {
-	StoreVersion version = FieldStore::get_store_version(buffer);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
-	return FieldStore::store_instance->load_single_layer(buffer, channel, layer);
+	return FieldStore::get_store_by(buffer)->load_single_layer(buffer, channel, layer);
 }
 
 void FieldStore::join(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, FieldJoinMode join_mode, FieldJoinCheckMode check_mode, StoreVersion fallback_version)
@@ -404,10 +377,9 @@ void FieldStore::join(std::shared_ptr<IRadiationField> field, std::shared_ptr<Ra
 	FileLock file_lock(file, FieldStore::file_lock_syncronization);
 
 	if (!fs::exists(file)) {
-		if (FieldStore::store_instance.get() == nullptr)
-			FieldStore::init_store_instance(fallback_version);
+		FieldStore::ensure_registered_stores();
 
-		FieldStore::store(field, metadata, file, FieldStore::store_version);
+		FieldStore::store(field, metadata, file, Registry::get_highest_registered_version());
 		return;
 	}
 
@@ -469,30 +441,21 @@ void FieldStore::join(std::shared_ptr<IRadiationField> field, std::shared_ptr<Ra
 
 	float ratio = static_cast<float>(v1_metadata.get_header().simulation.primary_particle_count) / static_cast<float>(target_metadata.simulation.primary_particle_count + v1_metadata.get_header().simulation.primary_particle_count);
 
-	FieldStore::store_instance->join(existing_field, field, join_mode, check_mode, ratio);
+	auto store = FieldStore::get_store_by(FieldStore::get_store_version(file));
+	store->join(existing_field, field, join_mode, check_mode, ratio);
 
 	target_metadata.simulation.primary_particle_count += v1_metadata.get_header().simulation.primary_particle_count;
 	v1_metadata.set_header(target_metadata);
-	FieldStore::store_instance->store(existing_field, metadata, file);
+	store->store(existing_field, metadata, file);
 }
 
 std::shared_ptr<Storage::RadiationFieldMetadata> FieldStore::peek_metadata(const std::string& file)
 {
-	StoreVersion version = FieldStore::get_store_version(file);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
 	std::ifstream buffer(file, std::ios::in | std::ios::binary);
-	return FieldStore::store_instance->peek_metadata(buffer);
+	return FieldStore::peek_metadata(buffer);
 }
 
 std::shared_ptr<Storage::RadiationFieldMetadata> FieldStore::peek_metadata(std::istream& buffer)
 {
-	StoreVersion version = FieldStore::get_store_version(buffer);
-	if (FieldStore::store_instance.get() == nullptr || version != FieldStore::store_version) {
-		FieldStore::init_store_instance(version);
-	}
-
-	return FieldStore::store_instance->peek_metadata(buffer);
+	return FieldStore::get_store_by(buffer)->peek_metadata(buffer);
 }
