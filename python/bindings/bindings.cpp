@@ -1424,7 +1424,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::arg("layer_name"), py::arg("idx"), py::return_value_policy::reference_internal)
+            }, py::arg("layer_name"), py::arg("idx"), py::return_value_policy::reference)
             .def("get_voxel", [](VoxelGridBuffer& self, const std::string& layer_name, size_t x, size_t y, size_t z) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1455,7 +1455,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference_internal)
+            }, py::return_value_policy::reference)
             .def("get_voxel_by_coord", [](VoxelGridBuffer& self, const std::string& layer_name, float x, float y, float z) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1486,7 +1486,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference_internal)
+            }, py::return_value_policy::reference)
             .def("get_layer_as_ndarray", [](std::shared_ptr<VoxelGridBuffer>& self, const std::string& layer, bool copy) {
                 try {
                     const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
