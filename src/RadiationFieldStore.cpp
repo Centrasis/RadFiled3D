@@ -289,10 +289,10 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 					target_channel->merge_data_buffer<glm::vec4>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<glm::vec4>(join_mode, ratio));
 					break;
 				case Typing::DType::Hist:
-					target_channel->merge_voxel_buffer<HistogramVoxel>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<HistogramVoxel, float>(join_mode, ratio));
+					target_channel->merge_voxel_buffer<HistogramVoxel<float>>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<HistogramVoxel<float>, float>(join_mode, ratio));
 					break;
 				case Typing::DType::Spherical:
-					target_channel->merge_voxel_buffer<SphericalVoxel>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<SphericalVoxel, float>(join_mode, ratio));
+					target_channel->merge_voxel_buffer<AngularResolvedVoxel<float>>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<AngularResolvedVoxel<float>, float>(join_mode, ratio));
 					break;
 			}
 		}

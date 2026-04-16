@@ -4,13 +4,13 @@ from torch import Tensor
 
 class RadiationFieldChannel(NamedTuple):
     spectrum: Tensor
-    fluence: Tensor
-    error: Tensor = None
+    flux: Tensor
+    error: Union[Tensor, None] = None
 
 
 class RadiationField(NamedTuple):
     scatter_field: RadiationFieldChannel
-    xray_beam: RadiationFieldChannel
+    direct_beam: RadiationFieldChannel
 
 
 class DirectionalInput(NamedTuple):

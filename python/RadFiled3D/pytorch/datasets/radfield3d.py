@@ -46,13 +46,13 @@ class RadField3DDataset(CartesianFieldDataset):
             rad_field = RadiationField(
                 scatter_field=RadiationFieldChannel(
                     spectrum=RadiationFieldHelper.load_tensor_from_field(field, "scatter_field", "spectrum"),
-                    fluence=RadiationFieldHelper.load_tensor_from_field(field, "scatter_field", "hits"),
+                    flux=RadiationFieldHelper.load_tensor_from_field(field, "scatter_field", "flux"),
                     error=RadiationFieldHelper.load_tensor_from_field(field, "scatter_field", "error")
                 ),
-                xray_beam= RadiationFieldChannel(
-                    spectrum=RadiationFieldHelper.load_tensor_from_field(field, "xray_beam", "spectrum"),
-                    fluence=RadiationFieldHelper.load_tensor_from_field(field, "xray_beam", "hits"),
-                    error=RadiationFieldHelper.load_tensor_from_field(field, "xray_beam", "error")
+                direct_beam= RadiationFieldChannel(
+                    spectrum=RadiationFieldHelper.load_tensor_from_field(field, "direct_beam", "spectrum"),
+                    flux=RadiationFieldHelper.load_tensor_from_field(field, "direct_beam", "flux"),
+                    error=RadiationFieldHelper.load_tensor_from_field(field, "direct_beam", "error")
                 )
             )
 
@@ -174,19 +174,19 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
             metadata_cache.direction[i] = data.input.direction.detach()
             metadata_cache.spectrum[i] = data.input.spectrum.detach()
             fields_cache.scatter_field.spectrum[i] = data.ground_truth.scatter_field.spectrum.detach()
-            fields_cache.scatter_field.fluence[i] = data.ground_truth.scatter_field.fluence.detach()
+            fields_cache.scatter_field.flux[i] = data.ground_truth.scatter_field.flux.detach()
             fields_cache.scatter_field.error[i] = data.ground_truth.scatter_field.error.detach()
-            fields_cache.xray_beam.spectrum[i] = data.ground_truth.xray_beam.spectrum.detach()
-            fields_cache.xray_beam.fluence[i] = data.ground_truth.xray_beam.fluence.detach()
-            fields_cache.xray_beam.error[i] = data.ground_truth.xray_beam.error.detach()
+            fields_cache.direct_beam.spectrum[i] = data.ground_truth.direct_beam.spectrum.detach()
+            fields_cache.direct_beam.flux[i] = data.ground_truth.direct_beam.flux.detach()
+            fields_cache.direct_beam.error[i] = data.ground_truth.direct_beam.error.detach()
         metadata_cache.direction.requires_grad_(False)
         metadata_cache.spectrum.requires_grad_(False)
         fields_cache.scatter_field.spectrum.requires_grad_(False)
-        fields_cache.scatter_field.fluence.requires_grad_(False)
+        fields_cache.scatter_field.flux.requires_grad_(False)
         fields_cache.scatter_field.error.requires_grad_(False)
-        fields_cache.xray_beam.spectrum.requires_grad_(False)
-        fields_cache.xray_beam.fluence.requires_grad_(False)
-        fields_cache.xray_beam.error.requires_grad_(False)
+        fields_cache.direct_beam.spectrum.requires_grad_(False)
+        fields_cache.direct_beam.flux.requires_grad_(False)
+        fields_cache.direct_beam.error.requires_grad_(False)
         
         return metadata_cache, fields_cache
 
@@ -214,12 +214,12 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
             self.cached_fields = RadiationField(
                 scatter_field=RadiationFieldChannel(
                     spectrum=torch.empty((len(self.file_paths), first_data.input.spectrum.shape[0], *field_voxel_counts), dtype=torch.float32).share_memory_(),
-                    fluence=torch.empty((len(self.file_paths), 1, *field_voxel_counts), dtype=torch.float32).share_memory_(),
+                    flux=torch.empty((len(self.file_paths), 1, *field_voxel_counts), dtype=torch.float32).share_memory_(),
                     error=torch.empty((len(self.file_paths), 1, *field_voxel_counts), dtype=torch.float32).share_memory_()
                 ),
-                xray_beam=RadiationFieldChannel(
+                direct_beam=RadiationFieldChannel(
                     spectrum=torch.empty((len(self.file_paths), first_data.input.spectrum.shape[0], *field_voxel_counts), dtype=torch.float32).share_memory_(),
-                    fluence=torch.empty((len(self.file_paths), 1, *field_voxel_counts), dtype=torch.float32).share_memory_(),
+                    flux=torch.empty((len(self.file_paths), 1, *field_voxel_counts), dtype=torch.float32).share_memory_(),
                     error=torch.empty((len(self.file_paths), 1, *field_voxel_counts), dtype=torch.float32).share_memory_()
                 )
             )
@@ -229,19 +229,19 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
     def load_voxel_training_data_from_cache(self, idx: Union[int, Tensor], xyz: Union[Tensor, tuple[int, int, int]], external_fields_cache: RadiationField = None, external_metadata_cache: DirectionalInput = None) -> TrainingInputData:
         cached_fields = self.cached_fields if external_fields_cache is None else external_fields_cache
         cached_metadata = self.cached_metadata if external_metadata_cache is None else external_metadata_cache
-        xyz = torch.tensor(xyz, dtype=torch.float32, device=cached_fields.scatter_field.fluence.device, requires_grad=False) if not isinstance(xyz, Tensor) else xyz
+        xyz = torch.tensor(xyz, dtype=torch.float32, device=cached_fields.scatter_field.flux.device, requires_grad=False) if not isinstance(xyz, Tensor) else xyz
         xyz_idx = xyz.long()
 
         field = RadiationField(
             scatter_field=RadiationFieldChannel(
                 spectrum=cached_fields.scatter_field.spectrum[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
-                fluence=cached_fields.scatter_field.fluence[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
+                flux=cached_fields.scatter_field.flux[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
                 error=cached_fields.scatter_field.error[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone()
             ),
-            xray_beam=RadiationFieldChannel(
-                spectrum=cached_fields.xray_beam.spectrum[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
-                fluence=cached_fields.xray_beam.fluence[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
-                error=cached_fields.xray_beam.error[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone()
+            direct_beam=RadiationFieldChannel(
+                spectrum=cached_fields.direct_beam.spectrum[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
+                flux=cached_fields.direct_beam.flux[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone(),
+                error=cached_fields.direct_beam.error[idx, :, xyz_idx[0], xyz_idx[1], xyz_idx[2]].clone()
             )
         ) if cached_fields is not None else None
         # normalize xyz to 0 to 1
@@ -277,21 +277,21 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
             return self.load_voxel_training_data_from_cache(file_idx, xyz)
         else:
             scatter_spectrum = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="scatter_field", layer_name="spectrum").get_histogram()
-            scatter_fluence = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="scatter_field", layer_name="hits").get_data()
+            scatter_flux = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="scatter_field", layer_name="flux").get_data()
             scatter_error = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="scatter_field", layer_name="error").get_data()
-            xray_spectrum = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="xray_beam", layer_name="spectrum").get_histogram()
-            xray_fluence = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="xray_beam", layer_name="hits").get_data()
-            xray_error = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="xray_beam", layer_name="error").get_data()
+            xray_spectrum = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="direct_beam", layer_name="spectrum").get_histogram()
+            xray_flux = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="direct_beam", layer_name="flux").get_data()
+            xray_error = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="direct_beam", layer_name="error").get_data()
             geometry = self._get_voxel_flat(file_idx=file_idx, vx_idx=voxel_idx, channel_name="geometry", layer_name="density").get_data() if self.has_geometry else None
             field = RadiationField(
                 scatter_field=RadiationFieldChannel(
                     spectrum=torch.tensor(scatter_spectrum, dtype=torch.float32, device=xyz.device, requires_grad=False),
-                    fluence=torch.tensor(scatter_fluence, dtype=torch.float32, device=xyz.device, requires_grad=False),
+                    flux=torch.tensor(scatter_flux, dtype=torch.float32, device=xyz.device, requires_grad=False),
                     error=torch.tensor(scatter_error, dtype=torch.float32, device=xyz.device, requires_grad=False)
                 ),
-                xray_beam=RadiationFieldChannel(
+                direct_beam=RadiationFieldChannel(
                     spectrum=torch.tensor(xray_spectrum, dtype=torch.float32, device=xyz.device, requires_grad=False),
-                    fluence=torch.tensor(xray_fluence, dtype=torch.float32, device=xyz.device, requires_grad=False),
+                    flux=torch.tensor(xray_flux, dtype=torch.float32, device=xyz.device, requires_grad=False),
                     error=torch.tensor(xray_error, dtype=torch.float32, device=xyz.device, requires_grad=False)
                 )
             )
@@ -354,7 +354,7 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
         indices = torch.tensor(
             indices,
             dtype=torch.int64,
-            device=self.cached_fields.scatter_field.fluence.device if self.cached_fields is not None else None,
+            device=self.cached_fields.scatter_field.flux.device if self.cached_fields is not None else None,
             requires_grad=False
         ) if not isinstance(indices, Tensor) else indices
         file_indices = indices // self.voxels_per_field
@@ -371,11 +371,11 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                 self.field_accessor,
                 [
                     "scatter_field",
-                    "xray_beam"
+                    "direct_beam"
                 ],
                 [
                     "spectrum",
-                    "hits",
+                    "flux",
                     "error"
                 ]
             )
@@ -383,7 +383,7 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
             field_voxel_counts = torch.tensor([self.field_voxel_counts.x, self.field_voxel_counts.y, self.field_voxel_counts.z], dtype=torch.float32, device=xyz.device, requires_grad=False)
 
             requests = []
-            indices = torch.tensor(indices, dtype=torch.int64, device=self.cached_fields.scatter_field.fluence.device, requires_grad=False) if not isinstance(indices, Tensor) else indices
+            indices = torch.tensor(indices, dtype=torch.int64, device=self.cached_fields.scatter_field.flux.device, requires_grad=False) if not isinstance(indices, Tensor) else indices
             file_indices = indices // self.voxels_per_field
             unique_file_indices = torch.unique(file_indices)
             voxel_indices = indices % self.voxels_per_field
@@ -464,13 +464,13 @@ class RadField3DVoxelwiseDataset(RadField3DDataset):
                 ground_truth=RadiationField(
                     scatter_field=RadiationFieldChannel(
                         spectrum=torch.tensor(collection.get_as_ndarray("scatter_field", "spectrum"), device=xyz.device, requires_grad=False),
-                        fluence=torch.tensor(collection.get_as_ndarray("scatter_field", "hits"), device=xyz.device, requires_grad=False).unsqueeze(-1),
+                        flux=torch.tensor(collection.get_as_ndarray("scatter_field", "flux"), device=xyz.device, requires_grad=False).unsqueeze(-1),
                         error=torch.tensor(collection.get_as_ndarray("scatter_field", "error"), device=xyz.device, requires_grad=False).unsqueeze(-1)
                     ),
-                    xray_beam=RadiationFieldChannel(
-                        spectrum=torch.tensor(collection.get_as_ndarray("xray_beam", "spectrum"), device=xyz.device, requires_grad=False),
-                        fluence=torch.tensor(collection.get_as_ndarray("xray_beam", "hits"), device=xyz.device, requires_grad=False).unsqueeze(-1),
-                        error=torch.tensor(collection.get_as_ndarray("xray_beam", "error"), device=xyz.device, requires_grad=False).unsqueeze(-1)
+                    direct_beam=RadiationFieldChannel(
+                        spectrum=torch.tensor(collection.get_as_ndarray("direct_beam", "spectrum"), device=xyz.device, requires_grad=False),
+                        flux=torch.tensor(collection.get_as_ndarray("direct_beam", "flux"), device=xyz.device, requires_grad=False).unsqueeze(-1),
+                        error=torch.tensor(collection.get_as_ndarray("direct_beam", "error"), device=xyz.device, requires_grad=False).unsqueeze(-1)
                     )
                 )
             )

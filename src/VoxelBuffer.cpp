@@ -225,16 +225,16 @@ VoxelBuffer& VoxelBuffer::operator+=(const VoxelBuffer& other)
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist1 = (HistogramVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto hist2 = (HistogramVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist1 = (HistogramVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist2 = (HistogramVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*hist1 += *hist2;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph1 = (SphericalVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto sph2 = (SphericalVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph2 = (AngularResolvedVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*sph1 += *sph2;
 			}
 			break;
@@ -309,16 +309,16 @@ VoxelBuffer& VoxelBuffer::operator*=(const VoxelBuffer& other) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist1 = (HistogramVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto hist2 = (HistogramVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist1 = (HistogramVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist2 = (HistogramVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*hist1 *= *hist2;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph1 = (SphericalVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto sph2 = (SphericalVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph2 = (AngularResolvedVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*sph1 *= *sph2;
 			}
 			break;
@@ -393,16 +393,16 @@ VoxelBuffer& VoxelBuffer::operator-=(const VoxelBuffer& other) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist1 = (HistogramVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto hist2 = (HistogramVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist1 = (HistogramVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist2 = (HistogramVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*hist1 -= *hist2;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph1 = (SphericalVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto sph2 = (SphericalVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph2 = (AngularResolvedVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*sph1 -= *sph2;
 			}
 			break;
@@ -477,16 +477,16 @@ VoxelBuffer& VoxelBuffer::operator/=(const VoxelBuffer& other) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist1 = (HistogramVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto hist2 = (HistogramVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist1 = (HistogramVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto hist2 = (HistogramVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*hist1 /= *hist2;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph1 = (SphericalVoxel*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
-				auto sph2 = (SphericalVoxel*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
+				auto sph2 = (AngularResolvedVoxel<float>*)(other_layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
 				*sph1 /= *sph2;
 			}
 			break;
@@ -576,14 +576,14 @@ VoxelBuffer& VoxelBuffer::operator+=(const float& scalar) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist = (HistogramVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto hist = (HistogramVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*hist += scalar;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph = (SphericalVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*sph += scalar;
 			}
 			break;
@@ -673,14 +673,14 @@ VoxelBuffer& VoxelBuffer::operator-=(const float& scalar) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist = (HistogramVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto hist = (HistogramVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*hist -= scalar;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph = (SphericalVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*sph -= scalar;
 			}
 			break;
@@ -770,14 +770,14 @@ VoxelBuffer& VoxelBuffer::operator*=(const float& scalar) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist = (HistogramVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto hist = (HistogramVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*hist *= scalar;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph = (SphericalVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*sph *= scalar;
 			}
 			break;
@@ -867,14 +867,14 @@ VoxelBuffer& VoxelBuffer::operator/=(const float& scalar) {
 		case Typing::DType::Hist:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto hist = (HistogramVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto hist = (HistogramVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*hist /= scalar;
 			}
 			break;
 		case Typing::DType::Spherical:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
-				auto sph = (SphericalVoxel*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
+				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
 				*sph /= scalar;
 			}
 			break;

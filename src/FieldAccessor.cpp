@@ -296,7 +296,7 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 	}
 
 	if (voxel == nullptr && dtype == Typing::DType::Hist) {
-		OwningHistogramVoxel* vx = new OwningHistogramVoxel();
+		OwningHistogramVoxel<float>* vx = new OwningHistogramVoxel<float>();
 		if (voxel_header_data != nullptr) {
 			vx->init_from_header(voxel_header_data);
 		}
@@ -305,7 +305,7 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 	}
 
 	if (voxel == nullptr && dtype == Typing::DType::Spherical) {
-		OwningSphericalVoxel* vx = new OwningSphericalVoxel();
+		OwningAngularResolvedVoxel<float>* vx = new OwningAngularResolvedVoxel<float>();
 		if (voxel_header_data != nullptr) {
 			vx->init_from_header(voxel_header_data);
 		}

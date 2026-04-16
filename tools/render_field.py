@@ -46,9 +46,9 @@ if __name__ == "__main__":
         field.get_field_dimensions().z,
     )
 
-    print(field.get_channel("xray_beam").get_layers())
+    print(field.get_channel("direct_beam").get_layers())
 
-    volume = field.get_channel("xray_beam").get_layer_as_ndarray("hits") + field.get_channel("scatter_field").get_layer_as_ndarray("hits")
+    volume = field.get_channel("direct_beam").get_layer_as_ndarray("flux") + field.get_channel("scatter_field").get_layer_as_ndarray("flux")
     # flip y and z for correct orientation
     print(f"Volume shape before transpose: {volume.shape}")
     volume = np.transpose(volume, (0, 2, 1, 3))
@@ -189,16 +189,16 @@ if __name__ == "__main__":
             loc[2] + (field_dimensions[2] / 2),
         )
         print(f"Rendering spectrum at location: {loc}")
-        sc_weight: float = field.get_channel("scatter_field").get_voxel_by_coord("hits", loc[0], loc[1], loc[2]).get_data() / (field.get_channel("xray_beam").get_voxel_by_coord("hits", loc[0], loc[1], loc[2]).get_data() + field.get_channel("scatter_field").get_voxel_by_coord("hits", loc[0], loc[1], loc[2]).get_data())
-        xb_weight: float = field.get_channel("xray_beam").get_voxel_by_coord("hits", loc[0], loc[1], loc[2]).get_data() / (field.get_channel("xray_beam").get_voxel_by_coord("hits", loc[0], loc[1], loc[2]).get_data() + field.get_channel("scatter_field").get_voxel_by_coord("hits", loc[0], loc[1], loc[2]).get_data())
+        sc_weight: float = field.get_channel("scatter_field").get_voxel_by_coord("flux", loc[0], loc[1], loc[2]).get_data() / (field.get_channel("direct_beam").get_voxel_by_coord("flux", loc[0], loc[1], loc[2]).get_data() + field.get_channel("scatter_field").get_voxel_by_coord("flux", loc[0], loc[1], loc[2]).get_data())
+        xb_weight: float = field.get_channel("direct_beam").get_voxel_by_coord("flux", loc[0], loc[1], loc[2]).get_data() / (field.get_channel("direct_beam").get_voxel_by_coord("flux", loc[0], loc[1], loc[2]).get_data() + field.get_channel("scatter_field").get_voxel_by_coord("flux", loc[0], loc[1], loc[2]).get_data())
 
         smoothed_spectrum = None
         for i in [-1, 0, 1]:
             for j in [-1, 0, 1]:
                 for k in [-1, 0, 1]:
                     scatter_spectrum = field.get_channel("scatter_field").get_voxel_by_coord("spectrum", loc[0] + i*voxel_size[0], loc[1] + j*voxel_size[1], loc[2] + k*voxel_size[2]).get_data()
-                    xray_beam_spectrum = field.get_channel("xray_beam").get_voxel_by_coord("spectrum", loc[0] + i*voxel_size[0], loc[1] + j*voxel_size[1], loc[2] + k*voxel_size[2]).get_data()
-                    hist: HistogramVoxel = field.get_channel("xray_beam").get_voxel_by_coord("spectrum", loc[0] + i*voxel_size[0], loc[1] + j*voxel_size[1], loc[2] + k*voxel_size[2])
+                    xray_beam_spectrum = field.get_channel("direct_beam").get_voxel_by_coord("spectrum", loc[0] + i*voxel_size[0], loc[1] + j*voxel_size[1], loc[2] + k*voxel_size[2]).get_data()
+                    hist: HistogramVoxel = field.get_channel("direct_beam").get_voxel_by_coord("spectrum", loc[0] + i*voxel_size[0], loc[1] + j*voxel_size[1], loc[2] + k*voxel_size[2])
 
                     combined_spectrum = scatter_spectrum * sc_weight + xray_beam_spectrum * xb_weight
                     combined_spectrum /= combined_spectrum.sum()  # Normalize

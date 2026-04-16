@@ -27,13 +27,13 @@ def test_radfield3d_voxelwise_dataset():
 
         field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.1, 0.1, 0.1))
         field.add_channel("scatter_field")
-        field.add_channel("xray_beam")
-        field.get_channel("scatter_field").add_layer("hits", "unit1", DType.FLOAT32)
+        field.add_channel("direct_beam")
+        field.get_channel("scatter_field").add_layer("flux", "unit1", DType.FLOAT32)
         field.get_channel("scatter_field").add_layer("error", "unit1", DType.FLOAT32)
         field.get_channel("scatter_field").add_histogram_layer("spectrum", 32, 0.1, "unit1")
-        field.get_channel("xray_beam").add_layer("hits", "unit1", DType.FLOAT32)
-        field.get_channel("xray_beam").add_layer("error", "unit1", DType.FLOAT32)
-        field.get_channel("xray_beam").add_histogram_layer("spectrum", 32, 0.1, "unit1")
+        field.get_channel("direct_beam").add_layer("flux", "unit1", DType.FLOAT32)
+        field.get_channel("direct_beam").add_layer("error", "unit1", DType.FLOAT32)
+        field.get_channel("direct_beam").add_histogram_layer("spectrum", 32, 0.1, "unit1")
 
         os.makedirs("test_dataset", exist_ok=True)
 
@@ -47,11 +47,11 @@ def test_radfield3d_voxelwise_dataset():
 
         test_in: TrainingInputData = dataset.__getitems__([random.randint(0, len(dataset)) for _ in range(100)])
         assert test_in.ground_truth.scatter_field.error.shape[0] == 100, "Ground truth error shape does not match expected batch size."
-        assert test_in.ground_truth.scatter_field.fluence.shape[0] == 100, "Ground truth fluence shape does not match expected batch size."
+        assert test_in.ground_truth.scatter_field.flux.shape[0] == 100, "Ground truth fluence shape does not match expected batch size."
         assert test_in.ground_truth.scatter_field.spectrum.shape[0] == 100, "Ground truth spectrum shape does not match expected batch size."
-        assert test_in.ground_truth.xray_beam.error.shape[0] == 100, "X-ray beam error shape does not match expected batch size."
-        assert test_in.ground_truth.xray_beam.fluence.shape[0] == 100, "X-ray beam fluence shape does not match expected batch size."
-        assert test_in.ground_truth.xray_beam.spectrum.shape[0] == 100, "X-ray beam spectrum shape does not match expected batch size."
+        assert test_in.ground_truth.direct_beam.error.shape[0] == 100, "X-ray beam error shape does not match expected batch size."
+        assert test_in.ground_truth.direct_beam.flux.shape[0] == 100, "X-ray beam fluence shape does not match expected batch size."
+        assert test_in.ground_truth.direct_beam.spectrum.shape[0] == 100, "X-ray beam spectrum shape does not match expected batch size."
         assert test_in.input.direction.shape[0] == 100, "Input direction shape does not match expected batch size."
         assert test_in.input.position.shape[0] == 100, "Input position shape does not match expected batch size."
         assert test_in.input.spectrum.shape[0] == 100, "Input tube spectrum shape does not match expected batch size."
@@ -79,13 +79,13 @@ def test_radfield3d_dataset():
 
         field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.1, 0.1, 0.1))
         field.add_channel("scatter_field")
-        field.add_channel("xray_beam")
+        field.add_channel("direct_beam")
         ch = field.get_channel("scatter_field")
-        ch_xray = field.get_channel("xray_beam")
-        ch.add_layer("hits", "unit1", DType.FLOAT32)
+        ch_xray = field.get_channel("direct_beam")
+        ch.add_layer("flux", "unit1", DType.FLOAT32)
         ch.add_layer("error", "unit1", DType.FLOAT32)
         ch.add_histogram_layer("spectrum", 32, 0.1, "unit1")
-        ch_xray.add_layer("hits", "unit1", DType.FLOAT32)
+        ch_xray.add_layer("flux", "unit1", DType.FLOAT32)
         ch_xray.add_layer("error", "unit1", DType.FLOAT32)
         ch_xray.add_histogram_layer("spectrum", 32, 0.1, "unit1")
 

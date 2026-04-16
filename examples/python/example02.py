@@ -2,8 +2,8 @@ from RadFiled3D.RadFiled3D import vec3, GridTracerFactory, GridTracerAlgorithm, 
 from plotly import graph_objects as go
 
 field = CartesianRadiationField(vec3(1.0, 1.0, 1.0), vec3(0.01, 0.01, 0.01))
-field.add_channel("test").add_layer("hits", "counts", DType.INT32)
-hits_counts = field.get_channel("test").get_layer_as_ndarray("hits")
+field.add_channel("test").add_layer("flux", "counts", DType.INT32)
+hits_counts = field.get_channel("test").get_layer_as_ndarray("flux")
 hits_counts_shape = hits_counts.shape
 hits_counts = hits_counts.flatten()
 hits_counts.fill(0)

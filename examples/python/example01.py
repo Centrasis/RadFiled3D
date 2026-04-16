@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # The second argument is the unit of the data
     channel.add_layer("doserate", "Gy/h", DType.FLOAT32)
     channel.add_layer("energy", "Gy", DType.FLOAT64)
-    channel.add_layer("hits", "counts", DType.UINT64)
+    channel.add_layer("flux", "counts", DType.UINT64)
     channel.add_layer("directions", "", DType.VEC3)
 
     print(channel.get_layers())

@@ -378,7 +378,7 @@ class HistogramVoxel(Voxel):
         ...
 
 
-class SphericalVoxel(Voxel):
+class AngularResolvedVoxel(Voxel):
     def get_phi_segments(self) -> int:
         """
         Returns the number of phi (azimuthal) segments.
@@ -455,16 +455,15 @@ class SphericalVoxel(Voxel):
         """
         ...
 
-    def __eq__(self, value: "SphericalVoxel") -> bool: ...
+    def __eq__(self, value: "AngularResolvedVoxel") -> bool: ...
 
 
-class OwningSphericalVoxel(SphericalVoxel):
-    def __init__(self, phi_segments: int, theta_segments: int) -> None:
+class OwningAngularResolvedVoxel(AngularResolvedVoxel):
+    def __init__(self, segments: uvec2) -> None:
         """
-        Creates a new OwningSphericalVoxel with the given segment resolution.
+        Creates a new OwningAngularResolvedVoxel with the given segment resolution.
 
-        :param phi_segments: Number of azimuthal segments.
-        :param theta_segments: Number of polar segments.
+        :param segments: Number of azimuthal segments (phi: azimuth, theta: polar).
         """
         ...
 
