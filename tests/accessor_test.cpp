@@ -43,7 +43,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -102,7 +102,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -155,7 +155,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -209,7 +209,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -260,7 +260,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -307,7 +307,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -401,7 +401,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		ScalarVoxel<float>& vx = channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 20);
 		vx = 10.f;
@@ -469,7 +469,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 0.0f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
 		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
 			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
@@ -522,7 +522,7 @@ namespace {
 			auto vx = std::dynamic_pointer_cast<ScalarVoxel<float>>(collection->channels["test_channel"].layers["doserate"].voxels[i]);
 			EXPECT_EQ(vx->get_data(), 0.f); // file 01 voxels 1, 2, 3 should be zero
 
-			auto hist_vx = std::dynamic_pointer_cast<HistogramVoxel>(collection->channels["test_channel"].layers["spectra"].voxels[i]);
+			auto hist_vx = std::dynamic_pointer_cast<HistogramVoxel<float>>(collection->channels["test_channel"].layers["spectra"].voxels[i]);
 			EXPECT_EQ(hist_vx->get_bins(), 26);
 			for (size_t i = 0; i < 26; i++)
 				EXPECT_FLOAT_EQ(hist_vx->get_histogram()[i], .123f);

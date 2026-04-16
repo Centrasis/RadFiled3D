@@ -291,7 +291,7 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 		break;
 	case Typing::DType::Hist:
 		break;
-	case Typing::DType::Spherical:
+	case Typing::DType::AngularResolved:
 		break;
 	}
 
@@ -304,7 +304,7 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 		voxel = vx;
 	}
 
-	if (voxel == nullptr && dtype == Typing::DType::Spherical) {
+	if (voxel == nullptr && dtype == Typing::DType::AngularResolved) {
 		OwningAngularResolvedVoxel<float>* vx = new OwningAngularResolvedVoxel<float>();
 		if (voxel_header_data != nullptr) {
 			vx->init_from_header(voxel_header_data);

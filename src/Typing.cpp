@@ -54,7 +54,7 @@ Typing::DType Typing::Helper::get_dtype(const std::string& dtype)
 		return Typing::DType::Hist;
 	}
 	if (dtype == std::string("spherical")) {
-		return Typing::DType::Spherical;
+		return Typing::DType::AngularResolved;
 	}
 
 	std::string vec_prefix = "glm::vec<";
@@ -114,7 +114,7 @@ size_t RadFiled3D::Typing::Helper::get_bytes_of_dtype(Typing::DType dtype)
 		return sizeof(uint8_t);
 	case Typing::DType::Hist:
 		return sizeof(float);
-	case Typing::DType::Spherical:
+	case Typing::DType::AngularResolved:
 		return sizeof(float);
 	default:
 		throw std::runtime_error("Unknown data type");

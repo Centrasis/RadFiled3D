@@ -230,7 +230,7 @@ VoxelBuffer& VoxelBuffer::operator+=(const VoxelBuffer& other)
 				*hist1 += *hist2;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
@@ -314,7 +314,7 @@ VoxelBuffer& VoxelBuffer::operator*=(const VoxelBuffer& other) {
 				*hist1 *= *hist2;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
@@ -398,7 +398,7 @@ VoxelBuffer& VoxelBuffer::operator-=(const VoxelBuffer& other) {
 				*hist1 -= *hist2;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
@@ -482,7 +482,7 @@ VoxelBuffer& VoxelBuffer::operator/=(const VoxelBuffer& other) {
 				*hist1 /= *hist2;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph1 = (AngularResolvedVoxel<float>*)(layer_info->second.voxels + i * layer_info->second.bytes_per_voxel);
@@ -580,7 +580,7 @@ VoxelBuffer& VoxelBuffer::operator+=(const float& scalar) {
 				*hist += scalar;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
@@ -677,7 +677,7 @@ VoxelBuffer& VoxelBuffer::operator-=(const float& scalar) {
 				*hist -= scalar;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
@@ -774,7 +774,7 @@ VoxelBuffer& VoxelBuffer::operator*=(const float& scalar) {
 				*hist *= scalar;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);
@@ -871,7 +871,7 @@ VoxelBuffer& VoxelBuffer::operator/=(const float& scalar) {
 				*hist /= scalar;
 			}
 			break;
-		case Typing::DType::Spherical:
+		case Typing::DType::AngularResolved:
 			for (size_t i = 0; i < this->voxel_count; i++)
 			{
 				auto sph = (AngularResolvedVoxel<float>*)(layer_info.voxels + i * layer_info.bytes_per_voxel);

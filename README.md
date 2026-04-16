@@ -282,6 +282,7 @@ In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datat
 | glm::vec3     | DType.VEC3 |
 | glm::vec4     | DType.VEC4 |
 | HistogramVoxel<float> | DType.HISTOGRAM |
+| AngularResolvedVoxel<float> | DType.ANGULAR |
 
 
 ## Field Structure

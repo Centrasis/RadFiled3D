@@ -102,7 +102,7 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
         return VOXEL_CAPSULE(vx, ScalarVoxel<glm::vec4>);
     case Typing::DType::Hist:
         return VOXEL_CAPSULE(vx, HistogramVoxel<float>);
-    case Typing::DType::Spherical:
+    case Typing::DType::AngularResolved:
         return VOXEL_CAPSULE(vx, AngularResolvedVoxel<float>);
     case Typing::DType::UInt64:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint64_t>);
@@ -1310,6 +1310,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("VEC3", Typing::DType::Vec3)
         .value("VEC4", Typing::DType::Vec4)
         .value("HISTOGRAM", Typing::DType::Hist)
+        .value("ANGULAR", Typing::DType::AngularResolved)
         .value("UINT64", Typing::DType::UInt64)
         .value("UINT32", Typing::DType::UInt32)
         .value("BYTE", Typing::DType::Byte);
@@ -1415,7 +1416,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec4>>(layer_name, idx));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel<float>>(layer_name, idx));
-                    case Typing::DType::Spherical:
+                    case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<AngularResolvedVoxel<float>>(layer_name, idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(layer_name, idx));
@@ -1446,7 +1447,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<glm::vec4>>(layer_name, x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel<HistogramVoxel<float>>(layer_name, x, y, z));
-                    case Typing::DType::Spherical:
+                    case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel<AngularResolvedVoxel<float>>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
@@ -1477,7 +1478,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<glm::vec4>>(layer_name, x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<HistogramVoxel<float>>(layer_name, x, y, z));
-                    case Typing::DType::Spherical:
+                    case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<AngularResolvedVoxel<float>>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
@@ -1507,7 +1508,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 							return create_py_array<uint64_t>(self->get_layer<uint64_t>(layer), self->get_voxel_counts(), self, copy);
                         case Typing::DType::UInt32:
                             return create_py_array<unsigned long>(self->get_layer<unsigned long>(layer), self->get_voxel_counts(), self, copy);
-                        case Typing::DType::Spherical:
+                        case Typing::DType::AngularResolved:
                         {
                             const auto& sph = self->get_voxel_flat<AngularResolvedVoxel<float>>(layer, 0);
                             const size_t phi = sph.get_phi_segments();
@@ -1572,7 +1573,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<glm::vec4>>(idx));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel<float>>(idx));
-                    case Typing::DType::Spherical:
+                    case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<AngularResolvedVoxel<float>>(idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(idx));

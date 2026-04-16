@@ -187,7 +187,7 @@ namespace RadFiled3D {
 					this->dynamic_metadata->add_custom_layer<VoxelT, dtype>(key, voxel, value);
 				}
 
-				template<typename VoxelT = HistogramVoxel, typename dtype = float>
+				template<typename VoxelT = HistogramVoxel<float>, typename dtype = float>
 				void set_dynamic_custom_metadata(const std::string& key, const VoxelT& value) {
 					this->dynamic_metadata->add_custom_layer<VoxelT, dtype>(key, value, dtype());
 				}

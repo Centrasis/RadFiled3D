@@ -41,7 +41,7 @@ namespace {
 			auto channel = field->add_channel("test_channel");
 			channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 			channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-			channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+			channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
 			if (field_memory_consuption == 0) {
 				field_memory_consuption += sizeof(CartesianRadiationField);
 				field_memory_consuption += sizeof(VoxelGridBuffer) * 3;
@@ -71,7 +71,7 @@ namespace {
 			auto channel = field->add_channel("test_channel");
 			channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 			channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-			channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+			channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
 		}
 
 		unsigned long long totalVirtualUsed_end = 0;
@@ -102,7 +102,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
 
 		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
 			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
@@ -180,7 +180,7 @@ namespace {
 
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
-		channel->add_custom_layer<HistogramVoxel>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
+		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel(26, 10.f, nullptr), .123f, "");
 
 		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
 			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(

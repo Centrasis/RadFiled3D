@@ -18,9 +18,10 @@ class DType(Enum):
     VEC3 = 5
     VEC4 = 6
     HISTOGRAM = 7
-    UINT64 = 8
-    UINT32 = 9
-    BYTE = 10
+    ANGULAR = 8
+    UINT64 = 9
+    UINT32 = 10
+    BYTE = 11
 
 
 class FieldType(Enum):

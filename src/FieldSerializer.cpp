@@ -100,8 +100,8 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 
 	Typing::DType dtype = Typing::Helper::get_dtype(std::string(layer_desc.dtype));
 	VoxelLayer* layer = nullptr;
-	HistogramVoxel hist_template;
-	AngularResolvedVoxel sph_template;
+	HistogramVoxel<float> hist_template;
+	AngularResolvedVoxel<float> sph_template;
 
 	switch (dtype)
 	{
@@ -138,7 +138,7 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 			hist_template.init_from_header(header_data);
 		layer = VoxelLayer::ConstructFromBufferRaw<float, HistogramVoxel<float>>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, hist_template);
 		break;
-	case Typing::DType::Spherical:
+	case Typing::DType::AngularResolved:
 		if (header_data != nullptr)
 			sph_template.init_from_header(header_data);
 		layer = VoxelLayer::ConstructFromBufferRaw<float, AngularResolvedVoxel<float>>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, sph_template);
@@ -206,7 +206,7 @@ std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeCha
 			case Typing::DType::Hist:
 				Storage::V1::BinayFieldBlockHandler::add_hist_layer(destination, std::string(layer_desc.name), layer_desc.bytes_per_element, 0, layer_desc.unit, header_data);
 				break;
-			case Typing::DType::Spherical:
+			case Typing::DType::AngularResolved:
 				Storage::V1::BinayFieldBlockHandler::add_spherical_layer(destination, std::string(layer_desc.name), layer_desc.bytes_per_element, layer_desc.unit, header_data);
 				break;
 			case Typing::DType::UInt64:
@@ -239,7 +239,7 @@ std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeCha
 
 void Storage::V1::BinayFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, float max_energy_eV, const std::string& unit, void* header_data)
 {
-	HistogramVoxel hist;
+	HistogramVoxel<float> hist;
 	if (header_data != nullptr)
 		hist.init_from_header(header_data);
 	field->add_custom_layer<HistogramVoxel<float>, float>(layer, hist, 0.f, unit);
@@ -247,7 +247,7 @@ void Storage::V1::BinayFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBu
 
 void Storage::V1::BinayFieldBlockHandler::add_spherical_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data)
 {
-	AngularResolvedVoxel sph;
+	AngularResolvedVoxel<float> sph;
 	if (header_data != nullptr)
 		sph.init_from_header(header_data);
 	field->add_custom_layer<AngularResolvedVoxel<float>, float>(layer, sph, 0.f, unit);

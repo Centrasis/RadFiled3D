@@ -24,7 +24,7 @@ int main() {
 	// Add a layer to the channel called "directions" with initial value glm::vec3(0.f) and unit "normalized PCA direction"
 	channel->add_layer<glm::vec3>("direction", glm::vec3(0.f), "normalized PCA direction");
 	// Add a layer to the channel called "spectrum" which is not a simple scalar value voxel, but a more complex voxel with an custom constructor
-	channel->add_custom_layer("spectrum", HistogramVoxel(26, 10.f, nullptr), 0.f, "keV");
+	channel->add_custom_layer("spectrum", HistogramVoxel<float>(26, 10.f, nullptr), 0.f, "keV");
 
 	// Access the "doserate" layer and set the value of the voxel at index (0, 5, 0) to 123.f
 	channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 5, 0) = 123.f;
@@ -37,7 +37,7 @@ int main() {
 	channel->get_voxel<ScalarVoxel<glm::vec3>>("direction", 0, 5, 0) += glm::vec3(1.f, 2.f, 3.f);
 
 	// Access the "spectrum" layer and get the histogram data
-	auto hist = channel->get_voxel<HistogramVoxel>("spectrum", 0, 5, 0);
+	auto hist = channel->get_voxel<HistogramVoxel<float>>("spectrum", 0, 5, 0);
 	// Request a view to the histogram data that is easy to work with and implements the std::collection interface
 	auto hist_data = hist.get_histogram();
 	std::cout << "Hist bins: " << hist_data.size() << std::endl;

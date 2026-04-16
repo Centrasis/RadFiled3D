@@ -158,15 +158,15 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));
 
-		channel->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(12, 6, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(12, 6, nullptr), 0.f, "");
 		channel->add_layer<float>("doserate", 0.f, "Gy/s");
 
-		AngularResolvedVoxel& sph = channel->get_voxel<AngularResolvedVoxel>("angular", 0, 5, 0);
+		AngularResolvedVoxel<float>& sph = channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 5, 0);
 		for (size_t i = 0; i < 72; i++)
 			sph.get_segments_data()[i] = static_cast<float>(i);
 
 		for (size_t x = 0; x < 10; x++) {
-			AngularResolvedVoxel& diag = channel->get_voxel<AngularResolvedVoxel>("angular", x, x, x);
+			AngularResolvedVoxel<float>& diag = channel->get_voxel<AngularResolvedVoxel<float>>("angular", x, x, x);
 			for (size_t i = 0; i < 72; i++)
 				diag.get_segments_data()[i] = 99.f;
 		}
@@ -192,14 +192,14 @@ namespace {
 
 		EXPECT_FLOAT_EQ(loaded_channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 5, 0).get_data(), 42.f);
 
-		AngularResolvedVoxel& loaded_sph = loaded_channel->get_voxel<AngularResolvedVoxel>("angular", 0, 5, 0);
+		AngularResolvedVoxel<float>& loaded_sph = loaded_channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 5, 0);
 		EXPECT_EQ(loaded_sph.get_phi_segments(), 12);
 		EXPECT_EQ(loaded_sph.get_theta_segments(), 6);
 		for (size_t i = 0; i < 72; i++)
 			EXPECT_FLOAT_EQ(loaded_sph.get_segments_data()[i], static_cast<float>(i));
 
 		for (size_t x = 0; x < 10; x++) {
-			AngularResolvedVoxel& loaded_diag = loaded_channel->get_voxel<AngularResolvedVoxel>("angular", x, x, x);
+			AngularResolvedVoxel<float>& loaded_diag = loaded_channel->get_voxel<AngularResolvedVoxel<float>>("angular", x, x, x);
 			for (size_t i = 0; i < 72; i++)
 				EXPECT_FLOAT_EQ(loaded_diag.get_segments_data()[i], 99.f);
 		}
@@ -209,10 +209,10 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));
 
-		channel->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(12, 6, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(12, 6, nullptr), 0.f, "");
 		channel->add_layer<float>("doserate", 5.f, "Gy/s");
 
-		AngularResolvedVoxel& sph = channel->get_voxel<AngularResolvedVoxel>("angular", 5, 5, 5);
+		AngularResolvedVoxel<float>& sph = channel->get_voxel<AngularResolvedVoxel<float>>("angular", 5, 5, 5);
 		for (size_t i = 0; i < 72; i++)
 			sph.get_segments_data()[i] = static_cast<float>(i + 1);
 
@@ -222,7 +222,7 @@ namespace {
 		EXPECT_EQ(copy->get_voxel_counts(), field->get_voxel_counts());
 		EXPECT_EQ(copy->get_voxel_dimensions(), field->get_voxel_dimensions());
 
-		AngularResolvedVoxel& copy_sph = copy_channel->get_voxel<AngularResolvedVoxel>("angular", 5, 5, 5);
+		AngularResolvedVoxel<float>& copy_sph = copy_channel->get_voxel<AngularResolvedVoxel<float>>("angular", 5, 5, 5);
 		EXPECT_EQ(copy_sph.get_phi_segments(), 12);
 		EXPECT_EQ(copy_sph.get_theta_segments(), 6);
 		for (size_t i = 0; i < 72; i++)
@@ -239,31 +239,31 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("ch1"));
 
-		channel->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(4, 2, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(4, 2, nullptr), 0.f, "");
 		channel->add_layer<float>("doserate", 10.f, "Gy/s");
 
-		AngularResolvedVoxel& sph = channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0);
+		AngularResolvedVoxel<float>& sph = channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0);
 		for (size_t i = 0; i < 8; i++)
 			sph.get_segments_data()[i] = static_cast<float>(i);
 
 		VoxelBuffer* original = static_cast<VoxelBuffer*>(channel->copy());
-		EXPECT_FLOAT_EQ(static_cast<VoxelGridBuffer*>(original)->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).get_segments_data()[3], 3.f);
+		EXPECT_FLOAT_EQ(static_cast<VoxelGridBuffer*>(original)->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[3], 3.f);
 
 		*channel += *original;
-		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).get_segments_data()[3], 6.f);
+		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[3], 6.f);
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 0, 0).get_data(), 20.f);
 
 		*channel -= *original;
-		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).get_segments_data()[3], 3.f);
+		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[3], 3.f);
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 0, 0).get_data(), 10.f);
 
 		*channel *= *original;
-		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).get_segments_data()[3], 9.f);
+		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[3], 9.f);
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 0, 0).get_data(), 100.f);
 
 		*channel /= *channel;
-		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).get_segments_data()[0], 0.f);
-		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).get_segments_data()[3], 1.f);
+		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[0], 0.f);
+		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[3], 1.f);
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 0, 0).get_data(), 1.f);
 
 		delete original;
@@ -273,26 +273,26 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(0.5f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("ch1"));
 
-		channel->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(6, 3, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(6, 3, nullptr), 0.f, "");
 
-		channel->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).add_value(0.f, 0.f, 1.f);
-		channel->get_voxel<AngularResolvedVoxel>("angular", 4, 3, 2).add_value(1.f, 0.5f, 5.f);
-		channel->get_voxel<AngularResolvedVoxel>("angular", 2, 2, 2).add_value(3.14f, 1.57f, 10.f);
+		channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).add_value(0.f, 0.f, 1.f);
+		channel->get_voxel<AngularResolvedVoxel<float>>("angular", 4, 3, 2).add_value(1.f, 0.5f, 5.f);
+		channel->get_voxel<AngularResolvedVoxel<float>>("angular", 2, 2, 2).add_value(3.14f, 1.57f, 10.f);
 
 		size_t flat_432 = 2 * 5 * 5 + 3 * 5 + 4;
 		size_t flat_222 = 2 * 5 * 5 + 2 * 5 + 2;
 
 		float sum_0 = 0.f, sum_432 = 0.f, sum_222 = 0.f;
-		for (auto val : channel->get_voxel_flat<AngularResolvedVoxel>("angular", 0).get_segments_data()) sum_0 += val;
-		for (auto val : channel->get_voxel_flat<AngularResolvedVoxel>("angular", flat_432).get_segments_data()) sum_432 += val;
-		for (auto val : channel->get_voxel_flat<AngularResolvedVoxel>("angular", flat_222).get_segments_data()) sum_222 += val;
+		for (auto val : channel->get_voxel_flat<AngularResolvedVoxel<float>>("angular", 0).get_segments_data()) sum_0 += val;
+		for (auto val : channel->get_voxel_flat<AngularResolvedVoxel<float>>("angular", flat_432).get_segments_data()) sum_432 += val;
+		for (auto val : channel->get_voxel_flat<AngularResolvedVoxel<float>>("angular", flat_222).get_segments_data()) sum_222 += val;
 
 		EXPECT_FLOAT_EQ(sum_0, 1.f);
 		EXPECT_FLOAT_EQ(sum_432, 5.f);
 		EXPECT_FLOAT_EQ(sum_222, 10.f);
 
 		float sum_empty = 0.f;
-		for (auto val : channel->get_voxel<AngularResolvedVoxel>("angular", 1, 1, 1).get_segments_data()) sum_empty += val;
+		for (auto val : channel->get_voxel<AngularResolvedVoxel<float>>("angular", 1, 1, 1).get_segments_data()) sum_empty += val;
 		EXPECT_FLOAT_EQ(sum_empty, 0.f);
 	}
 
@@ -300,10 +300,10 @@ namespace {
 		auto create_field = [](float value) {
 			auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 			std::shared_ptr<VoxelGridBuffer> ch = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("beam"));
-			ch->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(4, 2, nullptr), 0.f, "");
+			ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(4, 2, nullptr), 0.f, "");
 			ch->add_layer<float>("flux", value, "counts");
 
-			AngularResolvedVoxel& sph = ch->get_voxel_flat<AngularResolvedVoxel>("angular", 0);
+			AngularResolvedVoxel<float>& sph = ch->get_voxel_flat<AngularResolvedVoxel<float>>("angular", 0);
 			for (size_t i = 0; i < 8; i++)
 				sph.get_segments_data()[i] = value;
 
@@ -330,7 +330,7 @@ namespace {
 
 		EXPECT_FLOAT_EQ(loaded_ch->get_voxel_flat<ScalarVoxel<float>>("flux", 0).get_data(), 10.f);
 
-		AngularResolvedVoxel& loaded_sph = loaded_ch->get_voxel_flat<AngularResolvedVoxel>("angular", 0);
+		AngularResolvedVoxel<float>& loaded_sph = loaded_ch->get_voxel_flat<AngularResolvedVoxel<float>>("angular", 0);
 		EXPECT_EQ(loaded_sph.get_phi_segments(), 4);
 		EXPECT_EQ(loaded_sph.get_theta_segments(), 2);
 		for (size_t i = 0; i < 8; i++)
@@ -340,10 +340,10 @@ namespace {
 	TEST_F(SphericalVoxelStorage, Accessor) {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 		std::shared_ptr<VoxelGridBuffer> ch = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("beam"));
-		ch->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(6, 3, nullptr), 0.f, "");
+		ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(6, 3, nullptr), 0.f, "");
 		ch->add_layer<float>("flux", 0.f, "counts");
 
-		AngularResolvedVoxel& sph = ch->get_voxel<AngularResolvedVoxel>("angular", 1, 1, 1);
+		AngularResolvedVoxel<float>& sph = ch->get_voxel<AngularResolvedVoxel<float>>("angular", 1, 1, 1);
 		for (size_t i = 0; i < 18; i++)
 			sph.get_segments_data()[i] = static_cast<float>(i + 1);
 		ch->get_voxel<ScalarVoxel<float>>("flux", 1, 1, 1) = 42.f;
@@ -363,7 +363,7 @@ namespace {
 		auto loaded_field = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test_spherical_accessor.rf3"));
 		std::shared_ptr<VoxelGridBuffer> loaded_ch = std::static_pointer_cast<VoxelGridBuffer>(loaded_field->get_channel("beam"));
 
-		AngularResolvedVoxel& loaded_sph = loaded_ch->get_voxel<AngularResolvedVoxel>("angular", 1, 1, 1);
+		AngularResolvedVoxel<float>& loaded_sph = loaded_ch->get_voxel<AngularResolvedVoxel<float>>("angular", 1, 1, 1);
 		EXPECT_EQ(loaded_sph.get_phi_segments(), 6);
 		EXPECT_EQ(loaded_sph.get_theta_segments(), 3);
 		for (size_t i = 0; i < 18; i++)
@@ -381,12 +381,12 @@ namespace {
 			auto loaded_channel_acc = cartesian_accessor->accessChannel(stream2, "beam");
 			ASSERT_NE(loaded_channel_acc, nullptr);
 			EXPECT_TRUE(loaded_channel_acc->has_layer("angular"));
-			AngularResolvedVoxel& acc_sph = loaded_channel_acc->get_voxel_flat<AngularResolvedVoxel>("angular", 7);
+			AngularResolvedVoxel<float>& acc_sph = loaded_channel_acc->get_voxel_flat<AngularResolvedVoxel<float>>("angular", 7);
 			EXPECT_EQ(acc_sph.get_phi_segments(), 6);
 			for (size_t i = 0; i < 18; i++)
 				EXPECT_FLOAT_EQ(acc_sph.get_segments_data()[i], static_cast<float>(i + 1));
 
-			AngularResolvedVoxel& acc_empty = loaded_channel_acc->get_voxel_flat<AngularResolvedVoxel>("angular", 0);
+			AngularResolvedVoxel<float>& acc_empty = loaded_channel_acc->get_voxel_flat<AngularResolvedVoxel<float>>("angular", 0);
 			float sum = 0.f;
 			for (auto val : acc_empty.get_segments_data()) sum += val;
 			EXPECT_FLOAT_EQ(sum, 0.f);
@@ -407,8 +407,8 @@ namespace {
 			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 		);
 
-		metadata->set_dynamic_custom_metadata<AngularResolvedVoxel>("angular_reference", AngularResolvedVoxel(8, 4, nullptr));
-		AngularResolvedVoxel& meta_sph = metadata->get_dynamic_metadata<AngularResolvedVoxel>("angular_reference");
+		metadata->set_dynamic_custom_metadata<AngularResolvedVoxel<float>>("angular_reference", AngularResolvedVoxel<float>(8, 4, nullptr));
+		AngularResolvedVoxel<float>& meta_sph = metadata->get_dynamic_metadata<AngularResolvedVoxel<float>>("angular_reference");
 		EXPECT_EQ(meta_sph.get_phi_segments(), 8);
 		EXPECT_EQ(meta_sph.get_theta_segments(), 4);
 		for (size_t i = 0; i < 32; i++)
@@ -430,7 +430,7 @@ namespace {
 			if (key == "angular_reference") found_angular = true;
 		EXPECT_TRUE(found_angular);
 
-		AngularResolvedVoxel& loaded_sph = loaded_metadata->get_dynamic_metadata<AngularResolvedVoxel>("angular_reference");
+		AngularResolvedVoxel<float>& loaded_sph = loaded_metadata->get_dynamic_metadata<AngularResolvedVoxel<float>>("angular_reference");
 		EXPECT_EQ(loaded_sph.get_phi_segments(), 8);
 		EXPECT_EQ(loaded_sph.get_theta_segments(), 4);
 		for (size_t i = 0; i < 32; i++)
@@ -442,14 +442,14 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 		std::shared_ptr<VoxelGridBuffer> ch = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("beam"));
 
-		ch->add_custom_layer<AngularResolvedVoxel>("angular", AngularResolvedVoxel(6, 3, nullptr), 0.f, "");
-		ch->add_custom_layer<HistogramVoxel>("spectrum", HistogramVoxel(16, 1000.f, nullptr), 0.f, "eV");
+		ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(6, 3, nullptr), 0.f, "");
+		ch->add_custom_layer<HistogramVoxel<float>>("spectrum", HistogramVoxel<float>(16, 1000.f, nullptr), 0.f, "eV");
 		ch->add_layer<float>("flux", 0.f, "counts");
 		ch->add_layer<glm::vec3>("direction", glm::vec3(0.f), "direction");
 
 		// Set values in all layer types
-		ch->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0).add_value(1.f, 0.5f, 7.f);
-		ch->get_voxel<HistogramVoxel>("spectrum", 0, 0, 0).get_histogram()[5] = 42.f;
+		ch->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).add_value(1.f, 0.5f, 7.f);
+		ch->get_voxel<HistogramVoxel<float>>("spectrum", 0, 0, 0).get_histogram()[5] = 42.f;
 		ch->get_voxel<ScalarVoxel<float>>("flux", 0, 0, 0) = 100.f;
 		ch->get_voxel<ScalarVoxel<glm::vec3>>("direction", 0, 0, 0) = glm::vec3(1.f, 0.f, 0.f);
 
@@ -469,10 +469,10 @@ namespace {
 		std::shared_ptr<VoxelGridBuffer> loaded_ch = std::static_pointer_cast<VoxelGridBuffer>(loaded->get_channel("beam"));
 
 		EXPECT_FLOAT_EQ(loaded_ch->get_voxel<ScalarVoxel<float>>("flux", 0, 0, 0).get_data(), 100.f);
-		EXPECT_FLOAT_EQ(loaded_ch->get_voxel<HistogramVoxel>("spectrum", 0, 0, 0).get_histogram()[5], 42.f);
-		EXPECT_EQ(loaded_ch->get_voxel<HistogramVoxel>("spectrum", 0, 0, 0).get_bins(), 16);
+		EXPECT_FLOAT_EQ(loaded_ch->get_voxel<HistogramVoxel<float>>("spectrum", 0, 0, 0).get_histogram()[5], 42.f);
+		EXPECT_EQ(loaded_ch->get_voxel<HistogramVoxel<float>>("spectrum", 0, 0, 0).get_bins(), 16);
 
-		AngularResolvedVoxel& loaded_sph = loaded_ch->get_voxel<AngularResolvedVoxel>("angular", 0, 0, 0);
+		AngularResolvedVoxel<float>& loaded_sph = loaded_ch->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0);
 		EXPECT_EQ(loaded_sph.get_phi_segments(), 6);
 		EXPECT_EQ(loaded_sph.get_theta_segments(), 3);
 		float sph_sum = 0.f;
