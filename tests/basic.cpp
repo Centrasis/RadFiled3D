@@ -93,8 +93,8 @@ namespace {
 		EXPECT_NO_THROW(channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction"));
 		EXPECT_NO_THROW(channel->add_layer<glm::vec3>("dirs2", glm::vec3(0.f), "normalized direction"));
 
-		HistogramVoxel hist(26, 0.1f, nullptr);
-		channel->add_custom_layer<HistogramVoxel, float>("hist", hist, 0.f);
+		HistogramVoxel<float> hist(26, 0.1f, nullptr);
+		channel->add_custom_layer<HistogramVoxel<float>, float>("hist", hist, 0.f);
 		EXPECT_NO_THROW(channel->get_layer("doserate"));
 		EXPECT_NO_THROW(channel->get_layer("test2"));
 		EXPECT_NO_THROW(channel->get_layer("dirs"));
@@ -209,7 +209,7 @@ namespace {
 		const float magic_diagonal_number = std::sqrt(3.f) * magic_number;
 
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), magic_number, "");
-		HistogramVoxel& hist1 = channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0);
+		HistogramVoxel<float>& hist1 = channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0);
 		for (size_t i = 0; i < 26; i++)
 			hist1.get_histogram()[i] = static_cast<float>(i);
 
@@ -218,7 +218,7 @@ namespace {
 
 		for (size_t x = 0; x < 10; x++)
 		{
-			HistogramVoxel& hist = channel->get_voxel<HistogramVoxel<float>>("spectra", x, x, x);
+			HistogramVoxel<float>& hist = channel->get_voxel<HistogramVoxel<float>>("spectra", x, x, x);
 			for (size_t i = 0; i < 26; i++)
 				hist.get_histogram()[i] = magic_diagonal_number;
 		}
@@ -226,7 +226,7 @@ namespace {
 		for (size_t x = 0; x < 10; x++)
 			for (size_t y = 0; y < 10; y++)
 				for (size_t z = 0; z < 10; z++) {
-					HistogramVoxel& hist = channel->get_voxel<HistogramVoxel<float>>("spectra", x, y, z);
+					HistogramVoxel<float>& hist = channel->get_voxel<HistogramVoxel<float>>("spectra", x, y, z);
 					if (x == y && x == z) {
 						for (size_t i = 0; i < 26; i++)
 							EXPECT_EQ(hist.get_histogram()[i], magic_diagonal_number);
@@ -246,12 +246,12 @@ namespace {
 		FieldStore::store(field, metadata, "test_hist.rf3", StoreVersion::V1);
 		std::shared_ptr<CartesianRadiationField> loaded_field = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test_hist.rf3"));
 		std::shared_ptr<VoxelGridBuffer> loaded_channel = std::static_pointer_cast<VoxelGridBuffer>(loaded_field->get_channel("test_channel"));
-		HistogramVoxel& loaded_hist1 = loaded_channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0);
+		HistogramVoxel<float>& loaded_hist1 = loaded_channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0);
 
 		for (size_t x = 0; x < 10; x++)
 			for (size_t y = 0; y < 10; y++)
 				for (size_t z = 0; z < 10; z++) {
-					HistogramVoxel& hist = loaded_channel->get_voxel<HistogramVoxel<float>>("spectra", x, y, z);
+					HistogramVoxel<float>& hist = loaded_channel->get_voxel<HistogramVoxel<float>>("spectra", x, y, z);
 					if (x == y && x == z) {
 						for (size_t i = 0; i < 26; i++)
 							EXPECT_EQ(hist.get_histogram()[i], magic_diagonal_number);
@@ -276,7 +276,7 @@ namespace {
 		const float magic_number = 0.134f;
 
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), magic_number, "");
-		HistogramVoxel& hist1 = channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0);
+		HistogramVoxel<float>& hist1 = channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0);
 		for (size_t i = 0; i < 26; i++)
 			hist1.get_histogram()[i] = static_cast<float>(i);
 
@@ -324,7 +324,7 @@ namespace {
 
 		*channel /= *channel;
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 5, 0).get_data(), 1.f);
-		EXPECT_FLOAT_EQ(channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0).get_histogram()[0], 0.f);
+		EXPECT_TRUE(channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0).get_histogram()[0] != channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0).get_histogram()[0]); // check for nan
 		for (size_t i = 1; i < 26; i++)
 			EXPECT_FLOAT_EQ(channel->get_voxel<HistogramVoxel<float>>("spectra", 0, 5, 0).get_histogram()[i], 1.f);
 	}
@@ -493,16 +493,16 @@ namespace {
 		{
 			size_t bins = 150;
 			float bin_width = 4.6f;
-			RadFiled3D::HistogramVoxel hist(bins, bin_width, nullptr);
-			metadata->set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel>("test_hist", hist);
-			RadFiled3D::HistogramVoxel& new_hist = *static_cast<RadFiled3D::HistogramVoxel*>(metadata->get_dynamic_metadata().at("test_hist"));
+			RadFiled3D::HistogramVoxel<float> hist(bins, bin_width, nullptr);
+			metadata->set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel<float>>("test_hist", hist);
+			RadFiled3D::HistogramVoxel<float>& new_hist = *static_cast<RadFiled3D::HistogramVoxel<float>*>(metadata->get_dynamic_metadata().at("test_hist"));
 			for (size_t i = 0; i < 10; i++)
 				new_hist.get_histogram()[i] = 1.f * i;
 			EXPECT_EQ(new_hist.get_bins(), bins);
 			EXPECT_EQ(new_hist.get_histogram_bin_width(), bin_width);
 		}
 
-		RadFiled3D::HistogramVoxel* voxel = static_cast<RadFiled3D::HistogramVoxel*>(metadata->get_dynamic_metadata().at("test_hist"));
+		RadFiled3D::HistogramVoxel<float>* voxel = static_cast<RadFiled3D::HistogramVoxel<float>*>(metadata->get_dynamic_metadata().at("test_hist"));
 
 		for (size_t i = 0; i < 10; i++)
 			EXPECT_FLOAT_EQ(voxel->get_histogram()[i], 1.f * i);

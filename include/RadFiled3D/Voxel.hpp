@@ -267,9 +267,10 @@ namespace RadFiled3D {
 	*/
 	template<typename T = float>
 	class HistogramVoxel : public ScalarVoxel<T> {
+		using typename IVoxel::VoxelBaseHeader;
 	public:
 #pragma pack(push, 4)
-		struct HistogramDefinition {
+		struct HistogramDefinition : public IVoxel::VoxelBaseHeader {
 			T histogram_bin_width;
 			size_t bins;
 
@@ -581,9 +582,10 @@ namespace RadFiled3D {
 
 	template<typename T = float>
 	class AngularResolvedVoxel : public ScalarVoxel<T> {
+		using typename IVoxel::VoxelBaseHeader;
 	public:
 #pragma pack(push, 4)
-		struct AngularDefinition {
+		struct AngularDefinition : public IVoxel::VoxelBaseHeader {
 			glm::uvec2 segments;
 
 			/**
