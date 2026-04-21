@@ -32,7 +32,7 @@ namespace {
 
 	TEST(SphericalVoxelTest, Construction) {
 		float buffer[72] = { 0.f };
-		AngularResolvedVoxel voxel(12, 6, buffer);
+		AngularResolvedVoxel<float> voxel(glm::uvec2(12, 6), buffer);
 
 		EXPECT_EQ(voxel.get_phi_segments(), 12);
 		EXPECT_EQ(voxel.get_theta_segments(), 6);
@@ -42,7 +42,7 @@ namespace {
 	}
 
 	TEST(SphericalVoxelTest, DefaultConstruction) {
-		AngularResolvedVoxel voxel;
+		AngularResolvedVoxel<float> voxel;
 
 		EXPECT_EQ(voxel.get_phi_segments(), 0);
 		EXPECT_EQ(voxel.get_theta_segments(), 0);
@@ -51,7 +51,7 @@ namespace {
 
 	TEST(SphericalVoxelTest, AccessByIndex) {
 		float buffer[72] = { 0.f };
-		AngularResolvedVoxel voxel(12, 6, buffer);
+		AngularResolvedVoxel<float> voxel(glm::uvec2(12, 6), buffer);
 
 		buffer[2 * 12 + 3] = 0.5f;
 		EXPECT_FLOAT_EQ(voxel.get_value(3, 2), 0.5f);
@@ -59,7 +59,7 @@ namespace {
 
 	TEST(SphericalVoxelTest, AddValue) {
 		float buffer[72] = { 0.f };
-		AngularResolvedVoxel voxel(12, 6, buffer);
+		AngularResolvedVoxel<float> voxel(glm::uvec2(12, 6), buffer);
 
 		voxel.add_value(1.0f, 0.5f, 3.0f);
 		EXPECT_FLOAT_EQ(voxel.get_value_by_coord(1.0f, 0.5f), 3.0f);
@@ -72,7 +72,7 @@ namespace {
 
 	TEST(SphericalVoxelTest, Clear) {
 		float buffer[4] = { 1.f, 3.f, 2.f, 4.f };
-		AngularResolvedVoxel voxel(2, 2, buffer);
+		AngularResolvedVoxel<float> voxel(glm::uvec2(2, 2), buffer);
 
 		voxel.clear();
 		for (size_t i = 0; i < 4; i++)
@@ -82,8 +82,8 @@ namespace {
 	TEST(SphericalVoxelTest, InplaceAdd) {
 		float buf_a[4] = { 1.f, 2.f, 3.f, 4.f };
 		float buf_b[4] = { 0.5f, 0.5f, 0.5f, 0.5f };
-		AngularResolvedVoxel a(2, 2, buf_a);
-		AngularResolvedVoxel b(2, 2, buf_b);
+		AngularResolvedVoxel<float> a(glm::uvec2(2, 2), buf_a);
+		AngularResolvedVoxel<float> b(glm::uvec2(2, 2), buf_b);
 
 		a += b;
 		EXPECT_FLOAT_EQ(buf_a[0], 1.5f);
@@ -94,7 +94,7 @@ namespace {
 
 	TEST(SphericalVoxelTest, ScalarDivide) {
 		float buffer[4] = { 2.f, 4.f, 6.f, 8.f };
-		AngularResolvedVoxel voxel(2, 2, buffer);
+		AngularResolvedVoxel<float> voxel(glm::uvec2(2, 2), buffer);
 
 		voxel /= 2.f;
 		EXPECT_FLOAT_EQ(buffer[0], 1.f);
@@ -105,19 +105,19 @@ namespace {
 
 	TEST(SphericalVoxelTest, Header) {
 		float buffer[72] = { 0.f };
-		AngularResolvedVoxel voxel(12, 6, buffer);
+		AngularResolvedVoxel<float> voxel(glm::uvec2(12, 6), buffer);
 
 		auto header = voxel.get_header();
-		EXPECT_EQ(header.header_bytes, sizeof(AngularResolvedVoxel::SphericalDefinition));
+		EXPECT_EQ(header.header_bytes, sizeof(AngularResolvedVoxel<float>::AngularDefinition));
 
-		AngularResolvedVoxel::SphericalDefinition* def = (AngularResolvedVoxel::SphericalDefinition*)header.header;
-		EXPECT_EQ(def->phi_segments, 12);
-		EXPECT_EQ(def->theta_segments, 6);
+		AngularResolvedVoxel<float>::AngularDefinition* def = (AngularResolvedVoxel<float>::AngularDefinition*)header.header;
+		EXPECT_EQ(def->segments.x, 12);
+		EXPECT_EQ(def->segments.y, 6);
 	}
 
 	TEST(SphericalVoxelTest, InitFromHeader) {
-		AngularResolvedVoxel voxel;
-		AngularResolvedVoxel::SphericalDefinition def(8, 4);
+		AngularResolvedVoxel<float> voxel;
+		AngularResolvedVoxel<float>::AngularDefinition def(glm::uvec2(8, 4));
 
 		voxel.init_from_header(&def);
 		EXPECT_EQ(voxel.get_phi_segments(), 8);
@@ -126,7 +126,7 @@ namespace {
 	}
 
 	TEST(SphericalVoxelTest, OwningConstruction) {
-		OwningAngularResolvedVoxel voxel(12, 6);
+		OwningAngularResolvedVoxel<float> voxel(glm::uvec2(12, 6));
 
 		EXPECT_EQ(voxel.get_phi_segments(), 12);
 		EXPECT_EQ(voxel.get_total_segments(), 72);
@@ -140,11 +140,11 @@ namespace {
 	}
 
 	TEST(SphericalVoxelTest, OwningCopy) {
-		OwningAngularResolvedVoxel a(2, 2);
+		OwningAngularResolvedVoxel<float> a(glm::uvec2(2, 2));
 		float* a_data = (float*)a.get_raw();
 		a_data[0] = 1.f; a_data[1] = 2.f; a_data[2] = 3.f; a_data[3] = 4.f;
 
-		OwningAngularResolvedVoxel b(a);
+		OwningAngularResolvedVoxel<float> b(a);
 		float* b_data = (float*)b.get_raw();
 
 		EXPECT_NE(a_data, b_data);
@@ -158,7 +158,7 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));
 
-		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(12, 6, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(12, 6), nullptr), 0.f, "");
 		channel->add_layer<float>("doserate", 0.f, "Gy/s");
 
 		AngularResolvedVoxel<float>& sph = channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 5, 0);
@@ -209,7 +209,7 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));
 
-		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(12, 6, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(12, 6), nullptr), 0.f, "");
 		channel->add_layer<float>("doserate", 5.f, "Gy/s");
 
 		AngularResolvedVoxel<float>& sph = channel->get_voxel<AngularResolvedVoxel<float>>("angular", 5, 5, 5);
@@ -239,7 +239,7 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("ch1"));
 
-		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(4, 2, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(4, 2), nullptr), 0.f, "");
 		channel->add_layer<float>("doserate", 10.f, "Gy/s");
 
 		AngularResolvedVoxel<float>& sph = channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0);
@@ -262,7 +262,7 @@ namespace {
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 0, 0).get_data(), 100.f);
 
 		*channel /= *channel;
-		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[0], 0.f);
+		EXPECT_TRUE(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[0] != channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[0]); // check for nan
 		EXPECT_FLOAT_EQ(channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).get_segments_data()[3], 1.f);
 		EXPECT_FLOAT_EQ(channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 0, 0).get_data(), 1.f);
 
@@ -273,7 +273,7 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(0.5f), glm::vec3(0.1f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("ch1"));
 
-		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(6, 3, nullptr), 0.f, "");
+		channel->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(6, 3), nullptr), 0.f, "");
 
 		channel->get_voxel<AngularResolvedVoxel<float>>("angular", 0, 0, 0).add_value(0.f, 0.f, 1.f);
 		channel->get_voxel<AngularResolvedVoxel<float>>("angular", 4, 3, 2).add_value(1.f, 0.5f, 5.f);
@@ -300,7 +300,7 @@ namespace {
 		auto create_field = [](float value) {
 			auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 			std::shared_ptr<VoxelGridBuffer> ch = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("beam"));
-			ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(4, 2, nullptr), 0.f, "");
+			ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(4, 2), nullptr), 0.f, "");
 			ch->add_layer<float>("flux", value, "counts");
 
 			AngularResolvedVoxel<float>& sph = ch->get_voxel_flat<AngularResolvedVoxel<float>>("angular", 0);
@@ -340,7 +340,7 @@ namespace {
 	TEST_F(SphericalVoxelStorage, Accessor) {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 		std::shared_ptr<VoxelGridBuffer> ch = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("beam"));
-		ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(6, 3, nullptr), 0.f, "");
+		ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(6, 3), nullptr), 0.f, "");
 		ch->add_layer<float>("flux", 0.f, "counts");
 
 		AngularResolvedVoxel<float>& sph = ch->get_voxel<AngularResolvedVoxel<float>>("angular", 1, 1, 1);
@@ -407,7 +407,7 @@ namespace {
 			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 		);
 
-		metadata->set_dynamic_custom_metadata<AngularResolvedVoxel<float>>("angular_reference", AngularResolvedVoxel<float>(8, 4, nullptr));
+		metadata->set_dynamic_custom_metadata<AngularResolvedVoxel<float>>("angular_reference", AngularResolvedVoxel<float>(glm::uvec2(8, 4), nullptr));
 		AngularResolvedVoxel<float>& meta_sph = metadata->get_dynamic_metadata<AngularResolvedVoxel<float>>("angular_reference");
 		EXPECT_EQ(meta_sph.get_phi_segments(), 8);
 		EXPECT_EQ(meta_sph.get_theta_segments(), 4);
@@ -437,12 +437,12 @@ namespace {
 			EXPECT_FLOAT_EQ(loaded_sph.get_segments_data()[i], static_cast<float>(i));
 	}
 
-	// Mixed voxel types in same channel — production uses AngularResolvedVoxel + HistogramVoxel + float together
+	// Mixed voxel types in same channel — production uses AngularResolvedVoxel<float> + HistogramVoxel + float together
 	TEST_F(SphericalVoxelStorage, MixedCustomVoxelTypes) {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 		std::shared_ptr<VoxelGridBuffer> ch = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("beam"));
 
-		ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(6, 3, nullptr), 0.f, "");
+		ch->add_custom_layer<AngularResolvedVoxel<float>>("angular", AngularResolvedVoxel<float>(glm::uvec2(6, 3), nullptr), 0.f, "");
 		ch->add_custom_layer<HistogramVoxel<float>>("spectrum", HistogramVoxel<float>(16, 1000.f, nullptr), 0.f, "eV");
 		ch->add_layer<float>("flux", 0.f, "counts");
 		ch->add_layer<glm::vec3>("direction", glm::vec3(0.f), "direction");
