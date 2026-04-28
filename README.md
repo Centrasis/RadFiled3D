@@ -60,7 +60,7 @@ Disclaimer: Not all methods support keyword arguments as they need to be defined
 ## From Python
 Simple example on how to create and store a radiation field. Find more in the example file: [Example](./examples/python/example01.py)
 ```python
-from RadFiled3D.RadFiled3D import CartesianRadiationField, DType
+from RadFiled3D.RadFiled3D import vec3, CartesianRadiationField, DType
 from RadFiled3D.utils import FieldStore, StoreVersion
 from RadFiled3D.metadata.v1 import Metadata
 
@@ -68,16 +68,17 @@ from RadFiled3D.metadata.v1 import Metadata
 # Creating a cartesian radiation field
 field = CartesianRadiationField(vec3(2.5, 2.5, 2.5), vec3(0.05, 0.05, 0.05))
 # defining a channel and a layer on it
-field.get_channel("channel1").add_layer("layer1", "unit1", DType.FLOAT32)
+field.add_channel("channel1").add_layer("layer1", "unit1", DType.FLOAT32)
 
 # accessing the voxels by using numpy arrays
 array = field.get_channel("channel1").get_layer_as_ndarray("layer1")
-assert array.shape == (50, 50, 50)
+assert array.shape == (50, 50, 50, 1)
+
 # modify voxels content by using numpy array as no data is copied, just referenced
 array[2:5, 2:5, 2:5] = 2.0
 
 # addressing a voxel by providing a point in space
-voxel = field.get_channel("channel1").get_voxel_by_coord("layer1", 0.1, 2.4, 5)
+voxel = field.get_channel("channel1").get_voxel_by_coord("layer1", 0.1, 2.4, 2.1)
 
 # Store changes to a file
 metadata = Metadata.default()
