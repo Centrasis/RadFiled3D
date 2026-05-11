@@ -1379,6 +1379,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				case Typing::DType::UInt32:
 					self.add_layer<unsigned long>(name, 0, unit);
 					break;
+                case Typing::DType::Hist:
+                    throw std::runtime_error("For this special type of composite voxel layer, you need to call 'add_histogram_layer' to provide the additional information.");
+                case Typing::DType::AngularResolved:
+                    throw std::runtime_error("For this special type of composite voxel layer, you need to call 'add_spherical_layer' to provide the additional information.");
                 default:
                     throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(dtype)));
             }
