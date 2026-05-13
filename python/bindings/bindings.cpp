@@ -422,10 +422,17 @@ PYBIND11_MODULE(RadFiled3D, m) {
            :toctree: _generate
     )pbdoc";
 
-    py::register_exception<std::runtime_error>(m, "RuntimeError");
+    py::register_exception_translator([](std::exception_ptr p) {
+        try {
+            if (p) std::rethrow_exception(p);
+        } catch (const py::stop_iteration &)      { throw; }   // let iter end propagate
+        catch (const py::index_error &)           { throw; }
+        catch (const py::key_error &)             { throw; }
+        catch (const py::error_already_set &)     { throw; }
+    });
+    
 	py::register_exception<std::invalid_argument>(m, "InvalidArgument");
 	py::register_exception<std::out_of_range>(m, "OutOfRange");
-	py::register_exception<std::exception>(m, "Exception");
 	py::register_exception<RadFiled3D::VoxelBufferException>(m, "VoxelBufferException");
 	py::register_exception<RadFiled3D::RadiationFieldStoreException>(m, "RadiationFieldStoreException");
 
