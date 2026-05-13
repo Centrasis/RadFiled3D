@@ -42,6 +42,13 @@ struct NonDeletingDeleter {
     }
 };
 
+
+class RadFiled3DError : public std::runtime_error {
+    public:
+        RadFiled3DError(const std::string& msg) : std::runtime_error(msg)
+}
+
+
 // This macro is used to return a shared_ptr that does not delete the object. Used for returning regular voxel pointers from radiation field buffers that are not holding their own data.
 #define VOXEL_REFERENCE(vx) std::shared_ptr<IVoxel>(static_cast<IVoxel*>(vx), NonDeletingDeleter())
 #define VOXEL_CAPSULE(vx, T) std::static_pointer_cast<IVoxel>(std::shared_ptr<T>(static_cast<T*>(vx)))
@@ -109,7 +116,7 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
     case Typing::DType::UInt32:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint32_t>);
     }
-    throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+    throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 }
 
 std::map<void*, std::pair<std::atomic<size_t>, std::shared_ptr<void>>> shared_ptrs;
@@ -435,6 +442,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 	py::register_exception<std::out_of_range>(m, "OutOfRange");
 	py::register_exception<RadFiled3D::VoxelBufferException>(m, "VoxelBufferException");
 	py::register_exception<RadFiled3D::RadiationFieldStoreException>(m, "RadiationFieldStoreException");
+    py::register_exception<RadFiled3DError>(m, "RadFiled3DError");
 
     py::class_<glm::uvec4>(m, "uvec4")
         .def(py::init<unsigned int, unsigned int, unsigned int, unsigned int>())
@@ -1387,11 +1395,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
 					self.add_layer<unsigned long>(name, 0, unit);
 					break;
                 case Typing::DType::Hist:
-                    throw std::runtime_error("For this special type of composite voxel layer, you need to call 'add_histogram_layer' to provide the additional information.");
+                    throw RadFiled3DError("For this special type of composite voxel layer, you need to call 'add_histogram_layer' to provide the additional information.");
                 case Typing::DType::AngularResolved:
-                    throw std::runtime_error("For this special type of composite voxel layer, you need to call 'add_spherical_layer' to provide the additional information.");
+                    throw RadFiled3DError("For this special type of composite voxel layer, you need to call 'add_spherical_layer' to provide the additional information.");
                 default:
-                    throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(dtype)));
+                    throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(dtype)));
             }
             }, py::arg("name"), py::arg("unit"), py::arg("dtype"))
             .def("add_histogram_layer", [](VoxelBuffer& self, const std::string& name, size_t bins, float bin_width, const std::string& unit) {
@@ -1434,7 +1442,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
 						return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<unsigned long>>(layer_name, idx));
                     default:
-                        throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::arg("layer_name"), py::arg("idx"), py::return_value_policy::reference)
             .def("get_voxel", [](VoxelGridBuffer& self, const std::string& layer_name, size_t x, size_t y, size_t z) {
@@ -1465,7 +1473,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<unsigned long>>(layer_name, x, y, z));
                     default:
-                        throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
             .def("get_voxel_by_coord", [](VoxelGridBuffer& self, const std::string& layer_name, float x, float y, float z) {
@@ -1496,7 +1504,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
 						return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<unsigned long>>(layer_name, x, y, z));
                     default:
-                        throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
             .def("get_layer_as_ndarray", [](std::shared_ptr<VoxelGridBuffer>& self, const std::string& layer, bool copy) {
@@ -1552,7 +1560,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     return create_py_array_generic<float>(data, self->get_voxel_counts(), self, copy, element_size);
                 }
 				catch (const std::exception& e) {
-					throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
+					throw RadFiled3DError("Failed to get layer as ndarray: " + std::string(e.what()));
 				}
             }, py::arg("layer"), py::arg("copy") = false)
             .def("__repr__", [](const VoxelGridBuffer& self) {
@@ -1591,7 +1599,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<unsigned long>>(idx));
                     default:
-                        throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
                 }, py::arg("idx"), py::return_value_policy::reference)
                 .def("get_unit", &VoxelLayer::get_unit)
@@ -1632,7 +1640,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<unsigned long>>(x, y, z));
                     default:
-                        throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
                 }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference)
                 .def("get_voxel_by_coord", [](const VoxelGrid& self, float x, float y, float z) {
@@ -1661,7 +1669,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<unsigned long>>(x, y, z));
                     default:
-                        throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
                 }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference)
                 .def("get_layer", &VoxelGrid::get_layer)
@@ -1703,7 +1711,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 					    return create_py_array_generic<float>(data, self->get_voxel_counts(), self, copy, element_size);
 				    }
 				    catch (const std::exception& e) {
-					    throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
+					    throw RadFiled3DError("Failed to get layer as ndarray: " + std::string(e.what()));
 				    }
                 }, py::arg("copy") = false);
 
@@ -1740,7 +1748,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    case Typing::DType::UInt32:
 				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<unsigned long>>(x, y));
 			    default:
-				    throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+				    throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 			    }
 			}, py::return_value_policy::reference)
 			.def("get_segment_by_coord", [](PolarSegments& self, float phi, float theta) {
@@ -1769,7 +1777,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    case Typing::DType::UInt32:
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<unsigned long>>(phi, theta));
 			    default:
-				    throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+				    throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 			    }
 			}, py::return_value_policy::reference)
 			.def("get_layer", &PolarSegments::get_layer)
@@ -1805,7 +1813,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
                 }
                 catch (const std::exception& e) {
-                    throw std::runtime_error("Failed to get layer as ndarray: " + std::string(e.what()));
+                    throw RadFiled3DError("Failed to get layer as ndarray: " + std::string(e.what()));
                 }
 			}, py::arg("copy") = false);
 
@@ -1839,7 +1847,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<unsigned long>>(layer, idx));
                     default:
-                        throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
             .def("get_segment_by_coord", [](const PolarSegmentsBuffer& self, const std::string& layer, float phi, float theta) {
@@ -1868,7 +1876,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     case Typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<unsigned long>>(layer, phi, theta));
                     default:
-                        throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
             .def("get_segment", [](const PolarSegmentsBuffer& self, const std::string& layer, size_t x, size_t y) {
@@ -1897,7 +1905,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 case Typing::DType::UInt32:
 					return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<unsigned long>>(layer, x, y));
                 default:
-                    throw std::runtime_error("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
+                    throw RadFiled3DError("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
             }, py::return_value_policy::reference)
             .def("get_layer_as_ndarray", [](std::shared_ptr<PolarSegmentsBuffer>& self, const std::string& layer, bool copy) {
@@ -1928,7 +1936,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 					return create_py_array_generic<float>(data, self->get_segments_count(), self, copy, element_size);
                 }
                 else {
-					throw std::runtime_error("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
+					throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 				}
 
                 const size_t element_size = layer_info.get_bytes();
@@ -2044,7 +2052,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 [](const FieldAccessorPickleTuple& t) {
                     FieldType type = std::get<0>(t);
                     if (std::get<1>(t).size() == 0) {
-                        throw std::runtime_error("Empty data");
+                        throw RadFiled3DError("Empty data");
                     }
                     return FieldAccessor::Deserialize(std::get<1>(t));
                 }
@@ -2169,10 +2177,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 [](const FieldAccessorPickleTuple& t) {
                     FieldType type = std::get<0>(t);
                     if (type != FieldType::Cartesian) {
-                        throw std::runtime_error("Unsupported field type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported field type: " + std::to_string(static_cast<int>(type)));
                     }
                     if (std::get<1>(t).size() == 0) {
-                        throw std::runtime_error("Empty data");
+                        throw RadFiled3DError("Empty data");
                     }
                     return std::dynamic_pointer_cast<Storage::V1::CartesianFieldAccessor>(FieldAccessor::Deserialize(std::get<1>(t)));
                 }
@@ -2222,10 +2230,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 [](const FieldAccessorPickleTuple& t) {
                     FieldType type = std::get<0>(t);
                     if (type != FieldType::Polar) {
-                        throw std::runtime_error("Unsupported field type: " + std::to_string(static_cast<int>(type)));
+                        throw RadFiled3DError("Unsupported field type: " + std::to_string(static_cast<int>(type)));
                     }
                     if (std::get<1>(t).size() == 0) {
-                        throw std::runtime_error("Empty data");
+                        throw RadFiled3DError("Empty data");
                     }
                     return std::dynamic_pointer_cast<Storage::V1::PolarFieldAccessor>(FieldAccessor::Deserialize(std::get<1>(t)));
                 }
@@ -2276,7 +2284,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 auto accessor = FieldStore::construct_accessor(buffer);
 
 				if (accessor->getFieldType() != RadFiled3D::FieldType::Cartesian) {
-					throw std::runtime_error("Field is not of type Cartesian");
+					throw RadFiled3DError("Field is not of type Cartesian");
 				}
 
 				return std::dynamic_pointer_cast<CartesianFieldAccessor>(accessor)->accessLayer(buffer, channel_name, layer_name);
@@ -2286,7 +2294,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				auto accessor = FieldStore::construct_accessor(stream);
 
 				if (accessor->getFieldType() != RadFiled3D::FieldType::Cartesian) {
-					throw std::runtime_error("Field is not of type Cartesian");
+					throw RadFiled3DError("Field is not of type Cartesian");
 				}
 
 				return std::dynamic_pointer_cast<CartesianFieldAccessor>(accessor)->accessLayer(stream, channel_name, layer_name);
@@ -2296,7 +2304,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    auto accessor = FieldStore::construct_accessor(buffer);
 
 				if (accessor->getFieldType() != RadFiled3D::FieldType::Polar) {
-					throw std::runtime_error("Field is not of type Polar");
+					throw RadFiled3DError("Field is not of type Polar");
 				}
 
 			    return std::dynamic_pointer_cast<PolarFieldAccessor>(accessor)->accessLayer(buffer, channel_name, layer_name);
@@ -2306,7 +2314,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    auto accessor = FieldStore::construct_accessor(stream);
 
 				if (accessor->getFieldType() != RadFiled3D::FieldType::Polar) {
-					throw std::runtime_error("Field is not of type Polar");
+					throw RadFiled3DError("Field is not of type Polar");
 				}
 
 			    return std::dynamic_pointer_cast<PolarFieldAccessor>(accessor)->accessLayer(stream, channel_name, layer_name);
@@ -2326,10 +2334,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def("get_as_ndarray", [](std::shared_ptr<VoxelCollection>& self, const std::string& channel, const std::string& layer, bool copy) {
 			    auto channel_it = self->channels.find(channel);
                 if (channel_it == self->channels.end())
-					throw std::runtime_error("Channel '" + channel + "' not found in VoxelCollection");
+					throw RadFiled3DError("Channel '" + channel + "' not found in VoxelCollection");
 				auto layer_it = channel_it->second.layers.find(layer);
 				if (layer_it == channel_it->second.layers.end())
-					throw std::runtime_error("Layer '" + layer + "' not found in channel '" + channel + "'");
+					throw RadFiled3DError("Layer '" + layer + "' not found in channel '" + channel + "'");
 
                 const Typing::DType type = Typing::Helper::get_dtype(layer_it->second.voxels[0]->get_type());
                 char* data_buffer = self->extract_data_buffer_from(channel, layer);
