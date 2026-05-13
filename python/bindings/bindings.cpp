@@ -45,8 +45,8 @@ struct NonDeletingDeleter {
 
 class RadFiled3DError : public std::runtime_error {
     public:
-        RadFiled3DError(const std::string& msg) : std::runtime_error(msg)
-}
+        RadFiled3DError(const std::string& msg) : std::runtime_error(msg) {}
+};
 
 
 // This macro is used to return a shared_ptr that does not delete the object. Used for returning regular voxel pointers from radiation field buffers that are not holding their own data.
