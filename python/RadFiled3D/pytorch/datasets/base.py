@@ -8,7 +8,6 @@ from typing import Union
 from pathlib import Path
 from rich.progress import Progress, TimeElapsedColumn, TimeRemainingColumn, BarColumn, TextColumn, TaskProgressColumn, SpinnerColumn, MofNCompleteColumn
 from rich import print
-from torch.multiprocessing import Manager
 from RadFiled3D.pytorch.types import TrainingInputData, RadiationField, RadiationFieldChannel, DirectionalInput, PositionalInput
 from typing import Any
 
@@ -42,9 +41,8 @@ class RadiationFieldDataset(Dataset):
         if file_paths is not None:
             file_paths = [str(p) for p in file_paths]
 
-        manager = Manager()
         self.file_paths = file_paths
-        
+
         self.zip_file = zip_file
         self.metadata_load_mode = metadata_load_mode
         if self.file_paths is None and self.zip_file is not None:
@@ -52,10 +50,19 @@ class RadiationFieldDataset(Dataset):
                 self.file_paths = [f for f in zip_ref.namelist() if f.endswith(".rf3")]
         elif self.file_paths is None and self.zip_file is None:
             raise ValueError("Either file_paths or zip_file must be provided.")
-        
+
         self._field_accessor: FieldAccessor = None
-        self.file_paths = manager.list(file_paths) if file_paths is not None else None
         self._store_version = None
+        self._buffer_cache: Union[tuple[str, bytes], None] = None
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_field_accessor"] = None
+        state["_buffer_cache"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
     @property
     def store_version(self) -> StoreVersion:
@@ -93,11 +100,17 @@ class RadiationFieldDataset(Dataset):
         
     def load_file_buffer_by_path(self, file_path: str) -> bytes:
         if self.zip_file is not None:
+            cached = self._buffer_cache
+            if cached is not None and cached[0] == file_path:
+                return cached[1]
             with zipfile.ZipFile(self.zip_file, 'r') as zip_ref:
                 with zip_ref.open(file_path) as file:
-                    return file.read()
+                    buffer = file.read()
+            self._buffer_cache = (file_path, buffer)
+            return buffer
         else:
-            return open(file_path, 'rb').read()
+            with open(file_path, 'rb') as f:
+                return f.read()
     
     def _get_field(self, idx: int) -> Union[RawRadiationField, CartesianRadiationField, PolarRadiationField]:
         """

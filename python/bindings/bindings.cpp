@@ -42,6 +42,35 @@ struct NonDeletingDeleter {
     }
 };
 
+// A read-only streambuf over an existing memory region, so accessors can read from
+// a py::bytes buffer without copying it into a std::string / istringstream.
+struct MemReadBuf : std::streambuf {
+    MemReadBuf(const char* base, size_t size) {
+        char* p = const_cast<char*>(base);
+        this->setg(p, p, p + size);
+    }
+    std::streampos seekoff(std::streamoff off, std::ios_base::seekdir dir, std::ios_base::openmode = std::ios_base::in) override {
+        char* target = (dir == std::ios_base::beg) ? eback() + off
+                     : (dir == std::ios_base::end) ? egptr() + off
+                     : gptr() + off;
+        if (target < eback() || target > egptr())
+            return std::streampos(std::streamoff(-1));
+        setg(eback(), target, egptr());
+        return std::streampos(target - eback());
+    }
+    std::streampos seekpos(std::streampos pos, std::ios_base::openmode which = std::ios_base::in) override {
+        return seekoff(std::streamoff(pos), std::ios_base::beg, which);
+    }
+};
+
+static inline std::pair<const char*, size_t> bytes_view(const py::bytes& b) {
+    char* buf = nullptr;
+    Py_ssize_t len = 0;
+    if (PyBytes_AsStringAndSize(b.ptr(), &buf, &len) != 0)
+        throw py::error_already_set();
+    return { buf, static_cast<size_t>(len) };
+}
+
 
 class RadFiled3DError : public std::runtime_error {
     public:
@@ -369,6 +398,71 @@ py::array create_py_array_generic(const T* data, size_t len, std::shared_ptr<voi
 template<typename T>
 py::array create_py_array(const T* data, size_t len, std::shared_ptr<void> ptr, bool copy_data) {
     return create_py_array_generic<T>(data, len, ptr, copy_data, sizeof(T));
+}
+
+template<typename T>
+py::array create_owning_py_array(char* owned_buffer, size_t len, size_t element_size) {
+    const size_t components = element_size / sizeof(T);
+    std::array<size_t, 2> target_shape = { len, components };
+    const std::array<size_t, 2> strides = { sizeof(T) * components, sizeof(T) };
+    py::capsule capsule(owned_buffer, [](void* p) { delete[] static_cast<char*>(p); });
+    py::buffer_info info(
+        owned_buffer,
+        sizeof(T),
+        py::format_descriptor<T>::format(),
+        2,
+        target_shape,
+        strides
+    );
+    return py::array(info, capsule);
+}
+
+// Takes ownership of a layer's data buffer from the grid and wraps it as a numpy array
+// that frees it (no copy, no grid kept alive). Layout is (c, x, y, z) when channel_first,
+// else (x, y, z, c); both are strided over the same voxel-major buffer.
+template<typename T>
+py::array owning_layer_array(std::shared_ptr<VoxelGrid> grid, bool channel_first) {
+    const glm::uvec3 counts = grid->get_voxel_counts();
+    const size_t components = grid->get_layer()->get_voxel_flat<IVoxel>(0).get_bytes() / sizeof(T);
+    const size_t X = counts.x, Y = counts.y, Z = counts.z, C = components, es = sizeof(T);
+    char* data = grid->get_layer()->release_data();
+    py::capsule capsule(data, [](void* p) { delete[] static_cast<char*>(p); });
+    std::vector<size_t> shape, strides;
+    if (channel_first) {
+        shape = { C, X, Y, Z };
+        strides = { es, C * es, X * C * es, X * Y * C * es };
+    }
+    else {
+        shape = { X, Y, Z, C };
+        strides = { C * es, X * C * es, X * Y * C * es, es };
+    }
+    return py::array(py::buffer_info((void*)data, es, py::format_descriptor<T>::format(), shape.size(), shape, strides), capsule);
+}
+
+static py::array layer_to_owning_array(std::shared_ptr<VoxelGrid> grid, bool channel_first) {
+    const Typing::DType type = Typing::Helper::get_dtype(grid->get_layer()->get_voxel_flat<IVoxel>(0).get_type());
+    switch (type) {
+    case Typing::DType::Double: return owning_layer_array<double>(grid, channel_first);
+    case Typing::DType::Int: return owning_layer_array<int>(grid, channel_first);
+    case Typing::DType::Char: return owning_layer_array<char>(grid, channel_first);
+    case Typing::DType::Byte: return owning_layer_array<uint8_t>(grid, channel_first);
+    case Typing::DType::UInt64: return owning_layer_array<uint64_t>(grid, channel_first);
+    case Typing::DType::UInt32: return owning_layer_array<unsigned long>(grid, channel_first);
+    default: return owning_layer_array<float>(grid, channel_first);
+    }
+}
+
+template<typename AccessorT>
+py::dict build_field_arrays(const AccessorT& self, std::istream& stream,
+        const std::vector<std::string>& channels, const std::vector<std::string>& layers, bool channel_first) {
+    py::dict out;
+    for (const auto& channel : channels) {
+        py::dict layer_dict;
+        for (const auto& layer : layers)
+            layer_dict[py::str(layer)] = layer_to_owning_array(self.accessLayer(stream, channel, layer), channel_first);
+        out[py::str(channel)] = layer_dict;
+    }
+    return out;
 }
 
 template<typename T>
@@ -2061,7 +2155,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return self.getFieldType();
             })
             .def("access_field_from_buffer", [](const FieldAccessor& self, const py::bytes& bytes) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return self.accessField(stream);
             })
             .def("access_field", [](const FieldAccessor& self, const std::string& file) {
@@ -2069,7 +2163,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return self.accessField(stream);
             })
 			.def_static("get_store_version", [](const py::bytes& bytes) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return FieldAccessor::getStoreVersion(stream);
 			})
             .def("get_voxel_count", [](const FieldAccessor& self) {
@@ -2095,7 +2189,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             })
             .def("access_voxel_flat_from_buffer", [](const FieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             });
 
@@ -2112,7 +2206,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return self.getVoxelCount();
             })
 			.def("access_voxel_flat_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+			    auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
 			})
             .def("access_field", [](const Storage::CartesianFieldAccessor& self, const std::string& file) {
@@ -2120,23 +2214,31 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return self.accessField(stream);
 		    })
 			.def("access_field_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+			    auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return self.accessField(stream);
 			})
             .def("access_layer_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return self.accessLayer(stream, channel_name, layer_name);
 			})
 			.def("access_layer", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name) {
 			    std::ifstream stream(file, std::ios::binary);
 			    return self.accessLayer(stream, channel_name, layer_name);
 		    })
+            .def("access_field_arrays", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::vector<std::string>& channels, const std::vector<std::string>& layers, bool channel_first) {
+                std::ifstream stream(file, std::ios::binary);
+                return build_field_arrays(self, stream, channels, layers, channel_first);
+            }, py::arg("file"), py::arg("channels"), py::arg("layers"), py::arg("channel_first") = true)
+            .def("access_field_arrays_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::vector<std::string>& channels, const std::vector<std::string>& layers, bool channel_first) {
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
+                return build_field_arrays(self, stream, channels, layers, channel_first);
+            }, py::arg("buffer"), py::arg("channels"), py::arg("layers"), py::arg("channel_first") = true)
             .def("access_layer_across_channels", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& layer_name) {
 			    std::ifstream stream(file, std::ios::binary);
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
             .def("access_layer_across_channels_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& layer_name) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+			    auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
 			.def("access_channel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name) {
@@ -2144,7 +2246,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return self.accessChannel(stream, channel_name);
 			})
             .def("access_channel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return self.accessChannel(stream, channel_name);
             })
 			.def("access_voxel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
@@ -2152,7 +2254,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
             })
 			.def("__repr__", [](const Storage::CartesianFieldAccessor& self) {
@@ -2160,7 +2262,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return std::string("<RadFiled3D.CartesianFieldAccessor (voxels: ") + std::to_string(voxels) + std::string(")>");
 			})
 			.def("access_voxel_by_coord_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_by_coord", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
@@ -2205,11 +2307,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return self.getFieldType();
             })
             .def("access_layer", [](const PolarFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return self.accessLayer(stream, channel_name, layer_name);
             })
 			.def("access_voxel", [](const PolarFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec2& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 		    })
 			.def("__repr__", [](const PolarFieldAccessor& a) {
@@ -2217,7 +2319,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return std::string("<RadFiled3D.PolarFieldAccessor (voxels: ") + std::to_string(voxels) + std::string(")>");
 		    })
 			.def("access_voxel_by_coord", [](const PolarFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::vec2& coord) {
-                std::istringstream stream(static_cast<std::string>(bytes));
+                auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			});
 
@@ -2276,7 +2378,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("construct_field_accessor_from_buffer", [](const py::bytes& bytes) {
-			    std::istringstream stream(static_cast<std::string>(bytes));
+			    auto _bv = bytes_view(bytes); MemReadBuf _mb(_bv.first, _bv.second); std::istream stream(&_mb);
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("load_single_grid_layer", [](const std::string& file, const std::string& channel_name, const std::string& layer_name) -> std::shared_ptr<VoxelGrid> {
@@ -2345,23 +2447,23 @@ PYBIND11_MODULE(RadFiled3D, m) {
 
                 switch (type) {
                     case Typing::DType::Float:
-                        return create_py_array<float>((float*)data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<float>(data_buffer, voxel_count, sizeof(float));
                     case Typing::DType::Double:
-                        return create_py_array<double>((double*)data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<double>(data_buffer, voxel_count, sizeof(double));
                     case Typing::DType::Int:
-                        return create_py_array<int>((int*)data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<int>(data_buffer, voxel_count, sizeof(int));
                     case Typing::DType::Char:
-                        return create_py_array<char>(data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<char>(data_buffer, voxel_count, sizeof(char));
                     case Typing::DType::Byte:
-                        return create_py_array<uint8_t>((uint8_t*)data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<uint8_t>(data_buffer, voxel_count, sizeof(uint8_t));
                     case Typing::DType::UInt64:
-                        return create_py_array<uint64_t>((uint64_t*)data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<uint64_t>(data_buffer, voxel_count, sizeof(uint64_t));
                     case Typing::DType::UInt32:
-                        return create_py_array<unsigned long>((unsigned long*)data_buffer, voxel_count, self, copy);
+                        return create_owning_py_array<unsigned long>(data_buffer, voxel_count, sizeof(unsigned long));
                 }
 
                 const size_t element_size = layer_it->second.voxels[0]->get_bytes();
-                return create_py_array_generic<float>((float*)data_buffer, voxel_count, self, copy, element_size);
+                return create_owning_py_array<float>(data_buffer, voxel_count, element_size);
             }, py::arg("channel"), py::arg("layer"), py::arg("copy") = false)
             .def("__repr__", [](const VoxelCollection& a) {
                 size_t vx_count = 0;

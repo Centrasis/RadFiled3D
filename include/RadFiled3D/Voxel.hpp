@@ -562,6 +562,42 @@ namespace RadFiled3D {
 			}
 		}
 
+		// Copy-assignment: OwningHistogramVoxel owns its `data` buffer (new[]/delete[]),
+		// but the inherited ScalarVoxel/HistogramVoxel operator= is `= default` and only
+		// shallow-copies the `data` pointer. Without this deep-copy override, assigning
+		// (e.g. std::fill over a freshly-allocated voxel array in VoxelLayer::Construct*)
+		// makes multiple voxels share one buffer, which is then freed multiple times →
+		// "double free or corruption" when the field is destroyed. (rule-of-five fix)
+		OwningHistogramVoxel<T>& operator=(const OwningHistogramVoxel<T>& buffer) {
+			if (this == &buffer)
+				return *this;
+			T* old = this->data;
+			this->histogram_definition = buffer.histogram_definition;
+			if (this->histogram_definition.bins > 0 && buffer.data != nullptr) {
+				this->data = new T[this->histogram_definition.bins];
+				memcpy(this->data, buffer.data, this->histogram_definition.bins * sizeof(T));
+			} else {
+				this->data = nullptr;
+			}
+			if (old != nullptr)
+				delete[] old;
+			return *this;
+		}
+
+		// Move-assignment: steal the buffer and null the source so its destructor does
+		// not free it (the inherited default would shallow-copy → double free).
+		OwningHistogramVoxel<T>& operator=(OwningHistogramVoxel<T>&& buffer) noexcept {
+			if (this == &buffer)
+				return *this;
+			T* old = this->data;
+			this->histogram_definition = buffer.histogram_definition;
+			this->data = buffer.data;
+			buffer.data = nullptr;
+			if (old != nullptr)
+				delete[] old;
+			return *this;
+		}
+
 		~OwningHistogramVoxel() {
 			if (this->data != nullptr)
 				delete[] this->data;

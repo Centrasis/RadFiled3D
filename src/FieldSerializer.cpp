@@ -44,9 +44,10 @@ void Storage::V1::BinayFieldBlockHandler::serializeField(std::shared_ptr<IRadiat
 		FiledTypes::V1::ChannelHeader ch;
 		std::strncpy(ch.name, channel.first.c_str(), std::min<size_t>(64, channel.first.length()));
 		auto serialized_field = this->serializeChannel(channel.second);
-		ch.channel_bytes = serialized_field->str().length();
+		const std::string serialized_str = serialized_field->str();
+		ch.channel_bytes = serialized_str.length();
 		buffer.write((const char*)&ch, sizeof(FiledTypes::V1::ChannelHeader));
-		buffer.write(serialized_field->str().c_str(), ch.channel_bytes);
+		buffer.write(serialized_str.c_str(), ch.channel_bytes);
 	}
 }
 
@@ -159,82 +160,133 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 	return layer;
 }
 
+VoxelLayer* Storage::V1::BinayFieldBlockHandler::constructOwnedLayer(const FiledTypes::V1::VoxelGridLayerHeader& layer_desc, size_t voxel_count, char* owned_data, const void* header_data)
+{
+	const Typing::DType dtype = Typing::Helper::get_dtype(std::string(layer_desc.dtype));
+	const std::string unit(layer_desc.unit);
+	const float stat_err = layer_desc.statistical_error;
+
+	HistogramVoxel<float> hist_template;
+	AngularResolvedVoxel<float> sph_template;
+	switch (dtype) {
+	case Typing::DType::Float:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<float>(unit, voxel_count, stat_err, (float*)owned_data);
+	case Typing::DType::Double:
+#if defined(__x86_64__) || defined(_M_X64)
+		return VoxelLayer::ConstructWithOwnedDataBuffer<double>(unit, voxel_count, stat_err, (double*)owned_data);
+#else
+		delete[] owned_data; throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
+#endif
+	case Typing::DType::Int:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<int>(unit, voxel_count, stat_err, (int*)owned_data);
+	case Typing::DType::Char:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<char>(unit, voxel_count, stat_err, (char*)owned_data);
+	case Typing::DType::Byte:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<uint8_t>(unit, voxel_count, stat_err, (uint8_t*)owned_data);
+	case Typing::DType::Vec2:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<glm::vec2>(unit, voxel_count, stat_err, (glm::vec2*)owned_data);
+	case Typing::DType::Vec3:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<glm::vec3>(unit, voxel_count, stat_err, (glm::vec3*)owned_data);
+	case Typing::DType::Vec4:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<glm::vec4>(unit, voxel_count, stat_err, (glm::vec4*)owned_data);
+	case Typing::DType::Hist:
+		if (header_data != nullptr) hist_template.init_from_header(header_data);
+		return VoxelLayer::ConstructWithOwnedDataBuffer<float, HistogramVoxel<float>>(unit, voxel_count, stat_err, (float*)owned_data, hist_template);
+	case Typing::DType::AngularResolved:
+		if (header_data != nullptr) sph_template.init_from_header(header_data);
+		return VoxelLayer::ConstructWithOwnedDataBuffer<float, AngularResolvedVoxel<float>>(unit, voxel_count, stat_err, (float*)owned_data, sph_template);
+	case Typing::DType::UInt64:
+#if defined(__x86_64__) || defined(_M_X64)
+		return VoxelLayer::ConstructWithOwnedDataBuffer<uint64_t>(unit, voxel_count, stat_err, (uint64_t*)owned_data);
+#else
+		delete[] owned_data; throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
+#endif
+	case Typing::DType::UInt32:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<uint32_t>(unit, voxel_count, stat_err, (uint32_t*)owned_data);
+	default:
+		delete[] owned_data;
+		throw std::runtime_error("Failed to find data-type for layer! Data-type was: " + std::string(layer_desc.dtype));
+	}
+}
+
+VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayerFromStream(std::istream& buffer, size_t size) const
+{
+	if (size < sizeof(FiledTypes::V1::VoxelGridLayerHeader))
+		throw std::runtime_error("Data is too small to contain a valid layer header");
+
+	FiledTypes::V1::VoxelGridLayerHeader layer_desc;
+	buffer.read((char*)&layer_desc, sizeof(FiledTypes::V1::VoxelGridLayerHeader));
+	size_t consumed = sizeof(FiledTypes::V1::VoxelGridLayerHeader);
+
+	std::vector<char> header_data;
+	if (layer_desc.header_block_size > 0) {
+		header_data.resize(layer_desc.header_block_size);
+		buffer.read(header_data.data(), layer_desc.header_block_size);
+		consumed += layer_desc.header_block_size;
+	}
+
+	if (consumed >= size)
+		throw std::runtime_error("Data is too small to contain a valid layer data");
+
+	const size_t data_bytes = size - consumed;
+	const size_t voxel_count = data_bytes / layer_desc.bytes_per_element;
+
+	char* data = new char[data_bytes];
+	buffer.read(data, data_bytes);
+
+	return constructOwnedLayer(layer_desc, voxel_count, data, header_data.empty() ? nullptr : header_data.data());
+}
+
 std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeChannel(std::shared_ptr<VoxelBuffer> destination, char* data, size_t size) const
 {
+	const size_t voxel_count = destination->get_voxel_count();
 	size_t mem_pos = 0;
 	while (mem_pos < size) {
 		const FiledTypes::V1::VoxelGridLayerHeader& layer_desc = *(FiledTypes::V1::VoxelGridLayerHeader*)(data + mem_pos);
 		mem_pos += sizeof(FiledTypes::V1::VoxelGridLayerHeader);
-		void* header_data = nullptr;
+		const void* header_data = nullptr;
 
 		if (layer_desc.header_block_size > 0) {
-			header_data = (void*)(data + mem_pos);
+			header_data = (const void*)(data + mem_pos);
 			mem_pos += layer_desc.header_block_size;
 		}
 
-		Typing::DType dtype = Typing::Helper::get_dtype(std::string(layer_desc.dtype));
+		const size_t data_bytes = voxel_count * layer_desc.bytes_per_element;
+		char* owned = new char[data_bytes];
+		memcpy(owned, data + mem_pos, data_bytes);
+		mem_pos += data_bytes;
 
-		switch (dtype) {
-			case Typing::DType::Float:
-				destination->add_layer<float>(std::string(layer_desc.name), 0.f, layer_desc.unit);
-				break;
-			case Typing::DType::Double:
-#if defined(__x86_64__) || defined(_M_X64)
-				destination->add_layer<double>(std::string(layer_desc.name), 0.0, layer_desc.unit);
-#else
-				throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
-#endif
-				break;
-			case Typing::DType::Int:
-				destination->add_layer<int>(std::string(layer_desc.name), 0, layer_desc.unit);
-				break;
-			case Typing::DType::Char:
-				destination->add_layer<char>(std::string(layer_desc.name), 0, layer_desc.unit);
-				break;
-			case Typing::DType::Byte:
-				destination->add_layer<uint8_t>(std::string(layer_desc.name), 0, layer_desc.unit);
-				break;
-			case Typing::DType::Vec3:
-				destination->add_layer<glm::vec3>(std::string(layer_desc.name), glm::vec3(0.f), layer_desc.unit);
-				break;
-			case Typing::DType::Vec2:
-				destination->add_layer<glm::vec2>(std::string(layer_desc.name), glm::vec2(0.f), layer_desc.unit);
-				break;
-			case Typing::DType::Vec4:
-				destination->add_layer<glm::vec4>(std::string(layer_desc.name), glm::vec4(0.f), layer_desc.unit);
-				break;
-			case Typing::DType::Hist:
-				Storage::V1::BinayFieldBlockHandler::add_hist_layer(destination, std::string(layer_desc.name), layer_desc.bytes_per_element, 0, layer_desc.unit, header_data);
-				break;
-			case Typing::DType::AngularResolved:
-				Storage::V1::BinayFieldBlockHandler::add_spherical_layer(destination, std::string(layer_desc.name), layer_desc.bytes_per_element, layer_desc.unit, header_data);
-				break;
-			case Typing::DType::UInt64:
-#if defined(__x86_64__) || defined(_M_X64)
-				destination->add_layer<uint64_t>(std::string(layer_desc.name), 0, layer_desc.unit);
-#else
-				throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
-#endif
-				break;
-			case Typing::DType::UInt32:
-				destination->add_layer<uint32_t>(std::string(layer_desc.name), 0, layer_desc.unit);
-				break;
-			default:
-				std::string msg = "Failed to find data-type for layer: '" + std::string(layer_desc.name) + "' and dtype: '" + std::string(layer_desc.dtype) + "'";
-				throw std::runtime_error(msg.c_str());
-		}
-
-		destination->set_statistical_error(std::string(layer_desc.name), layer_desc.statistical_error);
-		char* data_buffer = destination->get_layer<char>(std::string(layer_desc.name));
-		memcpy(
-			data_buffer,
-			data + mem_pos,
-			destination->get_voxel_count() * layer_desc.bytes_per_element
-		);
-		mem_pos += destination->get_voxel_count() * layer_desc.bytes_per_element;
+		VoxelLayer* layer = constructOwnedLayer(layer_desc, voxel_count, owned, header_data);
+		destination->emplace_layer(std::string(layer_desc.name), layer);
 	}
 
 	return destination;
+}
+
+void Storage::V1::BinayFieldBlockHandler::deserializeChannelFromStream(std::shared_ptr<VoxelBuffer> destination, std::istream& buffer, size_t channel_bytes) const
+{
+	const size_t voxel_count = destination->get_voxel_count();
+	size_t consumed = 0;
+	while (consumed + sizeof(FiledTypes::V1::VoxelGridLayerHeader) <= channel_bytes) {
+		FiledTypes::V1::VoxelGridLayerHeader layer_desc;
+		buffer.read((char*)&layer_desc, sizeof(FiledTypes::V1::VoxelGridLayerHeader));
+		consumed += sizeof(FiledTypes::V1::VoxelGridLayerHeader);
+
+		std::vector<char> header_data;
+		if (layer_desc.header_block_size > 0) {
+			header_data.resize(layer_desc.header_block_size);
+			buffer.read(header_data.data(), layer_desc.header_block_size);
+			consumed += layer_desc.header_block_size;
+		}
+
+		const size_t data_bytes = voxel_count * layer_desc.bytes_per_element;
+		char* owned = new char[data_bytes];
+		buffer.read(owned, data_bytes);
+		consumed += data_bytes;
+
+		VoxelLayer* layer = constructOwnedLayer(layer_desc, voxel_count, owned, header_data.empty() ? nullptr : header_data.data());
+		destination->emplace_layer(std::string(layer_desc.name), layer);
+	}
 }
 
 void Storage::V1::BinayFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, float max_energy_eV, const std::string& unit, void* header_data)
@@ -282,11 +334,7 @@ std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::BinayFieldBlockHandler
 		if (buffer.eof())
 			break;
 
-		char* channel_data = new char[ch.channel_bytes];
-		buffer.read(channel_data, ch.channel_bytes);
-
-		BinayFieldBlockHandler::deserializeChannel(field->add_channel(std::string(ch.name)), channel_data, ch.channel_bytes);
-		delete[] channel_data;
+		BinayFieldBlockHandler::deserializeChannelFromStream(field->add_channel(std::string(ch.name)), buffer, ch.channel_bytes);
 	}
 
 	return field;

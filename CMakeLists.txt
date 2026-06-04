@@ -47,11 +47,18 @@ if(RS_Build_PyBindings)
     message(STATUS "Python was already found: ${Python_EXECUTABLE}")
   endif()
 
-  if(NOT DEFINED fetch_pybind_POPULATED)
+  # Prefer a pybind11 provided by the build environment (scikit-build-core adds
+  # the build-requirement's CMake config to CMAKE_PREFIX_PATH). Fall back to
+  # fetching it for standalone CMake builds without pybind11 installed.
+  find_package(pybind11 CONFIG QUIET)
+  if(pybind11_FOUND)
+    message(STATUS "Found pybind11 via find_package: ${pybind11_VERSION}")
+  elseif(NOT DEFINED fetch_pybind_POPULATED)
+    message(STATUS "pybind11 not found, fetching via FetchContent...")
     FetchContent_Declare(
       fetch_pybind
       GIT_REPOSITORY https://github.com/pybind/pybind11.git
-      GIT_TAG        v3.0.3 # v2.13.6
+      GIT_TAG        v3.0.4 # v2.13.6
     )
     FetchContent_GetProperties(fetch_pybind)
     if(NOT fetch_pybind_POPULATED)
@@ -98,6 +105,14 @@ if(RS_Build_PyBindings)
     target_link_libraries(RadFiled3D PRIVATE libRadFiled3D stdc++fs)
   endif()
   set_target_properties(RadFiled3D PROPERTIES FOLDER "Library")
+
+  # Install the native module into the RadFiled3D package (used by
+  # scikit-build-core when assembling the wheel). The pure-python files and the
+  # RadFiled3D.pyi stub are added by scikit-build-core from python/RadFiled3D.
+  install(TARGETS RadFiled3D
+    LIBRARY DESTINATION RadFiled3D
+    RUNTIME DESTINATION RadFiled3D
+  )
 endif()
 
 if(BUILD_TESTS MATCHES ON)

@@ -1102,6 +1102,34 @@ class CartesianFieldAccessor(FieldAccessor):
         """
         ...
 
+    def access_field_arrays(self, file: str, channels: list[str], layers: list[str], channel_first: bool = True) -> dict[str, dict[str, np.ndarray]]:
+        """
+        Load the given channels/layers of a field directly into numpy arrays in a single pass.
+
+        Each layer's voxel data is read straight into its own buffer, which the returned numpy
+        array owns (no copy, and no C++ object is kept alive). The arrays are nested as
+        result[channel][layer].
+
+        :param file: The file path to the stored radiation field.
+        :param channels: The names of the channels to load.
+        :param layers: The names of the layers to load from every channel.
+        :param channel_first: If True the arrays have shape (c, x, y, z); otherwise (x, y, z, c).
+        :return: A dict mapping channel name -> (layer name -> numpy array).
+        """
+        ...
+
+    def access_field_arrays_from_buffer(self, buffer: bytes, channels: list[str], layers: list[str], channel_first: bool = True) -> dict[str, dict[str, np.ndarray]]:
+        """
+        Buffer-based variant of access_field_arrays.
+
+        :param buffer: The buffer to load the radiation field from.
+        :param channels: The names of the channels to load.
+        :param layers: The names of the layers to load from every channel.
+        :param channel_first: If True the arrays have shape (c, x, y, z); otherwise (x, y, z, c).
+        :return: A dict mapping channel name -> (layer name -> numpy array).
+        """
+        ...
+
     def access_layer_across_channels_from_buffer(self, buffer: bytes, layer_name: str) -> dict[str, VoxelGrid]:
         """
         Get a layer by name from a data buffer across all channels.

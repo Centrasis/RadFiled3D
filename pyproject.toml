@@ -1,3 +1,58 @@
 [build-system]
-requires = ["setuptools>=75.0"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "RadFiled3D"
+dynamic = ["version"]
+description = "Storage and tooling for 3D radiation fields with C++ core and Python bindings."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Felix Lehner", email = "felix.lehner@ptb.de" }]
+dependencies = [
+    "numpy>=2.0",
+    "rich>=13.9",
+]
+
+[project.urls]
+Homepage = "https://pypi.org/project/RadFiled3D/"
+
+# ---------------------------------------------------------------------------
+# scikit-build-core: drives the CMake/pybind11 build the standard PEP 517 way.
+# ---------------------------------------------------------------------------
+[tool.scikit-build]
+# Pure-python sources live under python/RadFiled3D and map to the RadFiled3D
+# package; the native pybind module (and its .pyi stub) is added into the same
+# package by CMake's install() rules.
+wheel.packages = ["python/RadFiled3D"]
+cmake.version = ">=3.16"
+cmake.build-type = "Release"
+build.verbose = false
+# Required to load the local version provider in build_tools/ (see below).
+experimental = true
+
+# Tests/examples are C++-only and not part of the wheel.
+[tool.scikit-build.cmake.define]
+BUILD_TESTS = "OFF"
+BUILD_EXAMPLES = "OFF"
+RS_Build_PyBindings = "ON"
+
+# Version is derived from the CI tag / git ref (GITHUB_REF, CI_COMMIT_TAG, ...).
+# See build_tools/radfiled3d_version.py.
+[tool.scikit-build.metadata.version]
+provider = "radfiled3d_version"
+provider-path = "build_tools"
+
+# Files needed to build from an sdist (the C++ sources, bindings, stubs and the
+# version provider). Pure-python under python/ is included automatically.
+[tool.scikit-build.sdist]
+include = [
+    "CMakeLists.txt",
+    "LICENSE",
+    "README.md",
+    "include/",
+    "src/",
+    "python/",
+    "build_tools/",
+]

@@ -117,6 +117,28 @@ namespace RadFiled3D {
 		}
 
 
+		/** Create a new VoxelLayer that takes ownership of an existing, already-filled
+		* data buffer (no copy). The buffer must hold elements_per_voxel * voxel_count
+		* values laid out contiguously and will be freed by the layer.
+		* @param unit The unit of the layer
+		* @param voxel_count The number of voxels in the layer
+		* @param statistical_error The statistical error of the layer
+		* @param owned_data_buffer The data buffer to take ownership of
+		* @param voxel_template The template voxel to use for each voxel in the layer
+		* @return A pointer to the new VoxelLayer
+		*/
+		template<typename dtype = float, class VoxelT = ScalarVoxel<dtype>>
+		static VoxelLayer* ConstructWithOwnedDataBuffer(const std::string& unit, size_t voxel_count, float statistical_error, dtype* owned_data_buffer, const VoxelT& voxel_template = VoxelT()) {
+			VoxelT* voxels = new VoxelT[voxel_count];
+			std::fill(voxels, voxels + voxel_count, voxel_template);
+			size_t voxel_size = voxels[0].get_bytes();
+			for (size_t i = 0; i < voxel_count; i++) {
+				voxels[i].set_data(((char*)owned_data_buffer) + i * voxel_size);
+			}
+
+			return new VoxelLayer(sizeof(VoxelT), sizeof(dtype), (char*)voxels, (char*)owned_data_buffer, unit, statistical_error, voxel_count, true);
+		}
+
 		/** Accesses a voxel in a layer by its flat index
 		* @param idx The flat index of the voxel
 		* @return A reference to the voxel
@@ -140,6 +162,17 @@ namespace RadFiled3D {
 
 		const char* get_raw_data() const {
 			return this->data;
+		}
+
+		/** Relinquishes ownership of the data buffer to the caller. After this call the
+		* layer no longer points at or frees the data; the caller must free it (it was
+		* allocated with new[]). The voxel wrapper array is unaffected.
+		* @return The data buffer that was owned by the layer.
+		*/
+		char* release_data() {
+			char* released = this->data;
+			this->data = nullptr;
+			return released;
 		}
 
 		const size_t get_bytes_per_data_element() const {
@@ -177,6 +210,17 @@ namespace RadFiled3D {
 				name,
 				*layer
 			});
+			delete layer;
+		}
+
+		/** Inserts a pre-constructed layer, taking ownership of its buffers.
+		* @param name The name of the layer
+		* @param layer The layer to insert; it is consumed (deleted) and its buffers are
+		*        transferred to the buffer.
+		*/
+		void emplace_layer(const std::string& name, VoxelLayer* layer) {
+			layer->shall_free_buffers = false;
+			this->layers.insert({ name, *layer });
 			delete layer;
 		}
 

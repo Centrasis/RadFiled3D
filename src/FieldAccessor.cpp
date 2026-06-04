@@ -104,59 +104,81 @@ void RadFiled3D::Storage::V1::CartesianFieldAccessor::SerializationData::deseria
 
 std::vector<char> RadFiled3D::Storage::FieldAccessor::Serialize(const FieldAccessor* accessor)
 {
-	FieldAccessor::SerializationData* sdata = accessor->generateSerializationBuffer();
+	std::unique_ptr<FieldAccessor::SerializationData> sdata(accessor->generateSerializationBuffer());
 	std::vector<char> additional_data = sdata->serialize_additional_data();
-	std::vector<char> serialized_accessor;
+	std::vector<char> out;
+
+	auto append = [&out](const void* src, size_t n) {
+		const char* p = static_cast<const char*>(src);
+		out.insert(out.end(), p, p + n);
+	};
+
+	append(&sdata->store_version, sizeof(StoreVersion));
+	append(&sdata->field_type, sizeof(FieldType));
+	append(&sdata->metadata_fileheader_size, sizeof(size_t));
+	append(&sdata->voxel_count, sizeof(size_t));
 
 	if (sdata->field_type == FieldType::Cartesian) {
-		serialized_accessor.resize(sizeof(V1::CartesianFieldAccessor::SerializationData) + additional_data.size());
-		memcpy((char*)serialized_accessor.data(), (void*)sdata, sizeof(V1::CartesianFieldAccessor::SerializationData));
+		auto* cdata = static_cast<RadFiled3D::Storage::CartesianFieldAccessor::SerializationData*>(sdata.get());
+		append(&cdata->field_dimensions, sizeof(glm::vec3));
+		append(&cdata->voxel_dimensions, sizeof(glm::vec3));
 	}
 	else if (sdata->field_type == FieldType::Polar) {
-		serialized_accessor.resize(sizeof(V1::PolarFieldAccessor::SerializationData) + additional_data.size());
-		memcpy((char*)serialized_accessor.data(), (void*)sdata, sizeof(V1::PolarFieldAccessor::SerializationData));
+		auto* pdata = static_cast<RadFiled3D::Storage::PolarFieldAccessor::SerializationData*>(sdata.get());
+		append(&pdata->segments_counts, sizeof(glm::uvec2));
 	}
 	else {
 		throw std::runtime_error("Unsupported field type");
 	}
 
-	memcpy((char*)serialized_accessor.data() + (serialized_accessor.size() - additional_data.size()), additional_data.data(), additional_data.size());
-	delete sdata;
-	return serialized_accessor;
+	out.insert(out.end(), additional_data.begin(), additional_data.end());
+	return out;
 }
 
 std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldAccessor::Deserialize(const std::vector<char>& buffer)
 {
-	FieldAccessor::SerializationData sdata_header;
-	memcpy((char*)&sdata_header, buffer.data(), sizeof(FieldAccessor::SerializationData));
-	std::shared_ptr<FieldAccessor> accessor;
-	if (sdata_header.store_version == StoreVersion::V1) {
-		if (sdata_header.field_type == FieldType::Cartesian) {
-			V1::CartesianFieldAccessor::SerializationData sdata;
-			memcpy(((char*)&sdata), buffer.data(), sizeof(V1::CartesianFieldAccessor::SerializationData) - sizeof(std::map<std::string, AccessorTypes::ChannelStructure>));
+	size_t offset = 0;
+	auto read = [&buffer, &offset](void* dst, size_t n) {
+		if (offset + n > buffer.size())
+			throw std::runtime_error("Corrupt FieldAccessor serialization buffer");
+		memcpy(dst, buffer.data() + offset, n);
+		offset += n;
+	};
 
-			size_t remaining_size = buffer.size() - sizeof(V1::CartesianFieldAccessor::SerializationData);
-			std::vector<char> additional_data(remaining_size);
-			memcpy(additional_data.data(), buffer.data() + sizeof(V1::CartesianFieldAccessor::SerializationData), remaining_size);
-			sdata.deserialize_additional_data(additional_data);
-			return std::static_pointer_cast<FieldAccessor>(std::make_shared<V1::CartesianFieldAccessor>(sdata));
-		}
-		else if (sdata_header.field_type == FieldType::Polar) {
-			V1::PolarFieldAccessor::SerializationData sdata;
-			memcpy(((char*)&sdata), buffer.data(), sizeof(V1::PolarFieldAccessor::SerializationData) - sizeof(std::map<std::string, AccessorTypes::ChannelStructure>));
+	StoreVersion store_version;
+	FieldType field_type;
+	size_t metadata_fileheader_size;
+	size_t voxel_count;
+	read(&store_version, sizeof(StoreVersion));
+	read(&field_type, sizeof(FieldType));
+	read(&metadata_fileheader_size, sizeof(size_t));
+	read(&voxel_count, sizeof(size_t));
 
-			size_t remaining_size = buffer.size() - sizeof(V1::PolarFieldAccessor::SerializationData);
-			std::vector<char> additional_data(remaining_size);
-			memcpy(additional_data.data(), buffer.data() + sizeof(V1::PolarFieldAccessor::SerializationData), remaining_size);
-			sdata.deserialize_additional_data(additional_data);
-			return std::static_pointer_cast<FieldAccessor>(std::make_shared<V1::PolarFieldAccessor>(sdata));
-		}
-		else {
-			throw std::runtime_error("Unsupported field type");
-		}
-	}
-	else {
+	if (store_version != StoreVersion::V1)
 		throw std::runtime_error("Unsupported store version");
+
+	if (field_type == FieldType::Cartesian) {
+		V1::CartesianFieldAccessor::SerializationData sdata;
+		sdata.store_version = store_version;
+		sdata.field_type = field_type;
+		sdata.metadata_fileheader_size = metadata_fileheader_size;
+		sdata.voxel_count = voxel_count;
+		read(&sdata.field_dimensions, sizeof(glm::vec3));
+		read(&sdata.voxel_dimensions, sizeof(glm::vec3));
+		std::vector<char> additional_data(buffer.begin() + offset, buffer.end());
+		sdata.deserialize_additional_data(additional_data);
+		return std::static_pointer_cast<FieldAccessor>(std::make_shared<V1::CartesianFieldAccessor>(sdata));
+	}
+	else if (field_type == FieldType::Polar) {
+		V1::PolarFieldAccessor::SerializationData sdata;
+		sdata.store_version = store_version;
+		sdata.field_type = field_type;
+		sdata.metadata_fileheader_size = metadata_fileheader_size;
+		sdata.voxel_count = voxel_count;
+		read(&sdata.segments_counts, sizeof(glm::uvec2));
+		std::vector<char> additional_data(buffer.begin() + offset, buffer.end());
+		sdata.deserialize_additional_data(additional_data);
+		return std::static_pointer_cast<FieldAccessor>(std::make_shared<V1::PolarFieldAccessor>(sdata));
 	}
 
 	throw std::runtime_error("Unsupported field type");
@@ -172,6 +194,7 @@ StoreVersion RadFiled3D::Storage::FieldAccessor::getStoreVersion(std::istream& b
 	buffer.read((char*)&version, sizeof(VersionHeader));
 	std::string version_str = std::string(version.version);
 
+	RadFiled3D::Storage::FieldStore::ensure_registered_stores();
 	return RadFiled3D::Storage::Registry::get_highest_supported_version_by(version_str);
 }
 
@@ -233,10 +256,9 @@ void RadFiled3D::Storage::V1::FileParser::initialize(std::istream& buffer)
 			layers_blocks[layer_header.name] = AccessorTypes::TypedMemoryBlockDefinition(layer_pos, layer_size, dtype, elements_per_voxel);
 
 			if (layer_header.header_block_size > 0) {
-				char* header_data = new char[layer_header.header_block_size];
-				buffer.read(header_data, layer_header.header_block_size);
-				layers_blocks[layer_header.name].set_voxel_header_data(header_data, layer_header.header_block_size);
-				delete[] header_data;
+				std::vector<char> header_data(layer_header.header_block_size);
+				buffer.read(header_data.data(), layer_header.header_block_size);
+				layers_blocks[layer_header.name].set_voxel_header_data(header_data.data(), layer_header.header_block_size);
 			}
 
 			layer_pos += layer_size;
@@ -338,11 +360,10 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::accessVoxelRawFlat(std::istream& bu
 
 	// Add layer_block.get_voxel_header_data_size() to read position as the creation of the voxel does not revist the header data
 	buffer.seekg(this->getFieldDataOffset() + channel_block.offset + layer_block.offset + layer_block.get_voxel_header_data_size() + sizeof(FiledTypes::V1::VoxelGridLayerHeader) + sizeof(FiledTypes::V1::ChannelHeader) + voxel_idx * layer_block.elements_per_voxel * element_size, std::ios::beg);
-	char* data_buffer = new char[layer_block.elements_per_voxel * element_size];
-	buffer.read(data_buffer, layer_block.elements_per_voxel * element_size);
+	std::vector<char> data_buffer(layer_block.elements_per_voxel * element_size);
+	buffer.read(data_buffer.data(), data_buffer.size());
 
-	IVoxel* voxel = this->createVoxelFromBuffer(data_buffer, layer_block.dtype, (layer_block.get_voxel_header_data_size() > 0) ? layer_block.get_voxel_header_data() : nullptr);
-	delete[] data_buffer;
+	IVoxel* voxel = this->createVoxelFromBuffer(data_buffer.data(), layer_block.dtype, (layer_block.get_voxel_header_data_size() > 0) ? layer_block.get_voxel_header_data() : nullptr);
 	return voxel;
 }
 
@@ -362,18 +383,20 @@ std::vector<IVoxel*> RadFiled3D::Storage::V1::FileParser::accessVoxelsRawFlat(st
 	auto& layer_block = layer_block_itr->second;
 
 	const size_t element_size = Typing::Helper::get_bytes_of_dtype(layer_block.dtype);
+	const size_t voxel_bytes = layer_block.elements_per_voxel * element_size;
+	// Add layer_block.get_voxel_header_data_size() to read position as the creation of the voxel does not revist the header data
+	const size_t base_offset = this->getFieldDataOffset() + channel_block.offset + layer_block.offset + layer_block.get_voxel_header_data_size() + sizeof(FiledTypes::V1::VoxelGridLayerHeader) + sizeof(FiledTypes::V1::ChannelHeader);
+	const char* voxel_header_data = (layer_block.get_voxel_header_data_size() > 0) ? layer_block.get_voxel_header_data() : nullptr;
 
+	std::vector<char> data_buffer(voxel_bytes);
 	size_t vx_parsed = 0;
 	for (size_t voxel_idx : voxel_indices) {
 		if (voxel_idx >= this->voxel_count)
 			throw RadiationFieldStoreException("Voxel index out of bounds");
 
-		// Add layer_block.get_voxel_header_data_size() to read position as the creation of the voxel does not revist the header data
-		buffer.seekg(this->getFieldDataOffset() + channel_block.offset + layer_block.offset + layer_block.get_voxel_header_data_size() + sizeof(FiledTypes::V1::VoxelGridLayerHeader) + sizeof(FiledTypes::V1::ChannelHeader) + voxel_idx * layer_block.elements_per_voxel * element_size, std::ios::beg);
-		char* data_buffer = new char[layer_block.elements_per_voxel * element_size];
-		buffer.read(data_buffer, layer_block.elements_per_voxel * element_size);
-		voxels[vx_parsed++] = this->createVoxelFromBuffer(data_buffer, layer_block.dtype, (layer_block.get_voxel_header_data_size() > 0) ? layer_block.get_voxel_header_data() : nullptr);
-		delete[] data_buffer;
+		buffer.seekg(base_offset + voxel_idx * voxel_bytes, std::ios::beg);
+		buffer.read(data_buffer.data(), voxel_bytes);
+		voxels[vx_parsed++] = this->createVoxelFromBuffer(data_buffer.data(), layer_block.dtype, voxel_header_data);
 	}
 
 	return voxels;
@@ -443,26 +466,16 @@ std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::CartesianFieldAccessor
 
 std::shared_ptr<VoxelGridBuffer> RadFiled3D::Storage::V1::CartesianFieldAccessor::accessChannel(std::istream& buffer, const std::string& channel_name) const
 {
-	std::ofstream out("access_channel_accessor.log", std::ios::app);
-	out << "From CartesianFieldAccessorV1" << std::endl;
-	out << "Accessing channel '" << channel_name << "'" << std::endl;
 	auto channel_block_itr = this->channels_layers_offsets.find(channel_name);
-	if (channel_block_itr == this->channels_layers_offsets.end()) {
-		out << "Channel not found" << std::endl;
+	if (channel_block_itr == this->channels_layers_offsets.end())
 		throw RadiationFieldStoreException("Channel not found");
-	}
 
 	auto& channel_block = channel_block_itr->second.channel_block;
 
 	buffer.seekg(this->getFieldDataOffset() + channel_block.offset + sizeof(FiledTypes::V1::ChannelHeader), std::ios::beg);
 
 	auto grid_buffer = std::make_shared<VoxelGridBuffer>(this->field_dimensions, this->voxel_dimensions);
-	char* data_buffer = new char[channel_block.size];
-	buffer.read(data_buffer, channel_block.size);
-	this->serializer->deserializeChannel(grid_buffer, data_buffer, channel_block.size);
-	delete[] data_buffer;
-
-	out << "Channel voxels loaded: " << grid_buffer->get_voxel_count() << std::endl;
+	this->serializer->deserializeChannelFromStream(grid_buffer, buffer, channel_block.size);
 
 	return grid_buffer;
 }
@@ -482,10 +495,7 @@ std::shared_ptr<VoxelGrid> RadFiled3D::Storage::V1::CartesianFieldAccessor::acce
 
 	buffer.seekg(this->getFieldDataOffset() + channel_block.offset + layer_block.offset + sizeof(FiledTypes::V1::ChannelHeader), std::ios::beg);
 
-	char* data_buffer = new char[layer_block.size];
-	buffer.read(data_buffer, layer_block.size);
-	VoxelLayer* layer = this->serializer->deserializeLayer(data_buffer, layer_block.size);
-	delete[] data_buffer;
+	VoxelLayer* layer = this->serializer->deserializeLayerFromStream(buffer, layer_block.size);
 
 	return std::make_shared<VoxelGrid>(this->field_dimensions, this->voxel_dimensions, std::shared_ptr<VoxelLayer>(layer));
 }
@@ -501,10 +511,9 @@ std::map<std::string, std::shared_ptr<VoxelGrid>> RadFiled3D::Storage::V1::Carte
 		auto& channel_block = channel.second.channel_block;
 		auto& layer_block = layer_block_itr->second;
 		buffer.seekg(this->getFieldDataOffset() + channel_block.offset + layer_block.offset + sizeof(FiledTypes::V1::ChannelHeader), std::ios::beg);
-		char* data_buffer = new char[layer_block.size];
-		buffer.read(data_buffer, layer_block.size);
-		VoxelLayer* layer = this->serializer->deserializeLayer(data_buffer, layer_block.size);
-		delete[] data_buffer;
+		std::unique_ptr<char[]> data_buffer(new char[layer_block.size]);
+		buffer.read(data_buffer.get(), layer_block.size);
+		VoxelLayer* layer = this->serializer->deserializeLayer(data_buffer.get(), layer_block.size);
 		layers.insert(std::make_pair(channel.first, std::make_shared<VoxelGrid>(this->field_dimensions, this->voxel_dimensions, std::shared_ptr<VoxelLayer>(layer))));
 	}
 
@@ -598,10 +607,7 @@ std::shared_ptr<PolarSegments> RadFiled3D::Storage::V1::PolarFieldAccessor::acce
 
 	buffer.seekg(this->getFieldDataOffset() + channel_block.offset + layer_block.offset + sizeof(FiledTypes::V1::ChannelHeader), std::ios::beg);
 
-	char* data_buffer = new char[layer_block.size];
-	buffer.read(data_buffer, layer_block.size);
-	PolarSegments* layer = (PolarSegments*)this->serializer->deserializeLayer(data_buffer, layer_block.size);
-	delete[] data_buffer;
+	PolarSegments* layer = (PolarSegments*)this->serializer->deserializeLayerFromStream(buffer, layer_block.size);
 
 	return std::shared_ptr<PolarSegments>(layer);
 }

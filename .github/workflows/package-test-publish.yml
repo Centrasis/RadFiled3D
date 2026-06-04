@@ -13,8 +13,8 @@ jobs:
         python-version: 3.13
     - name: Build RadFiled3D Source Distribution
       run: |
-        python -m pip install setuptools wheel build
-        python -m build --sdist --no-isolation
+        python -m pip install build
+        python -m build --sdist
     - name: Lint with flake8
       run: |
         python -m pip install flake8
@@ -60,8 +60,8 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Build RadFiled3D Wheel
       run: |
-        python -m pip install setuptools wheel build
-        python -m build --wheel --no-isolation
+        python -m pip install build
+        python -m build --wheel
     - name: Lint with flake8
       run: |
         python -m pip install flake8

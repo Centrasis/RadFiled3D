@@ -47,12 +47,14 @@ built automatically, but will take some time.
 In order to use the module directly from another C++ Project, you can integrate it by adding the local location of this repository via `add_submodule()` and then link against the target `libRadFiled3D`. All classes are then available from the namespace `RadFiled3D`. Check the [Example](./examples/cxx/example01.cpp) or the [First Test File](./tests/basic.cpp) as a first reference.
 
 #### Python
-In order to use the Module from Python, we provide a setup.py file that handles the compilation and integration automatically from the python setuptools.
+The Python package is built with [scikit-build-core](https://scikit-build-core.readthedocs.io/), the standard PEP 517 backend for CMake projects. It drives the CMake/pybind11 build automatically; no `setup.py` is required. CMake and Ninja are provisioned by the build backend if they are not already present.
 ##### Installing locally
 `python -m pip install .`
 
 ##### Building a wheel
 `python -m build --wheel`
+
+The package version is taken from the release tag (`GITHUB_REF` / `CI_COMMIT_TAG`) at build time and falls back to `0.0.0` for non-release builds.
 
 ## Getting Started
 Disclaimer: Not all methods support keyword arguments as they need to be defined manually in the bindings. For some methods like `add_layer` or the Metadata methods those are implemented.
