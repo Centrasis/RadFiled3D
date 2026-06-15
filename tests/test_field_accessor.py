@@ -55,6 +55,36 @@ def test_construction():
     assert vx_count == true_vx_count
     assert accessor.get_field_type() == FieldType.CARTESIAN
 
+
+def test_float16_layer_roundtrip(tmp_path):
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
+    field.add_channel("channel1")
+    field.get_channel("channel1").add_layer("half", "unit", DType.FLOAT16)
+
+    view = field.get_channel("channel1").get_layer_as_ndarray("half")
+    assert view.dtype == np.float16
+    values = np.array([1.5, 2.25, -3.5, 0.125, 100.0, 0.0, 65504.0, -1.0], dtype=np.float16).reshape(view.shape)
+    view[...] = values
+
+    voxel = field.get_channel("channel1").get_voxel("half", 0, 0, 0)
+    assert voxel.get_data() == 1.5
+
+    path = str(tmp_path / "float16.rf3")
+    FieldStore.store(field, METADATA, path, StoreVersion.V1)
+
+    loaded = FieldStore.load(path)
+    loaded_view = loaded.get_channel("channel1").get_layer_as_ndarray("half")
+    assert loaded_view.dtype == np.float16
+    assert np.array_equal(loaded_view, values)
+
+    accessor = FieldStore.construct_field_accessor(path)
+    arrays = accessor.access_field_arrays(path, ["channel1"], ["half"], True)
+    channel_first = arrays["channel1"]["half"]
+    assert channel_first.dtype == np.float16
+    assert channel_first.shape == (1, 2, 2, 2)
+    assert np.array_equal(channel_first[0], values.reshape(2, 2, 2))
+
+
 def test_pickle_cartesian():
     field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.1, 0.1, 0.1))
     field.add_channel("channel1")

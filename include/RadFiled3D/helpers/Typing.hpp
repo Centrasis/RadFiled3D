@@ -26,7 +26,8 @@ namespace RadFiled3D {
 			AngularResolved,
 			UInt64,
 			UInt32,
-			Byte
+			Byte,
+			Float16
 		};
 
 		class Helper {
@@ -63,7 +64,11 @@ namespace RadFiled3D {
 		template<> inline std::string Helper::get_plain_type_name<char>()          { return "char"; }
 		template<> inline std::string Helper::get_plain_type_name<unsigned char>() { return "unsigned char"; }
 		template<> inline std::string Helper::get_plain_type_name<unsigned int>()  { return "unsigned int"; }
-		template<> inline std::string Helper::get_plain_type_name<unsigned long>() { return "unsigned long"; }
+		// 64-bit unsigned is stored under the canonical fixed-width name. unsigned long is 64-bit on
+		// LP64 (Linux/macOS) but 32-bit on LLP64 (Windows), so it only canonicalises to uint64_t when
+		// it actually is 64 bits; otherwise it keeps its legacy spelling (read as a 32-bit unsigned).
+		template<> inline std::string Helper::get_plain_type_name<unsigned long>() { return (sizeof(unsigned long) == 8) ? "uint64_t" : "unsigned long"; }
+		template<> inline std::string Helper::get_plain_type_name<unsigned long long>() { return "uint64_t"; }
 		template<> inline std::string Helper::get_plain_type_name<_Float16>()      { return "float16"; }
 		template<> inline std::string Helper::get_plain_type_name<glm::vec2>()     { return "glm::vec2"; }
 		template<> inline std::string Helper::get_plain_type_name<glm::vec3>()     { return "glm::vec3"; }

@@ -276,6 +276,9 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 	case Typing::DType::Float:
 		voxel = new OwningScalarVoxel<float>((float*)data_buffer);
 		break;
+	case Typing::DType::Float16:
+		voxel = new OwningScalarVoxel<_Float16>((_Float16*)data_buffer);
+		break;
 	case Typing::DType::Double:
 #if defined(__x86_64__) || defined(_M_X64)
 		voxel = new OwningScalarVoxel<double>((double*)data_buffer);

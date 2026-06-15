@@ -111,6 +111,9 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 	case Typing::DType::Float:
 		layer = VoxelLayer::ConstructFromBufferRaw<float>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 		break;
+	case Typing::DType::Float16:
+		layer = VoxelLayer::ConstructFromBufferRaw<_Float16>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
+		break;
 	case Typing::DType::Double:
 #if defined(__x86_64__) || defined(_M_X64)
 		layer = VoxelLayer::ConstructFromBufferRaw<double>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
@@ -173,6 +176,8 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::constructOwnedLayer(const Filed
 	switch (dtype) {
 	case Typing::DType::Float:
 		return VoxelLayer::ConstructWithOwnedDataBuffer<float>(unit, voxel_count, stat_err, (float*)owned_data);
+	case Typing::DType::Float16:
+		return VoxelLayer::ConstructWithOwnedDataBuffer<_Float16>(unit, voxel_count, stat_err, (_Float16*)owned_data);
 	case Typing::DType::Double:
 #if defined(__x86_64__) || defined(_M_X64)
 		return VoxelLayer::ConstructWithOwnedDataBuffer<double>(unit, voxel_count, stat_err, (double*)owned_data);

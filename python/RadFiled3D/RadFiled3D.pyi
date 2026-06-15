@@ -22,6 +22,7 @@ class DType(Enum):
     UINT64 = 9
     UINT32 = 10
     BYTE = 11
+    FLOAT16 = 12
 
 
 class FieldType(Enum):
@@ -280,6 +281,11 @@ class Voxel(object):
 class Float32Voxel(Voxel):
     def get_data(self) -> float: ...
     def __eq__(self, value: "Float32Voxel") -> bool: ...
+
+
+class Float16Voxel(Voxel):
+    def get_data(self) -> float: ...
+    def set_data(self, value: float) -> None: ...
 
 
 class SCharVoxel(Voxel):

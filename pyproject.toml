@@ -55,4 +55,29 @@ include = [
     "src/",
     "python/",
     "build_tools/",
+    "tests/",
+]
+# Keep local build trees, editor/tooling state and other untracked dev artifacts
+# out of the published source distribution.
+exclude = [
+    "build",
+    "build/**",
+    "build_cpp",
+    "build_cpp/**",
+    "lib",
+    "lib/**",
+    ".vscode",
+    ".vscode/**",
+    ".claude",
+    ".claude/**",
+    ".pytest_cache",
+    ".pytest_cache/**",
+    "plan.md",
+    "*.rf3",
+    "*.log",
+    "*.pyc",
+    "build_tools/__pycache__",
+    "build_tools/__pycache__/**",
+    "python/RadFiled3D/__pycache__",
+    "python/RadFiled3D/__pycache__/**",
 ]
