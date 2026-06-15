@@ -1,8 +1,10 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <glm/vec3.hpp>
+#include <cstdint>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 #include "RadFiled3D/helpers/Typing.hpp"
 #include <cstring>
 #include <cmath>
@@ -227,8 +229,12 @@ namespace RadFiled3D {
 		}
 	};
 
+	// (voxel_header is unused; its old initializer VoxelBaseHeader(std::string) had no matching ctor
+	// and only compiled because it was never instantiated. Default-construct so the explicit
+	// instantiations below are valid. The type name is provided by get_type()/get_plain_type_name.)
 	template<typename T>
-	IVoxel::VoxelBaseHeader ScalarVoxel<T>::voxel_header = IVoxel::VoxelBaseHeader(Typing::Helper::get_plain_type_name<T>());
+	IVoxel::VoxelBaseHeader ScalarVoxel<T>::voxel_header = IVoxel::VoxelBaseHeader();
+
 
 	/** An OwningScalarVoxel is a ScalarVoxel that owns the data it points to. It is a simple wrapper around a single value, and is used to
 	* represent a single value in a VoxelBuffer. It provides a simple interface for reading and writing the value, and can be used

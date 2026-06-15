@@ -1,4 +1,6 @@
-#pragma comment(lib, "Dbghelp.lib")
+#if defined(_WIN32) || defined(_WIN64)
+#pragma comment(lib, "Dbghelp.lib")  // Windows-only dependent library; guarded so non-MSVC linkers don't choke
+#endif
 #include "RadFiled3D/storage/FieldSerializer.hpp"
 #include "RadFiled3D/VoxelBuffer.hpp"
 #include <glm/vec2.hpp>
