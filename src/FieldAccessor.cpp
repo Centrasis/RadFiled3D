@@ -277,8 +277,12 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 		voxel = new OwningScalarVoxel<float>((float*)data_buffer);
 		break;
 	case Typing::DType::Float16:
-		voxel = new OwningScalarVoxel<_Float16>((_Float16*)data_buffer);
+#if RADFILED3D_HAS_FLOAT16
+		voxel = new OwningScalarVoxel<RadFiled3D::Typing::float16>((RadFiled3D::Typing::float16*)data_buffer);
 		break;
+#else
+		throw RadiationFieldStoreException("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
+#endif
 	case Typing::DType::Double:
 #if defined(__x86_64__) || defined(_M_X64)
 		voxel = new OwningScalarVoxel<double>((double*)data_buffer);

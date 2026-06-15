@@ -3,6 +3,10 @@ from typing import Any, Tuple
 from enum import Enum
 
 
+# Whether this build supports DType.FLOAT16 (requires a compiler providing _Float16).
+HAS_FLOAT16: bool
+
+
 class FieldShape(Enum):
     CONE = 0
     RECTANGLE = 1

@@ -112,8 +112,12 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 		layer = VoxelLayer::ConstructFromBufferRaw<float>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 		break;
 	case Typing::DType::Float16:
-		layer = VoxelLayer::ConstructFromBufferRaw<_Float16>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
+#if RADFILED3D_HAS_FLOAT16
+		layer = VoxelLayer::ConstructFromBufferRaw<RadFiled3D::Typing::float16>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 		break;
+#else
+		throw std::runtime_error("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
+#endif
 	case Typing::DType::Double:
 #if defined(__x86_64__) || defined(_M_X64)
 		layer = VoxelLayer::ConstructFromBufferRaw<double>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
@@ -177,7 +181,12 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::constructOwnedLayer(const Filed
 	case Typing::DType::Float:
 		return VoxelLayer::ConstructWithOwnedDataBuffer<float>(unit, voxel_count, stat_err, (float*)owned_data);
 	case Typing::DType::Float16:
-		return VoxelLayer::ConstructWithOwnedDataBuffer<_Float16>(unit, voxel_count, stat_err, (_Float16*)owned_data);
+#if RADFILED3D_HAS_FLOAT16
+		return VoxelLayer::ConstructWithOwnedDataBuffer<RadFiled3D::Typing::float16>(unit, voxel_count, stat_err, (RadFiled3D::Typing::float16*)owned_data);
+#else
+		delete[] owned_data;
+		throw std::runtime_error("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
+#endif
 	case Typing::DType::Double:
 #if defined(__x86_64__) || defined(_M_X64)
 		return VoxelLayer::ConstructWithOwnedDataBuffer<double>(unit, voxel_count, stat_err, (double*)owned_data);

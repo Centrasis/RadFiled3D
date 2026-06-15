@@ -57,6 +57,10 @@ def test_construction():
 
 
 def test_float16_layer_roundtrip(tmp_path):
+    import RadFiled3D.RadFiled3D as _core
+    if not getattr(_core, "HAS_FLOAT16", False):
+        import pytest
+        pytest.skip("build has no float16 support (compiler lacks _Float16)")
     field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
     field.add_channel("channel1")
     field.get_channel("channel1").add_layer("half", "unit", DType.FLOAT16)

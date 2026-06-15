@@ -6,8 +6,21 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+// Half precision (_Float16) requires a recent toolchain (GCC >= 12, modern Clang/MSVC-clang).
+// Older compilers (e.g. the gcc-toolset-10 in some manylinux images) don't provide the type, so
+// float16 support is compiled out there and any attempt to use it raises a clear runtime error.
+#if defined(__FLT16_MAX__)
+#define RADFILED3D_HAS_FLOAT16 1
+#else
+#define RADFILED3D_HAS_FLOAT16 0
+#endif
+
 namespace RadFiled3D {
 	namespace Typing {
+#if RADFILED3D_HAS_FLOAT16
+		using float16 = _Float16;
+#endif
+
 		enum class FieldShape : uint8_t {
 			Cone = 0,
 			Rectangle = 1,
@@ -57,7 +70,7 @@ namespace RadFiled3D {
 		// so it is identical on every OS/compiler. Scalar names match what existing files already
 		// store ("float"/"unsigned char"/"unsigned int"/…); glm uses short names that fit the field
 		// (older files store the long, truncated glm name and still load via get_dtype's "glm::vec<"
-		// prefix fallback). _Float16 additionally has no typeinfo, so it could not use typeid at all.
+		// prefix fallback). float16 additionally has no typeinfo, so it could not use typeid at all.
 		template<> inline std::string Helper::get_plain_type_name<float>()         { return "float"; }
 		template<> inline std::string Helper::get_plain_type_name<double>()        { return "double"; }
 		template<> inline std::string Helper::get_plain_type_name<int>()           { return "int"; }
@@ -69,7 +82,9 @@ namespace RadFiled3D {
 		// it actually is 64 bits; otherwise it keeps its legacy spelling (read as a 32-bit unsigned).
 		template<> inline std::string Helper::get_plain_type_name<unsigned long>() { return (sizeof(unsigned long) == 8) ? "uint64_t" : "unsigned long"; }
 		template<> inline std::string Helper::get_plain_type_name<unsigned long long>() { return "uint64_t"; }
-		template<> inline std::string Helper::get_plain_type_name<_Float16>()      { return "float16"; }
+#if RADFILED3D_HAS_FLOAT16
+		template<> inline std::string Helper::get_plain_type_name<float16>()       { return "float16"; }
+#endif
 		template<> inline std::string Helper::get_plain_type_name<glm::vec2>()     { return "glm::vec2"; }
 		template<> inline std::string Helper::get_plain_type_name<glm::vec3>()     { return "glm::vec3"; }
 		template<> inline std::string Helper::get_plain_type_name<glm::vec4>()     { return "glm::vec4"; }

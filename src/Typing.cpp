@@ -14,9 +14,15 @@ Typing::DType Typing::Helper::get_dtype(const std::string& dtype)
 	if (dtype == Typing::Helper::get_plain_type_name<float>()) {
 		return Typing::DType::Float;
 	}
-	if (dtype == Typing::Helper::get_plain_type_name<_Float16>()) {
+#if RADFILED3D_HAS_FLOAT16
+	if (dtype == Typing::Helper::get_plain_type_name<RadFiled3D::Typing::float16>()) {
 		return Typing::DType::Float16;
 	}
+#else
+	if (dtype == std::string("float16")) {
+		throw std::runtime_error("RadFiled3D was built without float16 support (the compiler lacks _Float16; needs GCC >= 12 or a modern Clang). Rebuild with a newer toolset to read float16 fields.");
+	}
+#endif
 	if (dtype == Typing::Helper::get_plain_type_name<double>()) {
 		return Typing::DType::Double;
 	}
@@ -103,7 +109,11 @@ size_t RadFiled3D::Typing::Helper::get_bytes_of_dtype(Typing::DType dtype)
 	case Typing::DType::Float:
 		return sizeof(float);
 	case Typing::DType::Float16:
-		return sizeof(_Float16);
+#if RADFILED3D_HAS_FLOAT16
+		return sizeof(RadFiled3D::Typing::float16);
+#else
+		throw std::runtime_error("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
+#endif
 	case Typing::DType::Double:
 		return sizeof(double);
 	case Typing::DType::Int:
