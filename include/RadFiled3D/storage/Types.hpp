@@ -7,6 +7,8 @@
 
 #ifdef __linux__
 #define strncpy_s(dest, src, count) strncpy(dest, src, count)
+#elif __APPLE__
+#define strncpy_s(dest, src, count) strncpy(dest, src, count)
 #endif
 
 namespace RadFiled3D {
