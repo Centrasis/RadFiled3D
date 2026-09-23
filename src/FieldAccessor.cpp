@@ -197,12 +197,7 @@ std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldAccessor::Deserialize(c
 
 StoreVersion RadFiled3D::Storage::FieldAccessor::getStoreVersion(std::istream& buffer)
 {
-	static_assert(std::is_trivially_copyable_v<VersionHeader>);
-	VersionHeader version;
-	buffer.clear();
-	buffer.seekg(0, std::ios::beg);
-	buffer.read((char*)&version, sizeof(VersionHeader));
-	std::string version_str = std::string(version.version);
+	const std::string version_str = RadFiled3D::Storage::read_file_version_header(buffer);
 
 	RadFiled3D::Storage::FieldStore::ensure_registered_stores();
 	return RadFiled3D::Storage::Registry::get_highest_supported_version_by(version_str);
@@ -234,7 +229,7 @@ void RadFiled3D::Storage::V1::FileParser::initialize(std::istream& buffer)
 	this->channels_layers_offsets.clear();
 	buffer.seekg(this->getFieldDataOffset(), std::ios::beg);
 
-	this->serializer = std::make_unique<BinayFieldBlockHandler>();
+	this->serializer = std::make_unique<BinaryFieldBlockHandler>();
 
 	size_t channel_pos = 0;
 	const size_t start_pos = buffer.tellg();
@@ -475,7 +470,7 @@ RadFiled3D::Storage::V1::CartesianFieldAccessor::CartesianFieldAccessor(const Se
 	this->store_version = StoreVersion::V1;
 	this->channels_layers_offsets = data.channels_layers_offsets;
 	this->default_grid = std::make_unique<VoxelGrid>(this->field_dimensions, this->voxel_dimensions);
-	this->serializer = std::make_unique<BinayFieldBlockHandler>();
+	this->serializer = std::make_unique<BinaryFieldBlockHandler>();
 }
 
 std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::CartesianFieldAccessor::accessField(std::istream& buffer) const
@@ -592,7 +587,7 @@ RadFiled3D::Storage::V1::PolarFieldAccessor::PolarFieldAccessor(const Serializat
 	this->store_version = StoreVersion::V1;
 	this->channels_layers_offsets = data.channels_layers_offsets;
 	this->default_segments = std::make_unique<PolarSegments>(this->segments_counts);
-	this->serializer = std::make_unique<BinayFieldBlockHandler>();
+	this->serializer = std::make_unique<BinaryFieldBlockHandler>();
 }
 
 IVoxel* RadFiled3D::Storage::V1::PolarFieldAccessor::accessVoxelRaw(std::istream& buffer, const std::string& channel_name, const std::string& layer_name, const glm::uvec2& voxel_idx) const
@@ -643,7 +638,7 @@ std::shared_ptr<FieldAccessor> FieldAccessorBuilder::Construct(std::istream& buf
 	{
 	case StoreVersion::V1:
 		buffer.seekg(RadFiled3D::Storage::V1::MetadataAccessor().get_metadata_size(buffer) + sizeof(Storage::FiledTypes::VersionHeader), std::ios::beg);
-		switch (RadFiled3D::Storage::V1::BinayFieldBlockHandler().getFieldType(buffer)) {
+		switch (RadFiled3D::Storage::V1::BinaryFieldBlockHandler().getFieldType(buffer)) {
 		case FieldType::Cartesian:
 			accessor = std::static_pointer_cast<FieldAccessor>(std::shared_ptr<Storage::V1::CartesianFieldAccessor>(new Storage::V1::CartesianFieldAccessor()));
 			break;

@@ -26,7 +26,7 @@ using namespace RadFiled3D;
 using namespace RadFiled3D::Storage::FiledTypes;
 using namespace RadFiled3D::Storage;
 
-bool FieldStore::file_lock_syncronization = false;
+bool FieldStore::file_lock_synchronization = false;
 
 
 void IRadiationFieldExporter::store(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> metadata, const std::string& file) const
@@ -49,58 +49,137 @@ void RadFiled3D::Storage::BasicFieldStore::serialize(std::ostream& stream, std::
 	this->field_serializer->serializeField(field, stream);
 }
 
-std::shared_ptr<IRadiationField> IRadiationFieldImporter::load(const std::string& file) const
-{
-	if (!fs::exists(file)) {
-		std::string msg = "File " + file + " does not exist!";
-		throw new RadiationFieldStoreException(msg.c_str());
+namespace {
+	/** True if the header text has the shape of a RadFiled3D version, i.e. "<digits>.<digits>". */
+	bool is_file_version_string(const std::string& version_str)
+	{
+		const size_t dot = version_str.find('.');
+		if (dot == std::string::npos || dot == 0 || dot + 1 >= version_str.length())
+			return false;
+
+		for (size_t i = 0; i < version_str.length(); i++) {
+			if (i == dot)
+				continue;
+			if (version_str[i] < '0' || version_str[i] > '9')
+				return false;
+		}
+		return true;
 	}
 
-	std::ifstream stream(file.c_str(), std::ios::in | std::ios::binary);
+	/** Renders raw header bytes printably, so a message built from them stays valid UTF-8. */
+	std::string describe_header_bytes(const char* data, size_t length)
+	{
+		static const char* hex = "0123456789abcdef";
+		std::string described;
+		for (size_t i = 0; i < length; i++) {
+			const unsigned char byte = static_cast<unsigned char>(data[i]);
+			if (byte >= 0x20 && byte < 0x7f)
+				described += static_cast<char>(byte);
+			else {
+				described += "\\x";
+				described += hex[(byte >> 4) & 0xf];
+				described += hex[byte & 0xf];
+			}
+		}
+		return described;
+	}
+
+	/** "File 'x'" when the path is known, "The given data" otherwise. */
+	std::string describe_source(const std::string& file_name)
+	{
+		return file_name.empty() ? std::string("The given data") : "File '" + file_name + "'";
+	}
+}
+
+std::string RadFiled3D::Storage::read_file_version_header(std::istream& stream, const std::string& file_name)
+{
+	static_assert(std::is_trivially_copyable_v<FiledTypes::VersionHeader>);
+
+	stream.clear();
 	stream.seekg(0, std::ios::beg);
+
+	FiledTypes::VersionHeader version;
+	stream.read((char*)&version, sizeof(FiledTypes::VersionHeader));
+	const std::streamsize read_bytes = stream.gcount();
+	stream.clear();
+
+	if (read_bytes < static_cast<std::streamsize>(sizeof(FiledTypes::VersionHeader))) {
+		stream.seekg(0, std::ios::beg);
+		throw RadiationFieldStoreException(describe_source(file_name) + " is not a RadFiled3D (.rf3) file: it is too short to contain a file header.");
+	}
+
+	// The stored version need not be NUL-terminated when it fills the field.
+	const size_t version_length = strnlen(version.version, sizeof(version.version));
+	const std::string version_str(version.version, version_length);
+
+	if (!is_file_version_string(version_str)) {
+		stream.seekg(0, std::ios::beg);
+		throw RadiationFieldStoreException(
+			describe_source(file_name) + " is not a RadFiled3D (.rf3) file: expected a version header like '1.1', but the file starts with '"
+			+ describe_header_bytes(version.version, sizeof(version.version)) + "'.");
+	}
+
+	// Leave the stream just past the header: callers continue with seeks relative to
+	// this position (the metadata block follows immediately).
+	stream.seekg(sizeof(FiledTypes::VersionHeader), std::ios::beg);
+	return version_str;
+}
+
+std::ifstream RadFiled3D::Storage::open_file_for_reading(const std::string& file)
+{
+	std::error_code ec;
+	if (!fs::exists(file, ec) || ec)
+		throw RadiationFieldStoreException("File '" + file + "' does not exist!");
+
+	if (fs::is_directory(file, ec))
+		throw RadiationFieldStoreException("Path '" + file + "' is a directory, not a RadFiled3D file!");
+
+	std::ifstream stream(file.c_str(), std::ios::in | std::ios::binary);
+	if (!stream.is_open())
+		throw RadiationFieldStoreException("File '" + file + "' exists, but could not be opened for reading!");
+
+	// Reject an unrelated file here, where the path is still known for the message.
+	Storage::read_file_version_header(stream, file);
+
+	stream.seekg(0, std::ios::beg);
+	return stream;
+}
+
+std::shared_ptr<IRadiationField> IRadiationFieldImporter::load(const std::string& file) const
+{
+	std::ifstream stream = Storage::open_file_for_reading(file);
 
 	return this->load(stream);
 }
 
 std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> IRadiationFieldImporter::load_metadata(const std::string& file) const
 {
-	if (!fs::exists(file)) {
-		std::string msg = "File " + file + " does not exist!";
-		throw new RadiationFieldStoreException(msg.c_str());
-	}
-
-	std::ifstream stream(file.c_str(), std::ios::in | std::ios::binary);
+	std::ifstream stream = Storage::open_file_for_reading(file);
 	return this->load_metadata(stream);
 }
 
 std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> IRadiationFieldImporter::peek_metadata(const std::string& file) const
 {
-	if (!fs::exists(file)) {
-		std::string msg = "File " + file + " does not exist!";
-		throw new RadiationFieldStoreException(msg.c_str());
-	}
-
-	std::ifstream stream(file.c_str(), std::ios::in | std::ios::binary);
+	std::ifstream stream = Storage::open_file_for_reading(file);
 	return this->peek_metadata(stream);
 }
 
-void RadFiled3D::Storage::BasicFieldStore::valdiate_file_version(std::istream& stream) const
+void RadFiled3D::Storage::BasicFieldStore::validate_file_version(std::istream& stream) const
 {
-	stream.seekg(0, std::ios::beg);
-	Storage::FiledTypes::VersionHeader version;
-	stream.read((char*)&version, sizeof(Storage::FiledTypes::VersionHeader));
+	// Throws a "not a RadFiled3D (.rf3) file" error when the header is not a version at all,
+	// so only a genuine version-range mismatch reaches the check below.
+	const std::string version_str = Storage::read_file_version_header(stream);
 
-	std::string version_str = std::string(version.version);
 	if (!this->check_version_string_validity(version_str)) {
 		std::string version_range = std::to_string(this->validity_range.major.min) + "." + std::to_string(this->validity_range.minor.min) + " <= x.y <= " + std::to_string(this->validity_range.major.max) + "." + std::to_string(this->validity_range.minor.max);
-		std::string msg = "File version mismatch! '" + std::string(version.version) + "' was not within the supported range for this field store. Valid range would have been: " + version_range;
+		std::string msg = "File version mismatch! '" + version_str + "' was not within the supported range for this field store. Valid range would have been: " + version_range;
 		throw RadiationFieldStoreException(msg.c_str());
 	}
 }
 
 FieldType Storage::BasicFieldStore::peek_field_type(std::istream& file_stream) const
 {
-	this->valdiate_file_version(file_stream);
+	this->validate_file_version(file_stream);
 
 	size_t metadata_size = this->metadata_accessor->get_metadata_size(file_stream);
 	file_stream.seekg(metadata_size, std::ios::cur);
@@ -115,7 +194,7 @@ FieldType RadFiled3D::Storage::FieldStore::peek_field_type(std::istream& file_st
 
 std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldStore::construct_accessor(const std::string& file)
 {
-	std::ifstream buffer(file, std::ios::in | std::ios::binary);
+	std::ifstream buffer = Storage::open_file_for_reading(file);
 	return RadFiled3D::Storage::FieldStore::construct_accessor(buffer);
 }
 
@@ -127,7 +206,7 @@ std::shared_ptr<FieldAccessor> RadFiled3D::Storage::FieldStore::construct_access
 
 std::shared_ptr<IRadiationField> Storage::BasicFieldStore::load(std::istream& buffer) const
 {
-	this->valdiate_file_version(buffer);
+	this->validate_file_version(buffer);
 
 	size_t metadata_size = this->metadata_accessor->get_metadata_size(buffer);
 	buffer.seekg(metadata_size, std::ios::cur);
@@ -138,7 +217,7 @@ std::shared_ptr<IRadiationField> Storage::BasicFieldStore::load(std::istream& bu
 
 std::shared_ptr<VoxelLayer> Storage::V1::FieldStore::load_single_layer(std::istream& buffer, const std::string& channel, const std::string& layer_name) const
 {
-	this->valdiate_file_version(buffer);
+	this->validate_file_version(buffer);
 	FiledTypes::V1::RadiationFieldHeader desc;
 
 	size_t metadata_size = this->get_metadata_accessor().get_metadata_size(buffer);
@@ -207,13 +286,13 @@ std::shared_ptr<VoxelLayer> Storage::V1::FieldStore::load_single_layer(std::istr
 
 std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> Storage::BasicFieldStore::peek_metadata(std::istream& buffer) const
 {
-	this->valdiate_file_version(buffer);
+	this->validate_file_version(buffer);
 	return this->get_metadata_accessor().accessMetadata(buffer, true);
 }
 
 std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> RadFiled3D::Storage::BasicFieldStore::load_metadata(std::istream& buffer) const
 {
-	this->valdiate_file_version(buffer);
+	this->validate_file_version(buffer);
 	return this->metadata_accessor->accessMetadata(buffer, false);
 
 }
@@ -301,11 +380,7 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 
 StoreVersion RadFiled3D::Storage::FieldStore::get_store_version(const std::string& file)
 {
-	std::ifstream buffer(file, std::ios::in | std::ios::binary);
-	if (!buffer.is_open()) {
-		std::string msg = "File " + file + " does not exist!";
-		throw RadiationFieldStoreException(msg.c_str());
-	}
+	std::ifstream buffer = Storage::open_file_for_reading(file);
 	return FieldAccessor::getStoreVersion(buffer);
 }
 
@@ -335,7 +410,7 @@ void FieldStore::serialize(std::ostream& stream, std::shared_ptr<IRadiationField
 
 std::shared_ptr<IRadiationField> FieldStore::load(const std::string& file)
 {
-	std::ifstream buffer(file, std::ios::in | std::ios::binary);
+	std::ifstream buffer = Storage::open_file_for_reading(file);
 	return FieldStore::get_store_by(buffer)->load(buffer);
 }
 
@@ -346,7 +421,7 @@ std::shared_ptr<IRadiationField> FieldStore::load(std::istream& buffer)
 
 std::shared_ptr<RadiationFieldMetadata> FieldStore::load_metadata(const std::string& file)
 {
-	std::ifstream buffer(file, std::ios::in | std::ios::binary);
+	std::ifstream buffer = Storage::open_file_for_reading(file);
 	return FieldStore::get_store_by(buffer)->load_metadata(buffer);
 }
 
@@ -374,7 +449,7 @@ std::shared_ptr<VoxelLayer> FieldStore::load_single_layer(std::istream& buffer, 
 
 void FieldStore::join(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, FieldJoinMode join_mode, FieldJoinCheckMode check_mode, StoreVersion fallback_version)
 {
-	FileLock file_lock(file, FieldStore::file_lock_syncronization);
+	FileLock file_lock(file, FieldStore::file_lock_synchronization);
 
 	if (!fs::exists(file)) {
 		FieldStore::ensure_registered_stores();
@@ -451,7 +526,7 @@ void FieldStore::join(std::shared_ptr<IRadiationField> field, std::shared_ptr<Ra
 
 std::shared_ptr<Storage::RadiationFieldMetadata> FieldStore::peek_metadata(const std::string& file)
 {
-	std::ifstream buffer(file, std::ios::in | std::ios::binary);
+	std::ifstream buffer = Storage::open_file_for_reading(file);
 	return FieldStore::peek_metadata(buffer);
 }
 

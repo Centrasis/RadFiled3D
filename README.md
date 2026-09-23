@@ -1,6 +1,9 @@
 # RadFiled3D
 
 ![Tests](https://github.com/Centrasis/RadFiled3D/actions/workflows/package-test-publish.yml/badge.svg)
+[![PyPI](https://img.shields.io/pypi/v/RadFiled3D)](https://pypi.org/project/RadFiled3D/)
+[![Python versions](https://img.shields.io/pypi/pyversions/RadFiled3D)](https://pypi.org/project/RadFiled3D/)
+[![License](https://img.shields.io/github/license/Centrasis/RadFiled3D)](./LICENSE)
 
 This Repository contains the file format and API according to the Paper: "[RadField3D: A Data Generator and Data Format for Deep Learning in Radiation-Protection Dosimetry for Medical Applications](https://iopscience.iop.org/article/10.1088/1361-6498/add53d)".
 
@@ -25,26 +28,38 @@ The aim of this library is, to provide a simple to use API for a structured, bin
     - [Available Voxel Datatypes](#available-voxel-datatypes)
 - [Field Structure](#field-structure)
 - [Dependencies](#dependencies)
+- [Citation](#citation)
 
 ## Building and Installing
 ### Installing from PyPi
-Prebuilt versions of this module for python 3.11, 3.12 and 3.13 for Windows and most Linuxsystems can be installed directly by using pip.
-
 ``pip install RadFiled3D``
+
+Prebuilt wheels are published for:
+
+| Platform | Architectures | Python |
+| -------- | ------------- | ------ |
+| Linux (manylinux 2.28 / 2.17, musllinux 1.2) | x86_64 | 3.11 – 3.14 |
+| Windows | x64 | 3.12 – 3.14 |
+| macOS (11+ on Apple silicon, 10.15+ on Intel) | arm64, x86_64 | 3.11 – 3.14 |
+
+On any other platform pip falls back to the source distribution and compiles the module on the fly;
+this needs a C++20 compiler, while CMake and Ninja are provisioned automatically by the build
+backend.
 
 ### Installing from Source
 You can build and install this library and python module from source by using CMake and a C++ compiler. The CMake Project will be 
 built automatically, but will take some time.
 
 #### Prerequisites
-- C++ Compiler
-  - g++ or clang for Linux
+- C++20 compiler
+  - g++ >= 10 or clang for Linux
   - MSVC or clang from Visual Studio 2022 for Windows
-- CMake >= 3.30
+  - Apple clang (Xcode command line tools) for macOS
+- CMake >= 3.16 (only needed for standalone C++ builds; `pip` provisions its own)
 - Python >= 3.11
 
 #### CMake
-In order to use the module directly from another C++ Project, you can integrate it by adding the local location of this repository via `add_submodule()` and then link against the target `libRadFiled3D`. All classes are then available from the namespace `RadFiled3D`. Check the [Example](./examples/cxx/example01.cpp) or the [First Test File](./tests/basic.cpp) as a first reference.
+In order to use the module directly from another C++ Project, you can integrate it by adding the local location of this repository via `add_subdirectory()` and then link against the target `libRadFiled3D`. All classes are then available from the namespace `RadFiled3D`. Check the [Example](./examples/cxx/example01.cpp) or the [First Test File](./tests/basic.cpp) as a first reference.
 
 #### Python
 The Python package is built with [scikit-build-core](https://scikit-build-core.readthedocs.io/), the standard PEP 517 backend for CMake projects. It drives the CMake/pybind11 build automatically; no `setup.py` is required. CMake and Ninja are provisioned by the build backend if they are not already present.
@@ -94,88 +109,98 @@ metadata2 = FieldStore.load_metadata("test01.rf3")
 ### Integrating with pyTorch
 RadFiled3D comes with a submodule at `RadFiled3D.pytorch`. This module provides some dataset classes to support the usage. Datasets can be loaded from folders or .zip-Files.
 ```python
+import torch
+from RadFiled3D.pytorch import DataLoaderBuilder
 from RadFiled3D.pytorch.datasets import MetadataLoadMode
 from RadFiled3D.pytorch.datasets.cartesian import CartesianFieldSingleLayerDataset
-from RadFiled3D.pytorch import DataLoaderBuilder
 from RadFiled3D.pytorch.helpers import RadiationFieldHelper
-from RadFiled3D.RadFiled3D import VoxelGrid
-from torch import Tensor
-from RadFiled3D.metadata.v1 import Metadata
-from RadFiled3D.pytorch.types import TrainingInputData, DirectionalInput
+from RadFiled3D.pytorch.types import DirectionalInput, TrainingInputData
 
 
 # Extend one of the provided dataset classes to match the output to the current needs
 class MyLayerDataset(CartesianFieldSingleLayerDataset):
-    def __getitem____(self, idx: int) -> TrainingInputData:
+    def __getitem__(self, idx: int) -> TrainingInputData:
         layer, metadata = super().__getitem__(idx)
-        tube_dir = metadata.get_header().simulation.tube.radiation_direction
-        tube_pos = metadata.get_header().simulation.tube.radiation_origin
+        tube = metadata.get_header().simulation.tube
+        tube_dir, tube_pos = tube.radiation_direction, tube.radiation_origin
         # transform the layers data to a tensor
         return TrainingInputData(
             input=DirectionalInput(
                 direction=torch.tensor([tube_dir.x, tube_dir.y, tube_dir.z]),
                 origin=torch.tensor([tube_pos.x, tube_pos.y, tube_pos.z]),
-                spectrum=None
-            )
-            ground_truth=RadiationFieldHelper.load_tensor_from_layer(layer)
+                # the tube spectrum lives in the dynamic metadata, so reading it
+                # would require MetadataLoadMode.FULL below
+                spectrum=None,
+            ),
+            ground_truth=RadiationFieldHelper.load_tensor_from_layer(layer),
         )
 
 
-def finalize_dataset(dataset: MyLayerDataset)
+# Optional: provide a finalizer to configure the dataset once the builder created it
+def finalize_dataset(dataset: MyLayerDataset) -> None:
     dataset.set_channel_and_layer("test_channel", "test_layer")
     dataset.metadata_load_mode = MetadataLoadMode.HEADER
 
-# Pass the dataset class and other options to the DataLoaderBuilder
-builder = DataLoaderBuilder(
-    "./test_dataset.zip",
-    train_ratio=0.7,
-    val_ratio=0.15,
-    test_ratio=0.15,
-    dataset_class=MyLayerDataset,
-    on_dataset_created=finalize_dataset     # Optional: provide a finalizer to perform configuration of the dataset once it was created by the builder
-)
 
-# Build the training dataset
-train_dl = builder.build_train_dataloader(
-    batch_size=8,
-    shuffle=True,
-    worker_count=4
-)
+# Guard the entry point: with more than one worker, python re-imports this module
+# in every worker process (the default start method is spawn on Windows/macOS and
+# forkserver on Linux as of python 3.14).
+if __name__ == "__main__":
+    # Pass the dataset class and other options to the DataLoaderBuilder
+    builder = DataLoaderBuilder(
+        "./test_dataset.zip",
+        train_ratio=0.7,
+        val_ratio=0.15,
+        test_ratio=0.15,
+        dataset_class=MyLayerDataset,
+        on_dataset_created=finalize_dataset,
+    )
 
-# iterate over the dataset
-for field, metadata in train_dl:
-    pass
+    # Build the training dataset
+    train_dl = builder.build_train_dataloader(
+        batch_size=8,
+        shuffle=True,
+        worker_count=4,
+    )
+
+    # iterate over the dataset; every batch is a TrainingInputData of stacked tensors
+    for train_data in train_dl:
+        model_input = train_data.input        # DirectionalInput, direction: (8, 3)
+        ground_truth = train_data.ground_truth  # (8, c, x, y, z)
 ```
 
 #### Direct integration with RadField3D datasets
 Directly iterate RadField3D datasets either by loading whole fields or iterating each voxel independently. The dataset classes will return pyTorch compatible NamedTuples, that preserve the structure of the raw radiation fields and layers.
 ```python
-from RadField3D.pytorch.datasets.radfield3d import RadField3DDataset
-from RadField3D.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset
+from RadFiled3D.pytorch import DataLoaderBuilder
+from RadFiled3D.pytorch.datasets.radfield3d import RadField3DDataset, RadField3DVoxelwiseDataset
 # import the pyTorch compatible datatypes
-from RadField3D.pytorch import DataLoaderBuilder
-from RadField3D.pytorch.types import DirectionalInput, PositionalInput, TrainingInputData, RadiationField
+from RadFiled3D.pytorch.types import DirectionalInput, PositionalInput, RadiationField, TrainingInputData
 
 
-builder = DataLoaderBuilder(
-    "./test_dataset_folder/",
-    train_ratio=0.7,
-    val_ratio=0.15,
-    test_ratio=0.15,
-    dataset_class=RadField3DDataset
-)
+if __name__ == "__main__":
+    builder = DataLoaderBuilder(
+        "./test_dataset_folder/",
+        train_ratio=0.7,
+        val_ratio=0.15,
+        test_ratio=0.15,
+        dataset_class=RadField3DDataset
+    )
 
-train_dl = builder.build_train_dataloader(
-    batch_size=8,
-    shuffle=True,
-    worker_count=4
-)
+    train_dl = builder.build_train_dataloader(
+        batch_size=8,
+        shuffle=True,
+        worker_count=4
+    )
 
-# iterate over the dataset using fully useable pyTorch classes
-for train_data in train_dl:
-    input: DirectionalInput | PositionalInput = train_data.input
-    field: RadiationField = train_data.ground_truth
+    # iterate over the dataset using fully useable pyTorch classes
+    for train_data in train_dl:
+        model_input: DirectionalInput | PositionalInput = train_data.input
+        field: RadiationField = train_data.ground_truth
 ```
+
+Swap `dataset_class` for `RadField3DVoxelwiseDataset` to iterate single voxels instead of whole
+fields, or for `RadField3DDatasetWithGeometry` to also receive the phantom density map.
 **TrainingInputData** consists of two components
 **metadata** (as ``DirectionalInput`` or ``PositionalInput``) contains the following information 
 - radiation direction (x, y, z)
@@ -215,15 +240,19 @@ from RadFiled3D.RadFiled3D import vec3, GridTracerFactory, GridTracerAlgorithm, 
 
 field = CartesianRadiationField(vec3(1.0, 1.0, 1.0), vec3(0.01, 0.01, 0.01))
 field.add_channel("test").add_layer("flux", "counts", DType.INT32)
-hits_counts = field.get_channel("test").get_layer_as_ndarray("flux")
-hits_counts = hits_counts.flatten()
 
 tracer = GridTracerFactory.construct(field, GridTracerAlgorithm.SAMPLING)
-
 indices = tracer.trace(vec3(0.5, 0.5, 0.0), vec3(0.5, 0.85, 1.0))
-hits_counts[indices] += 1
-grid_shape = field.get_voxel_counts()
-hits_counts.reshape((grid_shape.x, grid_shape.y, grid_shape.z))
+
+# The layer array is a zero-copy view of shape (x, y, z, elements_per_voxel) in
+# which x varies fastest, exactly like the flat voxel indices the tracer returns.
+# Flattening it with order="F" therefore keeps the view, and the increments land
+# in the field itself -- .flatten() would copy and the writes would be lost.
+hits_counts = field.get_channel("test").get_layer_as_ndarray("flux")
+hits_counts.reshape(-1, order="F")[indices] += 1
+
+# ... and the 3D view of the same data, for plotting or further processing
+hits_per_voxel = hits_counts[..., 0]
 ```
 
 ### Faster loading of field series
@@ -251,20 +280,22 @@ Simple example on how to create and store a radiation field. Find more in the ex
 ```c++
 #include <RadFiled3D/storage/RadiationFieldStore.hpp>
 #include <RadFiled3D/RadiationField.hpp>
+#include <memory>
 
 using namespace RadFiled3D;
 using namespace RadFiled3D::Storage;
 
-void main() {
+int main() {
     auto field = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f)); // field extents: 2.5 m x 2.5 m x 2.5 m and voxel extents: 5 cm x 5 cm x 5 cm
 
     auto metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-        // learn about the existing data fields from the example file in ./examples/cxx/examples01.cpp
-    )
+        // learn about the existing data fields from the example file in ./examples/cxx/example01.cpp
+    );
 
     FieldStore::store(field, metadata, "test_field.rf3", StoreVersion::V1);
 
     auto field2 = FieldStore::load("test_field.rf3");
+    return 0;
 }
 ```
 
@@ -281,11 +312,18 @@ In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datat
 | uint32_t   | DType.UINT32  |
 | uint64_t   | DType.UINT64  |
 | unsigned long long | DType.UINT64  |
+| _Float16   | DType.FLOAT16 |
 | glm::vec2     | DType.VEC2 |
 | glm::vec3     | DType.VEC3 |
 | glm::vec4     | DType.VEC4 |
 | HistogramVoxel<float> | DType.HISTOGRAM |
 | AngularResolvedVoxel<float> | DType.ANGULAR |
+
+`DType.FLOAT16` requires a compiler that provides `_Float16` (GCC >= 12, a recent clang). Builds
+without it compile the type out and raise a clear error when it is used, so check
+`RadFiled3D.RadFiled3D.HAS_FLOAT16` before relying on it — it is not available in every published
+wheel (for 1.3.6 the manylinux_2_28 and musllinux wheels have it, the manylinux2014 and Windows
+ones do not).
 
 
 ## Field Structure
@@ -307,3 +345,23 @@ All python dependencies:
 - [numpy](https://numpy.org/)
 - Optional:
   - [pyTorch](https://pytorch.org/)
+
+## Citation
+If you use RadFiled3D in academic work, please cite the paper describing the format and the data generator:
+
+> Lehner, F., Lombardo, P., Castillo, S., Hupe, O. and Magnor, M. (2025).
+> *RadField3D: a data generator and data format for deep learning in radiation-protection dosimetry for medical applications.*
+> Journal of Radiological Protection **45**(2), 021508. https://doi.org/10.1088/1361-6498/add53d
+
+```bibtex
+@article{Lehner2025RadField3D,
+  author  = {Lehner, Felix and Lombardo, Pasquale and Castillo, Susana and Hupe, Oliver and Magnor, Marcus},
+  title   = {RadField3D: a data generator and data format for deep learning in radiation-protection dosimetry for medical applications},
+  journal = {Journal of Radiological Protection},
+  volume  = {45},
+  number  = {2},
+  pages   = {021508},
+  year    = {2025},
+  doi     = {10.1088/1361-6498/add53d}
+}
+```

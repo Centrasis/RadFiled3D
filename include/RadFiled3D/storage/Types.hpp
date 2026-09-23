@@ -14,7 +14,11 @@
 namespace RadFiled3D {
 	class RadiationFieldStoreException : public std::runtime_error {
 	public:
-		RadiationFieldStoreException(const std::string& message) : std::runtime_error("RadiationFieldStoreException: " + message) {}
+		// The message is passed through unchanged: the exception type is already
+		// reported by whoever catches it (pybind11 prefixes the registered name in
+		// python), so prepending it here only produced "RadiationFieldStoreException:
+		// RadiationFieldStoreException: ...".
+		RadiationFieldStoreException(const std::string& message) : std::runtime_error(message) {}
 	};
 
 	enum class FieldType {
@@ -150,14 +154,14 @@ namespace RadFiled3D {
 		};
 
 		namespace V1 {
-			class BinayFieldBlockHandler;
+			class BinaryFieldBlockHandler;
 
 			class RadiationFieldMetadata : public RadFiled3D::Storage::RadiationFieldMetadata {
 				friend class RadFiled3D::Storage::FieldStore;
 			protected:
 				FiledTypes::V1::RadiationFieldMetadataHeader header;
 				std::shared_ptr<VoxelBuffer> dynamic_metadata;
-				Storage::V1::BinayFieldBlockHandler* serializer;
+				Storage::V1::BinaryFieldBlockHandler* serializer;
 			public:
 				virtual size_t get_metadata_size(std::istream& stream) const override;
 
@@ -202,9 +206,27 @@ namespace RadFiled3D {
 					return metadata;
 				}
 
+				/** Accesses a dynamic metadata entry by key
+				* @param key The key of the entry
+				* @return A reference to the entry's voxel
+				* @throws RadiationFieldStoreException if no entry is stored under that key
+				*/
 				template<typename VoxelT = ScalarVoxel<float>>
 				VoxelT& get_dynamic_metadata(const std::string& key) const {
+					if (!this->dynamic_metadata->has_layer(key))
+						throw RadiationFieldStoreException("No dynamic metadata named '" + key + "'. Available keys: " + this->describe_dynamic_metadata_keys());
 					return this->dynamic_metadata->get_voxel_flat<VoxelT>(key, 0);
+				}
+
+				/** Lists the stored dynamic metadata keys for use in error messages */
+				std::string describe_dynamic_metadata_keys() const {
+					std::string available;
+					for (auto& name : this->dynamic_metadata->get_layers()) {
+						if (!available.empty())
+							available += ", ";
+						available += "'" + name + "'";
+					}
+					return available.empty() ? std::string("(none)") : available;
 				}
 
 				std::vector<std::string> get_dynamic_metadata_keys() const {

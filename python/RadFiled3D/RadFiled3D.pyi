@@ -1283,7 +1283,7 @@ class PolarFieldAccessor(FieldAccessor):
 
 class FieldStore:
     @staticmethod
-    def enable_file_lock_syncronization(enable: bool) -> None:
+    def enable_file_lock_synchronization(enable: bool) -> None:
         """
         Enable or disable file transaction synchronization. This will make sure, that only one process can perform transactions such as joining on a file at a time and that other processes are queued.
         

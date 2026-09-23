@@ -878,7 +878,7 @@ namespace {
 			)
 		);
 
-		FieldStore::enable_file_lock_syncronization(true);
+		FieldStore::enable_file_lock_synchronization(true);
 		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test07.rf3", StoreVersion::V1));
 		EXPECT_NO_THROW(FieldStore::join(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test07.rf3", FieldJoinMode::Add, FieldJoinCheckMode::Strict));
 
@@ -948,4 +948,93 @@ namespace {
 		metadata = std::dynamic_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::load_metadata("test07.rf3"));
 		EXPECT_EQ(metadata->get_header().simulation.primary_particle_count, 100);
 	}*/
+}
+
+TEST(Storage, MissingFileReportsItself) {
+	const std::string missing = "this_file_does_not_exist.rf3";
+
+	// The path-taking importers used to `throw new ...`, i.e. throw a pointer, which
+	// no `catch (const RadiationFieldStoreException&)` could ever match.
+	EXPECT_THROW(FieldStore::load(missing), RadiationFieldStoreException);
+	EXPECT_THROW(FieldStore::load_metadata(missing), RadiationFieldStoreException);
+	EXPECT_THROW(FieldStore::peek_metadata(missing), RadiationFieldStoreException);
+	EXPECT_THROW(FieldStore::get_store_version(missing), RadiationFieldStoreException);
+	EXPECT_THROW(FieldStore::construct_accessor(missing), RadiationFieldStoreException);
+
+	// ... and the message must name the file instead of blaming its (empty) contents.
+	try {
+		FieldStore::load(missing);
+		FAIL() << "expected a RadiationFieldStoreException";
+	}
+	catch (const RadiationFieldStoreException& e) {
+		const std::string what = e.what();
+		EXPECT_NE(what.find(missing), std::string::npos) << what;
+		EXPECT_NE(what.find("does not exist"), std::string::npos) << what;
+		EXPECT_EQ(what.find("version string"), std::string::npos) << what;
+	}
+}
+
+TEST(Storage, MissingDynamicMetadataKeyReportsItself) {
+	auto metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>();
+	metadata->add_dynamic_metadata<float>("known_key", 1.f);
+
+	try {
+		metadata->get_dynamic_metadata<ScalarVoxel<float>>("absent_key");
+		FAIL() << "expected a RadiationFieldStoreException";
+	}
+	catch (const RadiationFieldStoreException& e) {
+		const std::string what = e.what();
+		EXPECT_NE(what.find("absent_key"), std::string::npos) << what;
+		EXPECT_NE(what.find("known_key"), std::string::npos) << what;  // lists what IS there
+	}
+
+	EXPECT_NO_THROW(metadata->get_dynamic_metadata<ScalarVoxel<float>>("known_key"));
+}
+
+TEST(Storage, NonRadFiled3DFileIsRejected) {
+	// A file that exists but is not a field file must say exactly that, rather than
+	// failing later on its contents ("Found version string: '<binary>' was invalid!").
+	const std::string foreign = "not_a_field_file.bin";
+	{
+		std::ofstream out(foreign, std::ios::binary);
+		const unsigned char junk[] = { 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0xb0, 0x00, 0x1f, 0x7f, 0x42 };
+		out.write((const char*)junk, sizeof(junk));
+	}
+
+	try {
+		FieldStore::load(foreign);
+		FAIL() << "expected a RadiationFieldStoreException";
+	}
+	catch (const RadiationFieldStoreException& e) {
+		const std::string what = e.what();
+		EXPECT_NE(what.find("is not a RadFiled3D (.rf3) file"), std::string::npos) << what;
+		EXPECT_NE(what.find(foreign), std::string::npos) << what;
+		// the raw bytes must be escaped, never pasted verbatim into the message
+		EXPECT_NE(what.find("\\x89"), std::string::npos) << what;
+		for (char c : what)
+			EXPECT_TRUE(static_cast<unsigned char>(c) < 0x80) << "message must stay printable ASCII: " << what;
+	}
+
+	EXPECT_THROW(FieldStore::load_metadata(foreign), RadiationFieldStoreException);
+	EXPECT_THROW(FieldStore::get_store_version(foreign), RadiationFieldStoreException);
+	EXPECT_THROW(FieldStore::construct_accessor(foreign), RadiationFieldStoreException);
+
+	// a file too short to even hold the header
+	const std::string truncated = "truncated_field_file.rf3";
+	{
+		std::ofstream out(truncated, std::ios::binary);
+		out << "1.1";
+	}
+	try {
+		FieldStore::load(truncated);
+		FAIL() << "expected a RadiationFieldStoreException";
+	}
+	catch (const RadiationFieldStoreException& e) {
+		const std::string what = e.what();
+		EXPECT_NE(what.find("is not a RadFiled3D (.rf3) file"), std::string::npos) << what;
+		EXPECT_NE(what.find("too short"), std::string::npos) << what;
+	}
+
+	std::remove(foreign.c_str());
+	std::remove(truncated.c_str());
 }

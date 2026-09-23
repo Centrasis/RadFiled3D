@@ -15,7 +15,7 @@ using namespace RadFiled3D;
 using namespace RadFiled3D::Storage;
 using namespace RadFiled3D::Storage::FiledTypes;
 
-void Storage::V1::BinayFieldBlockHandler::serializeField(std::shared_ptr<IRadiationField> field, std::ostream& buffer) const
+void Storage::V1::BinaryFieldBlockHandler::serializeField(std::shared_ptr<IRadiationField> field, std::ostream& buffer) const
 {
 	FiledTypes::V1::RadiationFieldHeader desc;
 
@@ -53,7 +53,7 @@ void Storage::V1::BinayFieldBlockHandler::serializeField(std::shared_ptr<IRadiat
 	}
 }
 
-std::unique_ptr<std::ostringstream> Storage::V1::BinayFieldBlockHandler::serializeChannel(std::shared_ptr<VoxelBuffer> voxel_buffer) const
+std::unique_ptr<std::ostringstream> Storage::V1::BinaryFieldBlockHandler::serializeChannel(std::shared_ptr<VoxelBuffer> voxel_buffer) const
 {
 	auto layers = voxel_buffer->get_layers();
 
@@ -80,7 +80,7 @@ std::unique_ptr<std::ostringstream> Storage::V1::BinayFieldBlockHandler::seriali
 	return oss;
 }
 
-VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, size_t size) const
+VoxelLayer* Storage::V1::BinaryFieldBlockHandler::deserializeLayer(char* data, size_t size) const
 {
 	if (size < sizeof(FiledTypes::V1::VoxelGridLayerHeader))
 		throw std::runtime_error("Data is too small to contain a valid layer header");
@@ -169,7 +169,7 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayer(char* data, si
 	return layer;
 }
 
-VoxelLayer* Storage::V1::BinayFieldBlockHandler::constructOwnedLayer(const FiledTypes::V1::VoxelGridLayerHeader& layer_desc, size_t voxel_count, char* owned_data, const void* header_data)
+VoxelLayer* Storage::V1::BinaryFieldBlockHandler::constructOwnedLayer(const FiledTypes::V1::VoxelGridLayerHeader& layer_desc, size_t voxel_count, char* owned_data, const void* header_data)
 {
 	const Typing::DType dtype = Typing::Helper::get_dtype(std::string(layer_desc.dtype));
 	const std::string unit(layer_desc.unit);
@@ -225,7 +225,7 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::constructOwnedLayer(const Filed
 	}
 }
 
-VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayerFromStream(std::istream& buffer, size_t size) const
+VoxelLayer* Storage::V1::BinaryFieldBlockHandler::deserializeLayerFromStream(std::istream& buffer, size_t size) const
 {
 	if (size < sizeof(FiledTypes::V1::VoxelGridLayerHeader))
 		throw std::runtime_error("Data is too small to contain a valid layer header");
@@ -255,7 +255,7 @@ VoxelLayer* Storage::V1::BinayFieldBlockHandler::deserializeLayerFromStream(std:
 	return constructOwnedLayer(layer_desc, voxel_count, data, header_data.empty() ? nullptr : header_data.data());
 }
 
-std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeChannel(std::shared_ptr<VoxelBuffer> destination, char* data, size_t size) const
+std::shared_ptr<VoxelBuffer> Storage::V1::BinaryFieldBlockHandler::deserializeChannel(std::shared_ptr<VoxelBuffer> destination, char* data, size_t size) const
 {
 	const size_t voxel_count = destination->get_voxel_count();
 	size_t mem_pos = 0;
@@ -281,7 +281,7 @@ std::shared_ptr<VoxelBuffer> Storage::V1::BinayFieldBlockHandler::deserializeCha
 	return destination;
 }
 
-void Storage::V1::BinayFieldBlockHandler::deserializeChannelFromStream(std::shared_ptr<VoxelBuffer> destination, std::istream& buffer, size_t channel_bytes) const
+void Storage::V1::BinaryFieldBlockHandler::deserializeChannelFromStream(std::shared_ptr<VoxelBuffer> destination, std::istream& buffer, size_t channel_bytes) const
 {
 	const size_t voxel_count = destination->get_voxel_count();
 	size_t consumed = 0;
@@ -307,7 +307,7 @@ void Storage::V1::BinayFieldBlockHandler::deserializeChannelFromStream(std::shar
 	}
 }
 
-void Storage::V1::BinayFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, float max_energy_eV, const std::string& unit, void* header_data)
+void Storage::V1::BinaryFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, float max_energy_eV, const std::string& unit, void* header_data)
 {
 	HistogramVoxel<float> hist;
 	if (header_data != nullptr)
@@ -315,7 +315,7 @@ void Storage::V1::BinayFieldBlockHandler::add_hist_layer(std::shared_ptr<VoxelBu
 	field->add_custom_layer<HistogramVoxel<float>, float>(layer, hist, 0.f, unit);
 }
 
-void Storage::V1::BinayFieldBlockHandler::add_spherical_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data)
+void Storage::V1::BinaryFieldBlockHandler::add_spherical_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data)
 {
 	AngularResolvedVoxel<float> sph;
 	if (header_data != nullptr)
@@ -323,7 +323,7 @@ void Storage::V1::BinayFieldBlockHandler::add_spherical_layer(std::shared_ptr<Vo
 	field->add_custom_layer<AngularResolvedVoxel<float>, float>(layer, sph, 0.f, unit);
 }
 
-std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::BinayFieldBlockHandler::deserializeField(std::istream& buffer) const
+std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::BinaryFieldBlockHandler::deserializeField(std::istream& buffer) const
 {
 	FiledTypes::V1::RadiationFieldHeader desc;
 
@@ -352,13 +352,13 @@ std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::BinayFieldBlockHandler
 		if (buffer.eof())
 			break;
 
-		BinayFieldBlockHandler::deserializeChannelFromStream(field->add_channel(std::string(ch.name)), buffer, ch.channel_bytes);
+		BinaryFieldBlockHandler::deserializeChannelFromStream(field->add_channel(std::string(ch.name)), buffer, ch.channel_bytes);
 	}
 
 	return field;
 }
 
-RadFiled3D::FieldType RadFiled3D::Storage::V1::BinayFieldBlockHandler::getFieldType(std::istream& buffer) const
+RadFiled3D::FieldType RadFiled3D::Storage::V1::BinaryFieldBlockHandler::getFieldType(std::istream& buffer) const
 {
 	FiledTypes::V1::RadiationFieldHeader desc;
 	buffer.read((char*)&desc, sizeof(FiledTypes::V1::RadiationFieldHeader));

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16...3.29)
+cmake_minimum_required(VERSION 3.16...4.2)
 
 # Set the project name
 project(RadiationFieldStorage LANGUAGES CXX)
@@ -15,16 +15,21 @@ option(BUILD_EXAMPLES "Build the examples" OFF)
 option(RS_Build_PyBindings "If the python bindings should be build" ON)
 
 message(STATUS "Download GLM...")
+# GLM ships its own tests and install rules; both are turned off so that a
+# `cmake --install` (as run by scikit-build-core when assembling the wheel)
+# only ever contains RadFiled3D's own artifacts.
+set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
   glm
   GIT_REPOSITORY https://github.com/g-truc/glm.git
-  GIT_TAG        1.0.1
+  GIT_TAG        1.0.3
+  GIT_SHALLOW    TRUE
 )
-FetchContent_GetProperties(glm)
-if(NOT glm_POPULATED)
-  FetchContent_Populate(glm)
-  add_subdirectory(${glm_SOURCE_DIR} ${glm_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
+# FetchContent_MakeAvailable instead of the deprecated single-argument
+# FetchContent_Populate(): the latter is an error under CMake >= 3.30 policy
+# CMP0169, which any CMake 4.x provisioned by pip would enforce.
+FetchContent_MakeAvailable(glm)
 
 if(RS_Build_PyBindings)
   set(PYTHON_VERSION "3.11" CACHE STRING "Python Version to use for pyBind11 and conda.")
@@ -53,23 +58,16 @@ if(RS_Build_PyBindings)
   find_package(pybind11 CONFIG QUIET)
   if(pybind11_FOUND)
     message(STATUS "Found pybind11 via find_package: ${pybind11_VERSION}")
-  elseif(NOT DEFINED fetch_pybind_POPULATED)
+  else()
     message(STATUS "pybind11 not found, fetching via FetchContent...")
     FetchContent_Declare(
       fetch_pybind
       GIT_REPOSITORY https://github.com/pybind/pybind11.git
-      GIT_TAG        v3.0.4 # v2.13.6
+      GIT_TAG        v3.1.0
+      GIT_SHALLOW    TRUE
     )
-    FetchContent_GetProperties(fetch_pybind)
-    if(NOT fetch_pybind_POPULATED)
-      FetchContent_Populate(fetch_pybind)
-      add_subdirectory(
-        ${fetch_pybind_SOURCE_DIR}
-        ${fetch_pybind_BINARY_DIR}
-      )
-    endif()
-  else()
-    message(STATUS "Pybind11 was already fetched at: ${fetch_pybind_SOURCE_DIR}.")
+    # See the GLM comment above: MakeAvailable is the CMake >= 3.30 safe form.
+    FetchContent_MakeAvailable(fetch_pybind)
   endif()
 endif(RS_Build_PyBindings)
 
@@ -116,13 +114,14 @@ if(RS_Build_PyBindings)
 endif()
 
 if(BUILD_TESTS MATCHES ON)
-  if(NOT DEFINED fetch_googletest_POPULATED)
+  if(NOT TARGET GTest::gtest_main)
     FetchContent_Declare(
       googletest
-      URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+      URL https://github.com/google/googletest/archive/refs/tags/v1.18.0.zip
     )
 
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
   endif()
 

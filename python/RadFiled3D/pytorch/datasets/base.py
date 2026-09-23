@@ -24,9 +24,9 @@ class RadiationFieldDataset(Dataset):
     The dataset can be initialized with either a list of file paths in the file system (uncompressed) or a path to a zip file containing radiation field files.
     In the latter case, the file paths are either extracted from the zip file or can be provided as a list of relative paths. This is encouraged, as the splitting of the dataset in train, validation and test should be random an therefore all file paths should be known at the time of initialization.
 
-    The dataset can be created by using the DatasetBuilder class. This allows the Builder to parse the zip or folder structure correctly and link the metadata to the radiation field files.
+    The dataset can be created by using the DataLoaderBuilder class. This allows the Builder to parse the zip or folder structure correctly and link the metadata to the radiation field files.
 
-    The dataset is designed to be used with a DataLoader. The DataLoader should be initialized with a batch size of 1, as the radiation field files are already stored in memory and the dataset is not designed to be used with multiprocessing.
+    The dataset is designed to be used with a DataLoader and supports multiprocessing: instances are picklable, as __getstate__ drops the native FieldAccessor and the zip buffer cache so that each worker process lazily rebuilds its own (see _get_field_accessor). Use DataLoaderBuilder.build_*_dataloader(worker_count=...) to enable workers; any batch size may be used.
     """
 
     def __init__(self, file_paths: Union[list[str], str] = None, zip_file: str = None, metadata_load_mode: MetadataLoadMode = MetadataLoadMode.HEADER):

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+requires = ["scikit-build-core>=1.0.3", "pybind11>=3.0"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -13,6 +13,18 @@ authors = [{ name = "Felix Lehner", email = "felix.lehner@ptb.de" }]
 dependencies = [
     "numpy>=2.0",
     "rich>=13.9",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 
 [project.urls]
@@ -39,23 +51,32 @@ BUILD_EXAMPLES = "OFF"
 RS_Build_PyBindings = "ON"
 
 # Version is derived from the CI tag / git ref (GITHUB_REF, CI_COMMIT_TAG, ...).
-# See build_tools/radfiled3d_version.py.
-[tool.scikit-build.metadata.version]
-provider = "radfiled3d_version"
-provider-path = "build_tools"
+# See build_tools/radfiled3d_version.py. This is the standard top-level
+# dynamic-metadata form; the older [tool.scikit-build.metadata.version] table is
+# deprecated in scikit-build-core 1.x.
+[[tool.dynamic-metadata]]
+field = "version"
+provider = { module = "radfiled3d_version", path = "build_tools" }
 
 # Files needed to build from an sdist (the C++ sources, bindings, stubs and the
 # version provider). Pure-python under python/ is included automatically.
 [tool.scikit-build.sdist]
+# NOTE: sdist.include overrides sdist.exclude *and* .gitignore, so these are
+# listed as file patterns rather than whole directories -- a bare "python/"
+# force-included every nested __pycache__ back into the tarball.
 include = [
     "CMakeLists.txt",
     "LICENSE",
     "README.md",
-    "include/",
-    "src/",
-    "python/",
-    "build_tools/",
-    "tests/",
+    "include/**/*.hpp",
+    "src/*.cpp",
+    "python/bindings/*.cpp",
+    "python/RadFiled3D/**/*.py",
+    "python/RadFiled3D/RadFiled3D.pyi",
+    "python/RadFiled3D/py.typed",
+    "build_tools/*.py",
+    "tests/*.py",
+    "tests/*.cpp",
 ]
 # Keep local build trees, editor/tooling state and other untracked dev artifacts
 # out of the published source distribution.
@@ -75,9 +96,17 @@ exclude = [
     "plan.md",
     "*.rf3",
     "*.log",
-    "*.pyc",
-    "build_tools/__pycache__",
-    "build_tools/__pycache__/**",
-    "python/RadFiled3D/__pycache__",
-    "python/RadFiled3D/__pycache__/**",
+    # Recursive patterns: a bare "*.pyc" only matches the top level, which used
+    # to let every nested __pycache__ directory leak into the sdist.
+    "**/__pycache__",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    # Repo-only material that is not needed to build from source.
+    ".github",
+    ".github/**",
+    "openwiki",
+    "openwiki/**",
+    "docs",
+    "docs/**",
+    "AGENTS.md",
 ]

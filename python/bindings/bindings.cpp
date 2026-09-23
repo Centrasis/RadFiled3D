@@ -1121,21 +1121,32 @@ PYBIND11_MODULE(RadFiled3D, m) {
 
     py::class_<Storage::RadiationFieldMetadata, std::shared_ptr<Storage::RadiationFieldMetadata>>(m, "RadiationFieldMetadata");
 
+    // Looks up a dynamic metadata entry and reports a missing key honestly. A bare
+    // map::at() used to surface as "OutOfRange: map::at", which says nothing about
+    // which key was missing or what is actually stored.
+    auto dynamic_metadata_entry = [](Storage::V1::RadiationFieldMetadata& self, const std::string& key) -> IVoxel* {
+        const std::map<std::string, IVoxel*> entries = self.get_dynamic_metadata();
+        const auto found = entries.find(key);
+        if (found == entries.end())
+            throw py::key_error("No dynamic metadata named '" + key + "'. Available keys: " + self.describe_dynamic_metadata_keys());
+        return found->second;
+    };
+
     py::class_<Storage::V1::RadiationFieldMetadata, std::shared_ptr<Storage::V1::RadiationFieldMetadata>, Storage::RadiationFieldMetadata>(m, "RadiationFieldMetadataV1")
         .def(py::init<Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation, Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software>(), py::arg("simulation"), py::arg("software"))
         .def("get_header", &Storage::V1::RadiationFieldMetadata::get_header)
         .def("set_header", &Storage::V1::RadiationFieldMetadata::set_header)
-        .def("get_dynamic_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key) {
-            IVoxel* voxel = self.get_dynamic_metadata().at(key);
+        .def("get_dynamic_metadata", [dynamic_metadata_entry](Storage::V1::RadiationFieldMetadata& self, const std::string& key) {
+            IVoxel* voxel = dynamic_metadata_entry(self, key);
             return VOXEL_REFERENCE(voxel);
         }, py::arg("key"), py::return_value_policy::reference)
         .def("get_dynamic_metadata_keys", &Storage::V1::RadiationFieldMetadata::get_dynamic_metadata_keys)
-        .def("add_dynamic_histogram_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key, size_t bins, float bin_width) {
+        .def("add_dynamic_histogram_metadata", [dynamic_metadata_entry](Storage::V1::RadiationFieldMetadata& self, const std::string& key, size_t bins, float bin_width) {
             self.set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel<float>>(key, RadFiled3D::HistogramVoxel<float>(bins, bin_width, nullptr));
-			IVoxel* voxel = self.get_dynamic_metadata().at(key);
+			IVoxel* voxel = dynamic_metadata_entry(self, key);
             return VOXEL_REFERENCE(voxel);
 		}, py::arg("key"), py::arg("bins"), py::arg("bin_width"), py::return_value_policy::reference)
-        .def("add_dynamic_metadata", [](Storage::V1::RadiationFieldMetadata& self, const std::string& key, Typing::DType dtype) {
+        .def("add_dynamic_metadata", [dynamic_metadata_entry](Storage::V1::RadiationFieldMetadata& self, const std::string& key, Typing::DType dtype) {
             switch (dtype) {
 		    case Typing::DType::Float:
 		        self.add_dynamic_metadata<float>(key, 0.f);
@@ -1171,7 +1182,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				throw py::value_error("Histograms are not supported by this method please use the explicit histogram metadata method.");
             }
 
-            IVoxel* voxel = self.get_dynamic_metadata().at(key);
+            IVoxel* voxel = dynamic_metadata_entry(self, key);
             return VOXEL_REFERENCE(voxel);
         }, py::arg("key"), py::arg("dtype"), py::return_value_policy::reference);
 
@@ -2258,7 +2269,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return self.accessField(stream);
             })
             .def("access_field", [](const FieldAccessor& self, const std::string& file) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
                 return self.accessField(stream);
             })
 			.def_static("get_store_version", [](const py::bytes& bytes) {
@@ -2284,7 +2295,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return std::string("<RadFiled3D.FieldAccessor (") + field_type + std::string(")>");
 		    })
             .def("access_voxel_flat", [](const FieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-                std::ifstream stream(file, std::ios::binary);
+                std::ifstream stream = Storage::open_file_for_reading(file);
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
             })
             .def("access_voxel_flat_from_buffer", [](const FieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, size_t idx) {
@@ -2295,7 +2306,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         py::class_<Storage::CartesianFieldAccessor, std::shared_ptr<CartesianFieldAccessor>, RadFiled3D::Storage::FieldAccessor>(m, "CartesianFieldAccessor")
 			.def(py::init([](const std::shared_ptr<FieldAccessor>& base) { return std::dynamic_pointer_cast<Storage::CartesianFieldAccessor>(base); }))
             .def("access_voxel_flat", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, size_t idx) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
 			    return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
 			})
             .def("get_field_type", [](const CartesianFieldAccessor& self) {
@@ -2309,7 +2320,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return encapsulate_voxel(self.accessVoxelRawFlat(stream, channel_name, layer_name, idx));
 			})
             .def("access_field", [](const Storage::CartesianFieldAccessor& self, const std::string& file) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
 			    return self.accessField(stream);
 		    })
 			.def("access_field_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes) {
@@ -2321,11 +2332,11 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return self.accessLayer(stream, channel_name, layer_name);
 			})
 			.def("access_layer", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
 			    return self.accessLayer(stream, channel_name, layer_name);
 		    })
             .def("access_field_arrays", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::vector<std::string>& channels, const std::vector<std::string>& layers, bool channel_first) {
-                std::ifstream stream(file, std::ios::binary);
+                std::ifstream stream = Storage::open_file_for_reading(file);
                 return build_field_arrays(self, stream, channels, layers, channel_first);
             }, py::arg("file"), py::arg("channels"), py::arg("layers"), py::arg("channel_first") = true)
             .def("access_field_arrays_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::vector<std::string>& channels, const std::vector<std::string>& layers, bool channel_first) {
@@ -2333,7 +2344,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return build_field_arrays(self, stream, channels, layers, channel_first);
             }, py::arg("buffer"), py::arg("channels"), py::arg("layers"), py::arg("channel_first") = true)
             .def("access_layer_across_channels", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& layer_name) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
             .def("access_layer_across_channels_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& layer_name) {
@@ -2341,7 +2352,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return self.accessLayerAcrossChannels(stream, layer_name);
 			})
 			.def("access_channel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
 			    return self.accessChannel(stream, channel_name);
 			})
             .def("access_channel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name) {
@@ -2349,7 +2360,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return self.accessChannel(stream, channel_name);
             })
 			.def("access_voxel", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
-			    std::ifstream stream(static_cast<std::string>(file), std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(static_cast<std::string>(file));
 			    return encapsulate_voxel(self.accessVoxelRaw(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_from_buffer", [](const Storage::CartesianFieldAccessor& self, const py::bytes& bytes, const std::string& channel_name, const std::string& layer_name, const glm::uvec3& coord) {
@@ -2365,7 +2376,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
 			})
             .def("access_voxel_by_coord", [](const Storage::CartesianFieldAccessor& self, const std::string& file, const std::string& channel_name, const std::string& layer_name, const glm::vec3& coord) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
                 return encapsulate_voxel(self.accessVoxelRawByCoord(stream, channel_name, layer_name, coord));
             });
         
@@ -2452,7 +2463,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 
         py::class_<Storage::FieldStore>(m, "FieldStore")
             .def_static("ensure_registered_stores", &Storage::FieldStore::ensure_registered_stores)
-            .def_static("enable_file_lock_syncronization", &Storage::FieldStore::enable_file_lock_syncronization)
+            .def_static("enable_file_lock_synchronization", &Storage::FieldStore::enable_file_lock_synchronization)
             .def_static("get_store_version", static_cast<Storage::StoreVersion(*)(const std::string&)>(&Storage::FieldStore::get_store_version))
             .def_static("load", static_cast<std::shared_ptr<IRadiationField>(*)(const std::string&)>(&FieldStore::load))
             .def_static("load_from_buffer", [](const std::string& bytes) {
@@ -2473,7 +2484,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
             .def_static("join", &FieldStore::join, py::arg("field"), py::arg("metadata"), py::arg("file"), py::arg("join_mode") = FieldJoinMode::Add, py::arg("check_mode") = FieldJoinCheckMode::MetadataSimulationSimilar, py::arg("fallback_version") = StoreVersion::V1)
             .def_static("peek_field_type", &FieldStore::peek_field_type)
             .def_static("construct_field_accessor", [](const std::string& file) {
-			    std::ifstream stream(file, std::ios::binary);
+			    std::ifstream stream = Storage::open_file_for_reading(file);
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("construct_field_accessor_from_buffer", [](const py::bytes& bytes) {
@@ -2481,7 +2492,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 return FieldStore::construct_accessor(stream);
             })
             .def_static("load_single_grid_layer", [](const std::string& file, const std::string& channel_name, const std::string& layer_name) -> std::shared_ptr<VoxelGrid> {
-			    std::ifstream buffer(file, std::ios::binary);
+			    std::ifstream buffer = Storage::open_file_for_reading(file);
                 auto accessor = FieldStore::construct_accessor(buffer);
 
 				if (accessor->getFieldType() != RadFiled3D::FieldType::Cartesian) {
@@ -2501,7 +2512,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 				return std::dynamic_pointer_cast<CartesianFieldAccessor>(accessor)->accessLayer(stream, channel_name, layer_name);
 		    })
             .def_static("load_single_polar_layer", [](const std::string& file, const std::string& channel_name, const std::string& layer_name) -> std::shared_ptr<PolarSegments> {
-			    std::ifstream buffer(file, std::ios::binary);
+			    std::ifstream buffer = Storage::open_file_for_reading(file);
 			    auto accessor = FieldStore::construct_accessor(buffer);
 
 				if (accessor->getFieldType() != RadFiled3D::FieldType::Polar) {

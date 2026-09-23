@@ -3,6 +3,7 @@
 #include <memory>
 #include <glm/vec3.hpp>
 #include <cstring>
+#include <fstream>
 #include <stdexcept>
 #include "RadFiled3D/RadiationField.hpp"
 #include "RadFiled3D/storage/Types.hpp"
@@ -16,6 +17,31 @@
 
 namespace RadFiled3D {
 	namespace Storage {
+		/** Opens a RadFiled3D file for binary reading.
+		* Every API that takes a file path should obtain its stream here, so that a
+		* missing or unreadable file is reported as such instead of surfacing later
+		* as a confusing parse error (an empty stream used to be reported as
+		* "Found version string: '' was invalid!").
+		* @param file The path of the file to open
+		* @return The opened input stream, positioned at the beginning
+		* @throws RadiationFieldStoreException if the path does not exist, is a
+		*         directory, or cannot be opened for reading
+		*/
+		std::ifstream open_file_for_reading(const std::string& file);
+
+		/** Reads the file version header from the start of a stream.
+		* Rejects anything that does not begin with a RadFiled3D version header, so that
+		* an unrelated file is reported as such instead of failing later with a confusing
+		* parse error (binary header bytes used to be pasted verbatim into the message,
+		* which surfaced in python as a UnicodeDecodeError).
+		* @param stream The stream to read from; on success it is left positioned just after
+		*        the header, on failure it is rewound to the beginning
+		* @param file_name Optional path, quoted in the error message when known
+		* @return The version string, e.g. "1.1"
+		* @throws RadiationFieldStoreException if the data is not a RadFiled3D (.rf3) file
+		*/
+		std::string read_file_version_header(std::istream& stream, const std::string& file_name = std::string());
+
 		/** The mode how to join two radiation fields.
 		* Identity: Use the value of the target field
 		* Add: Add the values of the target and the additional source field
@@ -256,7 +282,7 @@ namespace RadFiled3D {
 			std::string file_version;
 			FieldStoreVersionValidityRange validity_range;
 			RadFiled3D::Storage::MetadataSerializer* metadata_serializer;
-			RadFiled3D::Storage::BinayFieldBlockHandler* field_serializer;
+			RadFiled3D::Storage::BinaryFieldBlockHandler* field_serializer;
 			RadFiled3D::Storage::MetadataAccessor* metadata_accessor;
 
 		protected:
@@ -268,7 +294,7 @@ namespace RadFiled3D {
 				const std::string& file_version,
 				const FieldStoreVersionValidityRange& validity_range,
 				RadFiled3D::Storage::MetadataSerializer* metadata_serializer,
-				RadFiled3D::Storage::BinayFieldBlockHandler* field_serializer,
+				RadFiled3D::Storage::BinaryFieldBlockHandler* field_serializer,
 				RadFiled3D::Storage::MetadataAccessor* metadata_accessor
 			) : file_version(file_version),
 				validity_range(validity_range),
@@ -285,7 +311,7 @@ namespace RadFiled3D {
 				return *this->metadata_accessor;
 			}
 
-			inline BinayFieldBlockHandler& get_field_serializer() const {
+			inline BinaryFieldBlockHandler& get_field_serializer() const {
 				return *this->field_serializer;
 			}
 
@@ -303,7 +329,7 @@ namespace RadFiled3D {
 			*/
 			virtual void serialize(std::ostream& stream, std::shared_ptr<IRadiationField> field, std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> metadata) const override;
 
-			virtual void valdiate_file_version(std::istream& stream) const;
+			virtual void validate_file_version(std::istream& stream) const;
 			virtual std::shared_ptr<IRadiationField> load(std::istream& buffer) const override;
 
 			/** Fully retrieves the metadata of the radiation field from a file
@@ -356,7 +382,7 @@ namespace RadFiled3D {
 						{0, 1}		// minor version in [0..1]
 					),
 					new V1::MetadataSerializer(),
-					(RadFiled3D::Storage::BinayFieldBlockHandler*)new RadFiled3D::Storage::V1::BinayFieldBlockHandler(),
+					(RadFiled3D::Storage::BinaryFieldBlockHandler*)new RadFiled3D::Storage::V1::BinaryFieldBlockHandler(),
 					new V1::MetadataAccessor()
 				) {}
 
@@ -383,7 +409,7 @@ namespace RadFiled3D {
 		*/
 		class FieldStore {
 		protected:
-			static bool file_lock_syncronization;
+			static bool file_lock_synchronization;
 
 			static const BasicFieldStore* get_store_by(std::istream& buffer);
 			static const BasicFieldStore* get_store_by(StoreVersion version);
@@ -397,8 +423,8 @@ namespace RadFiled3D {
 			* @param enable Enable or disable the synchronization
 			*/
 			[[deprecated("This feature is highly experimental and not tested on platforms!")]]
-			static void enable_file_lock_syncronization(bool enable) {
-				FieldStore::file_lock_syncronization = enable;
+			static void enable_file_lock_synchronization(bool enable) {
+				FieldStore::file_lock_synchronization = enable;
 			}
 
 			/** Get the version of the store that created a buffer

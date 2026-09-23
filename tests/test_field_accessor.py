@@ -448,3 +448,90 @@ def test_load_single_grid_layer_reuses_accessor_stream(tmp_path):
     with open(path, "rb") as f:
         grid_buf = FieldStore.load_single_grid_layer_from_buffer(f.read(), "channel2", "density")
     assert np.array_equal(grid_buf.get_as_ndarray(), expected)
+
+
+def test_missing_file_reports_itself(tmp_path):
+    """A path that does not exist must say so, not blame the (empty) file contents.
+
+    These calls used to surface as "Found version string: '' was invalid!", because the
+    stream was opened without checking that the file was there.
+    """
+    import pytest
+    from RadFiled3D.RadFiled3D import RadiationFieldStoreException
+
+    missing = str(tmp_path / "does_not_exist.rf3")
+    calls = [
+        lambda: FieldStore.load(missing),
+        lambda: FieldStore.load_metadata(missing),
+        lambda: FieldStore.peek_metadata(missing),
+        lambda: FieldStore.get_store_version(missing),
+        lambda: FieldStore.construct_field_accessor(missing),
+    ]
+    for call in calls:
+        with pytest.raises(RadiationFieldStoreException) as excinfo:
+            call()
+        message = str(excinfo.value)
+        assert missing in message
+        assert "does not exist" in message
+        assert "version string" not in message
+
+    # a directory is not a field file either
+    with pytest.raises(RadiationFieldStoreException) as excinfo:
+        FieldStore.load(str(tmp_path))
+    assert "is a directory" in str(excinfo.value)
+
+
+def test_missing_dynamic_metadata_key_reports_itself(tmp_path):
+    """An absent metadata key must raise KeyError naming the key, not "OutOfRange: map::at"."""
+    import pytest
+
+    metadata = RadiationFieldMetadataV1(
+        simulation=RadiationFieldSimulationMetadataV1(
+            geometry="geom", primary_particle_count=1, physics_list="phys",
+            tube=RadiationFieldXRayTubeMetadataV1(
+                radiation_direction=vec3(0, 0, 1), radiation_origin=vec3(0, 0, 0),
+                max_energy_eV=1e5, tube_id="tube"
+            )
+        ),
+        software=RadiationFieldSoftwareMetadataV1(name="t", version="1", repository="", commit="")
+    )
+    metadata.add_dynamic_metadata("known_key", DType.FLOAT32)
+
+    with pytest.raises(KeyError) as excinfo:
+        metadata.get_dynamic_metadata("absent_key")
+    message = str(excinfo.value)
+    assert "absent_key" in message
+    assert "known_key" in message      # the error lists what is actually stored
+    assert "map::at" not in message
+
+    assert metadata.get_dynamic_metadata("known_key") is not None
+
+
+def test_non_rf3_file_is_rejected(tmp_path):
+    """A file that is not a .rf3 must be named as such.
+
+    The binary header bytes used to be pasted into the message, so pybind11 could not
+    decode it and python raised UnicodeDecodeError instead of the real error.
+    """
+    import pytest
+    from RadFiled3D.RadFiled3D import RadiationFieldStoreException
+
+    foreign = tmp_path / "picture.png"
+    foreign.write_bytes(b"\x89PNG\r\n\x1a\n\xb0\x00\x1f\x7fhello world")
+
+    for call in (lambda: FieldStore.load(str(foreign)),
+                 lambda: FieldStore.load_metadata(str(foreign)),
+                 lambda: FieldStore.get_store_version(str(foreign)),
+                 lambda: FieldStore.construct_field_accessor(str(foreign))):
+        with pytest.raises(RadiationFieldStoreException) as excinfo:
+            call()
+        message = str(excinfo.value)
+        assert "is not a RadFiled3D (.rf3) file" in message
+        assert str(foreign) in message
+        assert "\\x89" in message          # escaped, not raw
+
+    truncated = tmp_path / "truncated.rf3"
+    truncated.write_bytes(b"1.1")
+    with pytest.raises(RadiationFieldStoreException) as excinfo:
+        FieldStore.load(str(truncated))
+    assert "too short" in str(excinfo.value)

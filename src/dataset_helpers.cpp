@@ -2,6 +2,7 @@
 #include <RadFiled3D/storage/FieldAccessor.hpp>
 #include <istream>
 #include <fstream>
+#include <RadFiled3D/storage/RadiationFieldStore.hpp>
 
 
 using namespace RadFiled3D;
@@ -18,7 +19,7 @@ std::shared_ptr<VoxelCollection> RadFiled3D::Dataset::VoxelCollectionAccessor::a
 
 	voxelsCount = 0;
 	for (const auto& request : requests) {
-		std::ifstream buffer(request.filePath, std::ios::binary);
+		std::ifstream buffer = Storage::open_file_for_reading(request.filePath);
 		for (const std::string& channel : this->channels) {
 			for (const std::string& layer : this->layers) {
 				auto voxels = this->accessor->accessVoxelsRawFlat(buffer, channel, layer, request.voxelIndices);

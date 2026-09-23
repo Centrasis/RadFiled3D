@@ -7,7 +7,7 @@ jobs:
     name: C++ memory safety (ASan + UBSan)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Configure C++ tests with Address + UndefinedBehavior sanitizers
       # RS_Build_PyBindings=OFF: build only the core library and its C++ gtest suite. An ASan-instrumented
       # Python extension loaded by a stock CPython needs LD_PRELOAD gymnastics and trips interpreter-internal
@@ -41,9 +41,9 @@ jobs:
   build-source:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Set up Python 3.13
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: 3.13
     - name: Build RadFiled3D Source Distribution
@@ -57,8 +57,26 @@ jobs:
         python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Verify the sdist compiles and keeps its version without CI variables
+      # Regression test for source installs on platforms that have no wheel.
+      # The dynamic version provider must fall back to the sdist's PKG-INFO when
+      # no CI tag variable is set (as on a user's machine); otherwise the built
+      # wheel claims 0.0.0, pip reports "has inconsistent version: expected
+      # X.Y.Z, but metadata has 0.0.0" and discards the sdist, so
+      # `pip install RadFiled3D` fails instead of compiling on the fly.
+      run: |
+        set -e
+        sdist=$(ls dist/*.tar.gz)
+        expected=$(basename "$sdist" .tar.gz | sed 's/^radfiled3d-//')
+        python -m venv /tmp/sdist-check
+        env -u GITHUB_REF -u GITHUB_REF_NAME -u GITHUB_REF_TYPE \
+            -u CI_COMMIT_TAG -u CI_COMMIT_REF_NAME \
+          /tmp/sdist-check/bin/pip install --no-deps "$sdist"
+        installed=$(/tmp/sdist-check/bin/python -c "import importlib.metadata as m; print(m.version('RadFiled3D'))")
+        echo "sdist declares '$expected', source install produced '$installed'"
+        test "$expected" = "$installed"
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: build-source-artifact
         path: dist/*.tar.gz
@@ -75,22 +93,20 @@ jobs:
           - python-version: 3.14
             python-name: cp314
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Install compiler
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: x64
     - name: Set up Clang
-      uses: egor-tensin/setup-clang@v1
+      uses: egor-tensin/setup-clang@v2
       with:
         version: latest
         platform: x64
     - name: Install CMake
-      uses: jwlawson/actions-setup-cmake@v1
-      with:
-        cmake-version: '3.21.3'
+      uses: jwlawson/actions-setup-cmake@v2
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
     - name: Build RadFiled3D Wheel
@@ -109,7 +125,7 @@ jobs:
         $whl = Get-ChildItem -Path dist\*.whl | Select-Object -First 1
         python -m pip install $whl.FullName
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: build-windows-artifact-${{ matrix.python-version }}
         path: dist/*.whl
@@ -128,9 +144,9 @@ jobs:
           - python-version: 3.14
             python-name: cp314
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
     - name: Define CIBW_BUILD variable
@@ -138,7 +154,7 @@ jobs:
         PYTHON_VERSION=${{ matrix.python-version }}
         export CIBW_BUILD="${{ matrix.python-name }}-manylinux_x86_64"
     - name: Build RadFiled3D Wheel for glibc 2.28
-      uses: pypa/cibuildwheel@v3.4.0
+      uses: pypa/cibuildwheel@v4.2.1
       env:
         CIBW_BUILD_FRONTEND: "build"
         CIBW_ARCHS: "x86_64"
@@ -160,7 +176,7 @@ jobs:
     # glibc 2.17 wheels are built without float16 support (it is compiled out and DType.FLOAT16
     # raises a clear error at runtime). Kept for maximum backwards compatibility on old systems.
     - name: Build RadFiled3D Wheel for glibc 2.17
-      uses: pypa/cibuildwheel@v3.4.0
+      uses: pypa/cibuildwheel@v4.2.1
       env:
         CIBW_BUILD_FRONTEND: "build"
         CIBW_ARCHS: "x86_64"
@@ -179,9 +195,52 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: build-linux-artifact-${{ matrix.python-version }}
+        path: dist/*.whl
+  build-macos:
+    name: Build macOS wheels (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      max-parallel: 5
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            # arm64 macOS starts at 11.0.
+            deployment-target: "11.0"
+          - runner: macos-15-intel
+            arch: x86_64
+            # std::filesystem (RadiationFieldStore, FileLock) is only available
+            # from macOS 10.15; building against an older target fails with
+            # "introduced in macOS 10.15" availability errors.
+            deployment-target: "10.15"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v7
+      with:
+        python-version: 3.13
+    - name: Build RadFiled3D wheels for macOS
+      uses: pypa/cibuildwheel@v4.2.1
+      env:
+        CIBW_BUILD_FRONTEND: "build"
+        CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-*"
+        CIBW_ARCHS_MACOS: ${{ matrix.arch }}
+        CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
+        MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
+        # Apple clang provides _Float16 on arm64 and on recent x86_64 targets;
+        # where it does not, Typing.hpp compiles float16 out and DType.FLOAT16
+        # raises at runtime, exactly as on the glibc 2.17 Linux wheels.
+        CIBW_TEST_REQUIRES: "pytest numpy"
+        CIBW_TEST_COMMAND: "python -m pytest {project}/tests"
+      with:
+        output-dir: dist
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: build-macos-artifact-${{ matrix.arch }}
         path: dist/*.whl
   test-linux:
     strategy:
@@ -203,12 +262,12 @@ jobs:
       - build-linux
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-linux-artifact-${{ matrix.python-version }}
           path: dist/
@@ -246,12 +305,12 @@ jobs:
       - build-windows
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-windows-artifact-${{ matrix.python-version }}
           path: dist/
@@ -288,11 +347,11 @@ jobs:
       id-token: write
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Download all the dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-linux-artifact-${{ matrix.python-version }}
           path: dist/
@@ -312,11 +371,11 @@ jobs:
       id-token: write
     steps:
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: 3.13
       - name: Download all the dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-source-artifact
           path: dist/
@@ -357,11 +416,11 @@ jobs:
           echo "username: __token__" >> ~/.pypirc
           echo "password: ${{ secrets.TWINE_PASSWORD }}" >> ~/.pypirc
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Download all the dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-windows-artifact-${{ matrix.python-version }}
           path: dist/
@@ -370,3 +429,28 @@ jobs:
           $whl = Get-ChildItem -Path dist\*.whl | Select-Object -First 1
           python -m pip install twine
           python -m twine upload --repository RadFiled3D $whl.FullName
+  publish-macos:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+      matrix:
+        arch: [arm64, x86_64]
+    if: startsWith(github.ref, 'refs/tags/')
+    name: Publish on macOS ${{ matrix.arch }}
+    # cibuildwheel runs the pytest suite against each macOS wheel it builds, so
+    # build-macos is the equivalent gate that test-linux is for the Linux wheels.
+    needs:
+      - build-macos
+    environment:
+      name: pypi
+      url: https://pypi.org/p/RadFiled3D
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v8
+        with:
+          name: build-macos-artifact-${{ matrix.arch }}
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

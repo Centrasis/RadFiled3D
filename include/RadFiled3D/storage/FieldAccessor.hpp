@@ -330,7 +330,7 @@ namespace RadFiled3D {
 				static std::map<std::string, AccessorTypes::ChannelStructure> DeserializeChannelsLayersOffsets(const std::vector<char>& data);
 
 			protected:
-				std::unique_ptr<RadFiled3D::Storage::V1::BinayFieldBlockHandler> serializer;
+				std::unique_ptr<RadFiled3D::Storage::V1::BinaryFieldBlockHandler> serializer;
 
 				FileParser(FieldType field_type) : FieldAccessor(field_type) {}
 				

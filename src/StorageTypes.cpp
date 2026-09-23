@@ -9,7 +9,7 @@ RadFiled3D::Storage::V1::RadiationFieldMetadata::RadiationFieldMetadata(const Fi
 	: header(FiledTypes::V1::RadiationFieldMetadataHeader(simulation, software)),
 	  dynamic_metadata(std::make_shared<VoxelBuffer>(1)),
 	  RadFiled3D::Storage::RadiationFieldMetadata(StoreVersion::V1),
-	  serializer(new V1::BinayFieldBlockHandler())
+	  serializer(new V1::BinaryFieldBlockHandler())
 {};
 
 RadFiled3D::Storage::V1::RadiationFieldMetadata::RadiationFieldMetadata()
@@ -31,7 +31,7 @@ RadFiled3D::Storage::V1::RadiationFieldMetadata::RadiationFieldMetadata()
 	),
 	dynamic_metadata(std::make_shared<VoxelBuffer>(1)),
 	RadFiled3D::Storage::RadiationFieldMetadata(StoreVersion::V1),
-	serializer(new V1::BinayFieldBlockHandler())
+	serializer(new V1::BinaryFieldBlockHandler())
 {};
 
 RadFiled3D::Storage::V1::RadiationFieldMetadata::~RadiationFieldMetadata()

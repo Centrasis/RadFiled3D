@@ -9,9 +9,9 @@ namespace RadFiled3D {
 	class IRadiationField;
 
 	namespace Storage {
-		class BinayFieldBlockHandler {
+		class BinaryFieldBlockHandler {
 		public:
-			virtual ~BinayFieldBlockHandler() = default;
+			virtual ~BinaryFieldBlockHandler() = default;
 			/** Serializes a radiation field to a binary string
 			* @param field The radiation field
 			* @return The binary string
@@ -65,7 +65,7 @@ namespace RadFiled3D {
 		};
 
 		namespace V1 {
-			class BinayFieldBlockHandler : public RadFiled3D::Storage::BinayFieldBlockHandler {
+			class BinaryFieldBlockHandler : public RadFiled3D::Storage::BinaryFieldBlockHandler {
 			protected:
 				/** Adds a histogram layer to the voxel buffer
 				* @param field The voxel buffer
@@ -81,7 +81,7 @@ namespace RadFiled3D {
 				* voxel data) and constructs the per-voxel wrappers for it. No fill, no copy. */
 				static VoxelLayer* constructOwnedLayer(const FiledTypes::V1::VoxelGridLayerHeader& layer_desc, size_t voxel_count, char* owned_data, const void* header_data);
 			public:
-				BinayFieldBlockHandler() = default;
+				BinaryFieldBlockHandler() = default;
 
 				virtual void serializeField(std::shared_ptr<IRadiationField> field, std::ostream& buffer) const override;
 
