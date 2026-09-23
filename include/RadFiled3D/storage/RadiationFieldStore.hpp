@@ -10,6 +10,7 @@
 #include <utility>
 #include <type_traits>
 #include <RadFiled3D/storage/FieldAccessor.hpp>
+#include <RadFiled3D/helpers/SaturatingArithmetic.hpp>
 #include <RadFiled3D/storage/MetadataSerializer.hpp>
 #include <RadFiled3D/storage/MetadataAccessor.hpp>
 #include <RadFiled3D/storage/FieldSerializer.hpp>
@@ -120,6 +121,28 @@ namespace RadFiled3D {
 			*/
 			template<typename dtype, typename scalarT = dtype>
 			static std::function<dtype(const dtype&, const dtype&)> get_join_function(FieldJoinMode mode, float ratio = 0.f) {
+				if constexpr (std::is_integral_v<dtype>) {
+					// Integral layers (e.g. 8-bit masks) saturate at the type's limits instead of wrapping around.
+					switch (mode)
+					{
+					case FieldJoinMode::Add:
+						return [](const dtype& a, const dtype& b) { return SaturatingArithmetic::add<dtype>(a, b); };
+					case FieldJoinMode::Mean:
+						return [](const dtype& a, const dtype& b) { return SaturatingArithmetic::mean<dtype>(a, b); };
+					case FieldJoinMode::Identity:
+						return [](const dtype& a, const dtype& b) { return a; };
+					case FieldJoinMode::Subtract:
+						return [](const dtype& a, const dtype& b) { return SaturatingArithmetic::subtract<dtype>(a, b); };
+					case FieldJoinMode::Divide:
+						return [](const dtype& a, const dtype& b) { return SaturatingArithmetic::divide<dtype>(a, b); };
+					case FieldJoinMode::Multiply:
+						return [](const dtype& a, const dtype& b) { return SaturatingArithmetic::multiply<dtype>(a, b); };
+					case FieldJoinMode::AddWeighted:
+						return [ratio](const dtype& a, const dtype& b) { return SaturatingArithmetic::blend<dtype>(a, b, ratio); };
+					default:
+						throw RadiationFieldStoreException("Unknown join mode");
+					}
+				}
 				switch (mode)
 				{
 				case FieldJoinMode::Add:
@@ -400,6 +423,15 @@ namespace RadFiled3D {
 				* @throw RadiationFieldStoreException If the buffer is corrupted
 				*/
 				virtual std::shared_ptr<VoxelLayer> load_single_layer(std::istream& buffer, const std::string& channel, const std::string& layer) const override;
+
+				/** Replace the metadata and the channels of a field in an existing V1 file, keeping all other channels of the file.
+				* See RadFiled3D::Storage::FieldStore::replace, which also handles missing files and file locking.
+				* @param field The radiation field whose channels replace the file's channels
+				* @param metadata The metadata replacing the file's metadata
+				* @param file The existing V1 file to update
+				* @throw RadiationFieldStoreException If the file has a different field type or grid than the field
+				*/
+				void replace(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadFiled3D::Storage::RadiationFieldMetadata> metadata, const std::string& file) const;
 			};
 		};
 
@@ -510,6 +542,19 @@ namespace RadFiled3D {
 			* @param fallback_version The version of the store to use if the file does not exist
 			*/
 			static void join(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, FieldJoinMode join_mode, FieldJoinCheckMode check_mode = FieldJoinCheckMode::MetadataSimulationSimilar, StoreVersion fallback_version = StoreVersion::V1);
+
+			/** Replace the metadata and the channels of a field in an existing file, keeping all other channels of the file.
+			* Channels of the file that the field does not contain (e.g. a geometry channel stored once) are copied byte for byte
+			* without being loaded, channels the field contains are written from the field. The channel order is the same as
+			* store() would produce. The file is written to a temporary file next to it first and then replaces it, so it stays
+			* intact if writing fails. If the file does not exist, the field is stored as with store().
+			* @param field The radiation field whose channels replace the file's channels
+			* @param metadata The metadata replacing the file's metadata
+			* @param file The file to update
+			* @param version The version of the store to use; must match the version of an existing file
+			* @throw RadiationFieldStoreException If the file has a different version, field type or grid than the field
+			*/
+			static void replace(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, StoreVersion version = StoreVersion::V1);
 		
 			/** Construct a field accessor from a file, that can be used for all files that share the same structure (metadata-size and field structure)
 			* This is useful when parsing large datasets.

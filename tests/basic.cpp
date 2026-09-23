@@ -666,6 +666,160 @@ namespace {
 		}
 	}
 
+	std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> make_join_test_metadata() {
+		return std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
+			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+				100,
+				"geom",
+				"FTFP_BERT",
+				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+					glm::vec3(1.f, 0.f, 0.f),
+					glm::vec3(0.f, 0.f, 0.f),
+					100.f,
+					"XRayTube"
+				)
+			),
+			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+				"test",
+				"1.0",
+				"repo",
+				"commit"
+			)
+		);
+	}
+
+	TEST(Storage, JoinByteLayersSaturate) {
+		auto make_field = [](uint8_t mask_value, char offset_value) {
+			auto field = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+			auto channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("geometry"));
+			channel->add_layer<uint8_t>("mask", mask_value, "");
+			channel->add_layer<char>("offset", offset_value, "");
+			return field;
+		};
+		std::remove("test08.rf3");
+		auto metadata = std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(make_join_test_metadata());
+
+		auto first = make_field(200, 100);
+		first->get_channel("geometry")->get_voxel_flat<ScalarVoxel<uint8_t>>("mask", 1) = static_cast<uint8_t>(0);
+		EXPECT_NO_THROW(FieldStore::store(first, metadata, "test08.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::join(make_field(255, 100), metadata, "test08.rf3", FieldJoinMode::Add));
+
+		auto joined = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test08.rf3"));
+		auto geometry = joined->get_channel("geometry");
+		EXPECT_EQ(geometry->get_voxel_flat<ScalarVoxel<uint8_t>>("mask", 0).get_data(), 255);
+		EXPECT_EQ(geometry->get_voxel_flat<ScalarVoxel<uint8_t>>("mask", 1).get_data(), 255);
+		EXPECT_EQ(geometry->get_voxel_flat<ScalarVoxel<char>>("offset", 0).get_data(), std::numeric_limits<char>::max());
+		std::remove("test08.rf3");
+	}
+
+	TEST(Storage, JoinTakesOverLayersMissingInTarget) {
+		std::remove("test09.rf3");
+		auto metadata = std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(make_join_test_metadata());
+
+		auto existing = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+		std::static_pointer_cast<VoxelGridBuffer>(existing->add_channel("radiation"))->add_layer<float>("flux", 1.f, "");
+		EXPECT_NO_THROW(FieldStore::store(existing, metadata, "test09.rf3", StoreVersion::V1));
+
+		auto additional = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+		std::static_pointer_cast<VoxelGridBuffer>(additional->add_channel("radiation"))->add_layer<float>("flux", 2.f, "");
+		auto geometry = std::static_pointer_cast<VoxelGridBuffer>(additional->add_channel("geometry"));
+		geometry->add_layer<uint8_t>("Patient", 0, "");
+		const size_t marked_voxel = geometry->get_voxel_count() - 1;
+		geometry->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", marked_voxel) = static_cast<uint8_t>(255);
+		// voxel 0 differs from the rest, so a layer seeded from voxel 0 would show up as wrong values
+		std::static_pointer_cast<VoxelGridBuffer>(additional->get_channel("radiation"))->add_layer<float>("extra", 0.f, "");
+		additional->get_channel("radiation")->get_voxel_flat<ScalarVoxel<float>>("extra", 0) = 7.f;
+
+		EXPECT_THROW(FieldStore::join(additional, metadata, "test09.rf3", FieldJoinMode::Add, FieldJoinCheckMode::FieldStructureOnly), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(additional, metadata, "test09.rf3", FieldJoinMode::Add, FieldJoinCheckMode::FieldUnitsOnly));
+
+		auto joined = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test09.rf3"));
+		auto joined_geometry = joined->get_channel("geometry");
+		for (size_t i = 0; i < joined_geometry->get_voxel_count(); i++)
+			EXPECT_EQ(joined_geometry->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", i).get_data(), i == marked_voxel ? 255 : 0);
+		auto radiation = joined->get_channel("radiation");
+		EXPECT_EQ(radiation->get_voxel_flat<ScalarVoxel<float>>("flux", 3).get_data(), 3.f);
+		EXPECT_EQ(radiation->get_voxel_flat<ScalarVoxel<float>>("extra", 0).get_data(), 7.f);
+		EXPECT_EQ(radiation->get_voxel_flat<ScalarVoxel<float>>("extra", 1).get_data(), 0.f);
+		std::remove("test09.rf3");
+	}
+
+	TEST(Storage, ReplaceKeepsOtherChannels) {
+		std::remove("test10.rf3");
+		std::remove("test10_expected.rf3");
+		auto metadata = make_join_test_metadata();
+
+		auto make_radiation = [](std::shared_ptr<CartesianRadiationField> field, float flux) {
+			auto channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("scatter_field"));
+			channel->add_layer<float>("flux", flux, "counts / primary_particles");
+			channel->add_custom_layer<HistogramVoxel<float>>("spectrum", HistogramVoxel<float>(8, 10.f, nullptr), flux, "eV");
+			std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("direct_beam"))->add_layer<float>("flux", 2.f * flux, "counts / primary_particles");
+		};
+		auto add_geometry = [](std::shared_ptr<CartesianRadiationField> field) {
+			auto channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("geometry"));
+			channel->add_layer<uint8_t>("Patient", 0, "occupancy");
+			channel->add_layer<uint8_t>("Shield", 255, "occupancy");
+			channel->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", 5) = static_cast<uint8_t>(255);
+		};
+
+		auto first = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+		make_radiation(first, 1.f);
+		add_geometry(first);
+		FieldStore::replace(first, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test10.rf3");
+
+		auto update = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+		make_radiation(update, 5.f);
+		auto updated_metadata = make_join_test_metadata();
+		auto header = updated_metadata->get_header();
+		header.simulation.primary_particle_count = 500;
+		updated_metadata->set_header(header);
+		EXPECT_NO_THROW(FieldStore::replace(update, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(updated_metadata), "test10.rf3"));
+
+		auto expected = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+		make_radiation(expected, 5.f);
+		add_geometry(expected);
+		FieldStore::store(expected, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(updated_metadata), "test10_expected.rf3");
+		auto read_all = [](const std::string& file) {
+			std::ifstream stream(file, std::ios::binary);
+			return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+		};
+		EXPECT_EQ(read_all("test10.rf3"), read_all("test10_expected.rf3"));
+
+		auto loaded = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test10.rf3"));
+		EXPECT_EQ(loaded->get_channel("scatter_field")->get_voxel_flat<ScalarVoxel<float>>("flux", 3).get_data(), 5.f);
+		EXPECT_EQ(loaded->get_channel("geometry")->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", 5).get_data(), 255);
+		EXPECT_EQ(loaded->get_channel("geometry")->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", 4).get_data(), 0);
+		EXPECT_EQ(static_cast<uint64_t>(std::dynamic_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::load_metadata("test10.rf3"))->get_header().simulation.primary_particle_count), 500u);
+
+		auto other_grid = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.1f));
+		make_radiation(other_grid, 9.f);
+		EXPECT_THROW(FieldStore::replace(other_grid, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test10.rf3"), RadiationFieldStoreException);
+		EXPECT_EQ(read_all("test10.rf3"), read_all("test10_expected.rf3"));
+
+		std::remove("test10.rf3");
+		std::remove("test10_expected.rf3");
+	}
+
+	TEST(SaturatingArithmetic, ClampsInsteadOfWrapping) {
+		EXPECT_EQ(SaturatingArithmetic::add<uint8_t>(200, 100), 255);
+		EXPECT_EQ(SaturatingArithmetic::subtract<uint8_t>(5, 10), 0);
+		EXPECT_EQ(SaturatingArithmetic::multiply<uint8_t>(16, 16), 255);
+		EXPECT_EQ(SaturatingArithmetic::divide<uint8_t>(7, 0), 255);
+		EXPECT_EQ(SaturatingArithmetic::mean<uint8_t>(255, 255), 255);
+		EXPECT_EQ(SaturatingArithmetic::blend<uint8_t>(255, 255, 0.3f), 255);
+		EXPECT_EQ(SaturatingArithmetic::add<int8_t>(-100, -100), -128);
+		EXPECT_EQ(SaturatingArithmetic::subtract<int8_t>(100, -100), 127);
+		EXPECT_EQ(SaturatingArithmetic::multiply<int8_t>(-100, 2), -128);
+		EXPECT_EQ(SaturatingArithmetic::multiply<int8_t>(-100, -2), 127);
+		EXPECT_EQ(SaturatingArithmetic::divide<int8_t>(-128, -1), 127);
+		EXPECT_EQ(SaturatingArithmetic::mean<int8_t>(3, -4), 0);
+		EXPECT_EQ(SaturatingArithmetic::add<int>(std::numeric_limits<int>::max(), 1), std::numeric_limits<int>::max());
+		EXPECT_EQ(SaturatingArithmetic::add<uint64_t>(std::numeric_limits<uint64_t>::max(), 1), std::numeric_limits<uint64_t>::max());
+		EXPECT_EQ(SaturatingArithmetic::multiply<int64_t>(std::numeric_limits<int64_t>::min(), -1), std::numeric_limits<int64_t>::max());
+		EXPECT_EQ(SaturatingArithmetic::add<uint8_t>(3, 4), 7);
+		EXPECT_EQ(SaturatingArithmetic::multiply<int>(-6, 7), -42);
+	}
+
 	TEST(Storage, JoinFieldsChecks) {
 		std::shared_ptr<CartesianRadiationField> field = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f));
 		std::shared_ptr<VoxelGridBuffer> channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("test_channel"));

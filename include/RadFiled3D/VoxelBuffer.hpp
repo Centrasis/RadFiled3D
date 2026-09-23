@@ -446,6 +446,31 @@ namespace RadFiled3D {
 			}
 		}
 
+		/** Overwrite the data of a layer with the data of the equally named layer of another buffer.
+		* @param layer_name The name of the layer to copy into
+		* @param other The voxel buffer to copy from
+		*/
+		void copy_layer_data(const std::string& layer_name, const VoxelBuffer& other) {
+			auto found = this->layers.find(layer_name);
+			if (found == this->layers.end())
+				throw VoxelBufferException("Layer: '" + layer_name + "' not found");
+
+			auto other_layer = other.layers.find(layer_name);
+			if (other_layer == other.layers.end())
+				throw VoxelBufferException("Layer: '" + layer_name + "' not found in the other buffer");
+
+			if (this->voxel_count != other.voxel_count)
+				throw VoxelBufferException("Layer: '" + layer_name + "' has a different voxel count in the other buffer");
+
+			for (size_t i = 0; i < this->voxel_count; i++) {
+				IVoxel* target_voxel = found->second.get_voxel_flat_raw(i);
+				const IVoxel* source_voxel = other_layer->second.get_voxel_flat_raw(i);
+				if (target_voxel->get_bytes() != source_voxel->get_bytes())
+					throw VoxelBufferException("Layer: '" + layer_name + "' has different per-voxel data sizes in the other buffer");
+				std::memcpy(target_voxel->get_raw(), source_voxel->get_raw(), target_voxel->get_bytes());
+			}
+		}
+
 		/** Merge layer voxels with a custom voxel type.
 		* Will implicitly modify the data buffer, but through calling the voxel objects.
 		* @param layer_name The name of the layer to merge into

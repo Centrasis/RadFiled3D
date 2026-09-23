@@ -17,6 +17,9 @@ namespace fs = std::filesystem;
 namespace fs = std::filesystem;
 #endif
 #include <stdexcept>
+#include <map>
+#include <algorithm>
+#include <cstring>
 #include "RadFiled3D/storage/FieldSerializer.hpp"
 #include "RadFiled3D/storage/Registry.hpp"
 #include <RadFiled3D/helpers/FileLock.hpp>
@@ -316,7 +319,12 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 			if (!target_channel->has_layer(layer_name)) {
 				if (check_mode <= FieldJoinCheckMode::FieldStructureOnly)
 					throw RadiationFieldStoreException("Layer: '" + layer_name + "' not found in target field");
+				if (target_channel->get_voxel_count() != channel.second->get_voxel_count())
+					throw RadiationFieldStoreException("Voxel count mismatch for layer: '" + layer_name + "' in channel: " + channel.first);
+				// A layer only present in the additional source has nothing to be joined with: take it over as is.
 				target_channel->add_custom_layer_unsafe(layer_name, &channel.second->get_voxel_flat(layer_name, 0), channel.second->get_layer_unit(layer_name));
+				target_channel->copy_layer_data(layer_name, *channel.second.get());
+				continue;
 			}
 
 			const Typing::DType dtype1 = Typing::Helper::get_dtype(channel.second->get_voxel_flat<IVoxel>(layer_name, 0).get_type());
@@ -341,12 +349,10 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 #endif
 					break;
 				case Typing::DType::Char:
-					throw RadiationFieldStoreException("Unsupported data type 'char' for merging of layer: '" + layer_name + "' in channel: " + channel.first);
-					//target_channel->merge_data_buffer<char>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<char>(join_mode, ratio));
+					target_channel->merge_data_buffer<char>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<char>(join_mode, ratio));
 					break;
 				case Typing::DType::Byte:
-					throw RadiationFieldStoreException("Unsupported data type 'byte' for merging of layer: '" + layer_name + "' in channel: " + channel.first);
-					//target_channel->merge_data_buffer<uint8_t>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<uint8_t>(join_mode, ratio));
+					target_channel->merge_data_buffer<uint8_t>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<uint8_t>(join_mode, ratio));
 					break;
 				case Typing::DType::Int:
 					target_channel->merge_data_buffer<int>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<int>(join_mode, ratio));
@@ -522,6 +528,130 @@ void FieldStore::join(std::shared_ptr<IRadiationField> field, std::shared_ptr<Ra
 	target_metadata.simulation.primary_particle_count += v1_metadata.get_header().simulation.primary_particle_count;
 	v1_metadata.set_header(target_metadata);
 	store->store(existing_field, metadata, file);
+}
+
+void FieldStore::replace(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, StoreVersion version)
+{
+	FileLock file_lock(file, FieldStore::file_lock_synchronization);
+
+	if (!fs::exists(file)) {
+		FieldStore::store(field, metadata, file, version);
+		return;
+	}
+
+	if (FieldStore::get_store_version(file) != version)
+		throw RadiationFieldStoreException("The store version of file " + file + " differs from the requested one.");
+	const auto* store = dynamic_cast<const Storage::V1::FieldStore*>(FieldStore::get_store_by(version));
+	if (store == nullptr)
+		throw RadiationFieldStoreException("Replacing channels is only supported for files of store version V1: " + file);
+	store->replace(field, metadata, file);
+}
+
+void Storage::V1::FieldStore::replace(std::shared_ptr<IRadiationField> field, std::shared_ptr<Storage::RadiationFieldMetadata> metadata, const std::string& file) const
+{
+	std::ifstream existing(file, std::ios::in | std::ios::binary);
+	VersionHeader version_header;
+	existing.read((char*)&version_header, sizeof(VersionHeader));
+	const size_t metadata_size = Storage::V1::RadiationFieldMetadata().get_metadata_size(existing);
+	existing.seekg(sizeof(VersionHeader) + metadata_size, std::ios::beg);
+
+	FiledTypes::V1::RadiationFieldHeader field_header;
+	existing.read((char*)&field_header, sizeof(FiledTypes::V1::RadiationFieldHeader));
+	const std::string field_type = field->get_typename();
+	if (std::string(field_header.field_type, strnlen(field_header.field_type, sizeof(field_header.field_type))) != field_type)
+		throw RadiationFieldStoreException("Field type mismatch! File " + file + " contains a " + std::string(field_header.field_type) + ", but the field is a " + field_type);
+
+	std::string grid_header;
+	if (field_type == "CartesianRadiationField") {
+		FiledTypes::V1::CartesianHeader existing_grid;
+		existing.read((char*)&existing_grid, sizeof(FiledTypes::V1::CartesianHeader));
+		auto cartesian = std::dynamic_pointer_cast<CartesianRadiationField>(field);
+		if (existing_grid.voxel_counts != cartesian->get_voxel_counts() || existing_grid.voxel_dimensions != cartesian->get_voxel_dimensions())
+			throw RadiationFieldStoreException("Voxel grid mismatch! The field's voxel grid differs from the one in file " + file);
+		grid_header.assign((const char*)&existing_grid, sizeof(FiledTypes::V1::CartesianHeader));
+	}
+	else if (field_type == "PolarRadiationField") {
+		FiledTypes::V1::PolarHeader existing_grid;
+		existing.read((char*)&existing_grid, sizeof(FiledTypes::V1::PolarHeader));
+		auto polar = std::dynamic_pointer_cast<PolarRadiationField>(field);
+		if (existing_grid.segments_counts != polar->get_segments_count())
+			throw RadiationFieldStoreException("Segment count mismatch! The field's segments differ from the ones in file " + file);
+		grid_header.assign((const char*)&existing_grid, sizeof(FiledTypes::V1::PolarHeader));
+	}
+	else {
+		throw RadiationFieldStoreException("Field type " + field_type + " is not supported!");
+	}
+	if (!existing)
+		throw RadiationFieldStoreException("File " + file + " is truncated or corrupted.");
+
+	// channel name -> (header, offset of its data) for the channels of the file that are kept
+	std::map<std::string, std::pair<FiledTypes::V1::ChannelHeader, std::streamoff>> kept_channels;
+	while (true) {
+		FiledTypes::V1::ChannelHeader channel_header;
+		existing.read((char*)&channel_header, sizeof(FiledTypes::V1::ChannelHeader));
+		if (existing.gcount() == 0 && existing.eof())
+			break;
+		if (!existing)
+			throw RadiationFieldStoreException("File " + file + " is truncated or corrupted.");
+		const std::string name(channel_header.name, strnlen(channel_header.name, sizeof(channel_header.name)));
+		const std::streamoff data_offset = existing.tellg();
+		if (!field->has_channel(name))
+			kept_channels.insert({ name, { channel_header, data_offset } });
+		existing.seekg(static_cast<std::streamoff>(channel_header.channel_bytes), std::ios::cur);
+	}
+	existing.clear();
+
+	std::map<std::string, std::shared_ptr<VoxelBuffer>> new_channels;
+	for (auto& channel : field->get_channels())
+		new_channels.insert(channel);
+	std::vector<std::string> channel_names;
+	for (auto& [name, channel] : new_channels)
+		channel_names.push_back(name);
+	for (auto& [name, kept] : kept_channels)
+		channel_names.push_back(name);
+	std::sort(channel_names.begin(), channel_names.end());
+
+	const std::string temporary_file = file + ".replace.tmp";
+	{
+		std::ofstream out(temporary_file, std::ios::out | std::ios::binary | std::ios::trunc);
+		if (!out.is_open())
+			throw RadiationFieldStoreException("Could not create temporary file " + temporary_file);
+		out.write((const char*)&version_header, sizeof(VersionHeader));
+		this->get_metadata_serializer().serializeMetadata(out, metadata);
+		out.write((const char*)&field_header, sizeof(FiledTypes::V1::RadiationFieldHeader));
+		out.write(grid_header.data(), grid_header.size());
+
+		std::vector<char> copy_buffer(1 << 20);
+		for (const std::string& name : channel_names) {
+			auto new_channel = new_channels.find(name);
+			if (new_channel != new_channels.end()) {
+				FiledTypes::V1::ChannelHeader channel_header;
+				std::strncpy(channel_header.name, name.c_str(), std::min<size_t>(sizeof(channel_header.name), name.length()));
+				const std::string serialized = this->get_field_serializer().serializeChannel(new_channel->second)->str();
+				channel_header.channel_bytes = serialized.length();
+				out.write((const char*)&channel_header, sizeof(FiledTypes::V1::ChannelHeader));
+				out.write(serialized.data(), serialized.length());
+			}
+			else {
+				const auto& [channel_header, data_offset] = kept_channels.at(name);
+				out.write((const char*)&channel_header, sizeof(FiledTypes::V1::ChannelHeader));
+				existing.seekg(data_offset, std::ios::beg);
+				size_t remaining = channel_header.channel_bytes;
+				while (remaining > 0) {
+					const size_t chunk = std::min(remaining, copy_buffer.size());
+					existing.read(copy_buffer.data(), chunk);
+					if (static_cast<size_t>(existing.gcount()) != chunk)
+						throw RadiationFieldStoreException("File " + file + " is truncated or corrupted.");
+					out.write(copy_buffer.data(), chunk);
+					remaining -= chunk;
+				}
+			}
+		}
+		if (!out)
+			throw RadiationFieldStoreException("Could not write temporary file " + temporary_file);
+	}
+	existing.close();
+	fs::rename(temporary_file, file);
 }
 
 std::shared_ptr<Storage::RadiationFieldMetadata> FieldStore::peek_metadata(const std::string& file)
