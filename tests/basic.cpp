@@ -4,6 +4,8 @@
 #include "RadFiled3D/storage/RadiationFieldStore.hpp"
 #include "RadFiled3D/storage/Types.hpp"
 #include <memory>
+#include <limits>
+#include <cmath>
 #include <vector>
 #include <chrono>
 #include <fstream>
@@ -798,6 +800,63 @@ namespace {
 
 		std::remove("test10.rf3");
 		std::remove("test10_expected.rf3");
+	}
+
+	TEST(FloatingPointJoin, EvaluatesInAWiderTypeAndRejectsUnrepresentableResults) {
+		const float huge = std::numeric_limits<float>::max() * 0.75f;
+		EXPECT_FLOAT_EQ(ExporterHelpers::get_join_function<float>(FieldJoinMode::Mean)(huge, huge), huge);
+		EXPECT_FLOAT_EQ(ExporterHelpers::get_join_function<float>(FieldJoinMode::AddWeighted, 0.25f)(huge, huge), huge);
+		EXPECT_THROW(ExporterHelpers::get_join_function<float>(FieldJoinMode::Add)(huge, huge), RadiationFieldStoreException);
+		EXPECT_THROW(ExporterHelpers::get_join_function<float>(FieldJoinMode::Divide)(1.f, 0.f), RadiationFieldStoreException);
+		EXPECT_FLOAT_EQ(ExporterHelpers::get_join_function<float>(FieldJoinMode::Add)(1.5f, 2.f), 3.5f);
+		// non-finite inputs are passed on, not reported: the join did not cause them
+		EXPECT_TRUE(std::isinf(ExporterHelpers::get_join_function<float>(FieldJoinMode::Add)(std::numeric_limits<float>::infinity(), 1.f)));
+
+		const double huge_double = std::numeric_limits<double>::max() * 0.75;
+		EXPECT_DOUBLE_EQ(ExporterHelpers::get_join_function<double>(FieldJoinMode::Mean)(huge_double, huge_double), huge_double);
+
+		const glm::vec3 huge_vec(huge, 1.f, -huge);
+		EXPECT_EQ(ExporterHelpers::get_join_function<glm::vec3>(FieldJoinMode::Mean)(huge_vec, huge_vec), huge_vec);
+		EXPECT_THROW(ExporterHelpers::get_join_function<glm::vec3>(FieldJoinMode::Add)(huge_vec, huge_vec), RadiationFieldStoreException);
+
+#if RADFILED3D_HAS_FLOAT16
+		const Typing::float16 big = static_cast<Typing::float16>(60000.f);
+		EXPECT_EQ(static_cast<float>(ExporterHelpers::get_join_function<Typing::float16>(FieldJoinMode::Mean)(big, big)), 60000.f);
+		EXPECT_THROW(ExporterHelpers::get_join_function<Typing::float16>(FieldJoinMode::Add)(big, big), RadiationFieldStoreException);
+#endif
+	}
+
+	TEST(Storage, JoinNeverDegeneratesFloatLayers) {
+		std::remove("test11.rf3");
+		auto metadata = std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(make_join_test_metadata());
+		const float huge = std::numeric_limits<float>::max() * 0.75f;
+		auto make_field = [huge]() {
+			auto field = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
+			auto channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("scatter_field"));
+			channel->add_layer<float>("flux", huge, "");
+			channel->add_custom_layer<HistogramVoxel<float>>("spectrum", HistogramVoxel<float>(4, 10.f, nullptr), huge, "");
+			channel->add_layer<uint32_t>("counts", 7u, "");
+			return field;
+		};
+		FieldStore::store(make_field(), metadata, "test11.rf3", StoreVersion::V1);
+		auto read_all = [](const std::string& file) {
+			std::ifstream stream(file, std::ios::binary);
+			return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+		};
+		const std::string before = read_all("test11.rf3");
+
+		// the plain sum of two huge float32 values is not representable: the join fails and the file stays untouched
+		EXPECT_THROW(FieldStore::join(make_field(), metadata, "test11.rf3", FieldJoinMode::Add), RadiationFieldStoreException);
+		EXPECT_EQ(read_all("test11.rf3"), before);
+
+		// the weighted mean fits, although its intermediate sum would overflow float32
+		EXPECT_NO_THROW(FieldStore::join(make_field(), metadata, "test11.rf3", FieldJoinMode::AddWeighted));
+		auto joined = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test11.rf3"));
+		auto channel = joined->get_channel("scatter_field");
+		EXPECT_FLOAT_EQ(channel->get_voxel_flat<ScalarVoxel<float>>("flux", 3).get_data(), huge);
+		EXPECT_FLOAT_EQ((&channel->get_voxel_flat<HistogramVoxel<float>>("spectrum", 3).get_data())[2], huge);
+		EXPECT_EQ(channel->get_voxel_flat<ScalarVoxel<uint32_t>>("counts", 3).get_data(), 7u);
+		std::remove("test11.rf3");
 	}
 
 	TEST(SaturatingArithmetic, ClampsInsteadOfWrapping) {

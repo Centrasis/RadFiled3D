@@ -379,6 +379,18 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 				case Typing::DType::AngularResolved:
 					target_channel->merge_voxel_buffer<AngularResolvedVoxel<float>>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<AngularResolvedVoxel<float>, float>(join_mode, ratio));
 					break;
+				case Typing::DType::UInt32:
+					target_channel->merge_data_buffer<uint32_t>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<uint32_t>(join_mode, ratio));
+					break;
+				case Typing::DType::Float16:
+#if RADFILED3D_HAS_FLOAT16
+					target_channel->merge_data_buffer<Typing::float16>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<Typing::float16>(join_mode, ratio));
+#else
+					throw RadiationFieldStoreException("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
+#endif
+					break;
+				default:
+					throw RadiationFieldStoreException("Unsupported data type for joining layer: '" + layer_name + "' in channel: " + channel.first);
 			}
 		}
 	}

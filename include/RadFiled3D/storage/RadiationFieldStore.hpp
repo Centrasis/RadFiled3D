@@ -9,8 +9,13 @@
 #include "RadFiled3D/storage/Types.hpp"
 #include <utility>
 #include <type_traits>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <glm/glm.hpp>
 #include <RadFiled3D/storage/FieldAccessor.hpp>
 #include <RadFiled3D/helpers/SaturatingArithmetic.hpp>
+#include <RadFiled3D/helpers/Typing.hpp>
 #include <RadFiled3D/storage/MetadataSerializer.hpp>
 #include <RadFiled3D/storage/MetadataAccessor.hpp>
 #include <RadFiled3D/storage/FieldSerializer.hpp>
@@ -96,6 +101,51 @@ namespace RadFiled3D {
 			NoChecks = 6
 		};
 
+		/** Type traits of the join arithmetic (see ExporterHelpers::get_join_function). */
+		namespace JoinTypes {
+			template<typename T>
+			struct is_float16 : std::false_type {};
+#if RADFILED3D_HAS_FLOAT16
+			template<>
+			struct is_float16<Typing::float16> : std::true_type {};
+#endif
+
+			/** Floating point types a join evaluates in a wider type. */
+			template<typename T>
+			struct is_join_float : std::bool_constant<std::is_floating_point_v<T> || is_float16<T>::value> {};
+
+			/** Wider type in which joins of the floating point type T are evaluated: double, or long double for double. */
+			template<typename T>
+			using wide_float_t = std::conditional_t<std::is_same_v<T, double> || std::is_same_v<T, long double>, long double, double>;
+
+			/** Largest finite value of the floating point type T. */
+			template<typename T>
+			constexpr long double float_max() {
+				if constexpr (is_float16<T>::value)
+					return 65504.0L;
+				else
+					return static_cast<long double>(std::numeric_limits<T>::max());
+			}
+
+			/** Name of the floating point type T for messages. */
+			template<typename T>
+			std::string float_name() {
+				if constexpr (is_float16<T>::value)
+					return "float16";
+				else if constexpr (std::is_same_v<T, float>)
+					return "float32";
+				else if constexpr (std::is_same_v<T, double>)
+					return "float64";
+				else
+					return "long double";
+			}
+
+			template<typename T>
+			struct is_glm_vec : std::false_type {};
+			template<glm::length_t L, typename T, glm::qualifier Q>
+			struct is_glm_vec<glm::vec<L, T, Q>> : std::true_type {};
+		}
+
 		class ExporterHelpers {
 		public:
 			/** Perform the actual merge of the fields
@@ -112,7 +162,61 @@ namespace RadFiled3D {
 				}
 			}
 
-			/** Generate a Voxel-level join function (a, b) -> c with a beeing the target voxel, b beeing the additional source voxel and c beeing the result voxel
+			/** Narrows a join result evaluated in a wider type to T. A result that is not representable as T although both
+			* joined values were finite (e.g. the sum of two huge fp16 values) is reported instead of being stored as inf or nan.
+			* Non-finite input values are passed on unchanged.
+			*/
+			template<typename T, typename W>
+			static T narrow_join_result(W result, W a, W b) {
+				if (std::isfinite(a) && std::isfinite(b) && (!std::isfinite(result) || std::fabs(static_cast<long double>(result)) > JoinTypes::float_max<T>())) {
+					throw RadiationFieldStoreException(
+						"Joining the values " + std::to_string(static_cast<long double>(a)) + " and " + std::to_string(static_cast<long double>(b))
+						+ " yields " + std::to_string(static_cast<long double>(result)) + ", which is not representable as " + JoinTypes::float_name<T>()
+						+ ". The join was aborted instead of storing a degenerated value."
+					);
+				}
+				return static_cast<T>(result);
+			}
+
+			/** Join function for a floating point type T: evaluated in wide_float_t<T>, so an intermediate result (e.g. the
+			* sum inside a mean of two huge values) cannot overflow, and narrowed with narrow_join_result.
+			*/
+			template<typename T>
+			static std::function<T(const T&, const T&)> get_float_join_function(FieldJoinMode mode, float ratio) {
+				using W = JoinTypes::wide_float_t<T>;
+				auto wrap = [](auto op) {
+					return [op](const T& a, const T& b) {
+						const W wa = static_cast<W>(a);
+						const W wb = static_cast<W>(b);
+						return narrow_join_result<T, W>(op(wa, wb), wa, wb);
+					};
+				};
+				const W r = static_cast<W>(ratio);
+				switch (mode)
+				{
+				case FieldJoinMode::Add:
+					return wrap([](W a, W b) { return a + b; });
+				case FieldJoinMode::Mean:
+					return wrap([](W a, W b) { return (a + b) / W(2); });
+				case FieldJoinMode::Identity:
+					return [](const T& a, const T& b) { return a; };
+				case FieldJoinMode::Subtract:
+					return wrap([](W a, W b) { return a - b; });
+				case FieldJoinMode::Divide:
+					return wrap([](W a, W b) { return a / b; });
+				case FieldJoinMode::Multiply:
+					return wrap([](W a, W b) { return a * b; });
+				case FieldJoinMode::AddWeighted:
+					return wrap([r](W a, W b) { return a * (W(1) - r) + b * r; });
+				default:
+					throw RadiationFieldStoreException("Unknown join mode");
+				}
+			}
+
+			/** Generate a Voxel-level join function (a, b) -> c with a beeing the target voxel, b beeing the additional source voxel and c beeing the result voxel.
+			* Integral values saturate at their type's limits. Floating point values (also the components of vectors and the
+			* elements of histogram and angular voxels) are joined in a wider type and a result not representable in the layer's
+			* type raises an exception, so no join silently degenerates data.
 			* @param mode The mode to join the fields
 			* @param ratio The ratio to use for the weighted join mode. Default is 0.f meaning only the data of the target voxel is used.
 			* @return The join function
@@ -121,7 +225,31 @@ namespace RadFiled3D {
 			*/
 			template<typename dtype, typename scalarT = dtype>
 			static std::function<dtype(const dtype&, const dtype&)> get_join_function(FieldJoinMode mode, float ratio = 0.f) {
-				if constexpr (std::is_integral_v<dtype>) {
+				if constexpr (std::is_base_of_v<IVoxel, dtype>) {
+					// Joined element-wise into the target: view voxels (Hist/AngularResolved) share their data pointer on copy,
+					// so arithmetic on voxel temporaries could modify the SOURCE field.
+					const auto join_element = get_join_function<scalarT>(mode, ratio);
+					return [join_element](const dtype& a, const dtype& b) {
+						if (a.get_bytes() != b.get_bytes())
+							throw RadiationFieldStoreException("Voxel data size mismatch in join");
+						scalarT* av = (scalarT*)a.get_raw();
+						const scalarT* bv = (const scalarT*)b.get_raw();
+						const size_t n = a.get_bytes() / sizeof(scalarT);
+						for (size_t i = 0; i < n; i++)
+							av[i] = join_element(av[i], bv[i]);
+						return a;
+					};
+				}
+				else if constexpr (JoinTypes::is_glm_vec<dtype>::value) {
+					const auto join_component = get_join_function<typename dtype::value_type>(mode, ratio);
+					return [join_component](const dtype& a, const dtype& b) {
+						dtype c;
+						for (glm::length_t i = 0; i < dtype::length(); i++)
+							c[i] = join_component(a[i], b[i]);
+						return c;
+					};
+				}
+				else if constexpr (std::is_integral_v<dtype>) {
 					// Integral layers (e.g. 8-bit masks) saturate at the type's limits instead of wrapping around.
 					switch (mode)
 					{
@@ -143,46 +271,11 @@ namespace RadFiled3D {
 						throw RadiationFieldStoreException("Unknown join mode");
 					}
 				}
-				switch (mode)
-				{
-				case FieldJoinMode::Add:
-					return [](const dtype& a, const dtype& b) { return a + b; };
-				case FieldJoinMode::Mean:
-					return [](const dtype& a, const dtype& b) { return (a + b) / static_cast<scalarT>(2); };
-				case FieldJoinMode::Identity:
-					return [](const dtype& a, const dtype& b) { return a; };
-				case FieldJoinMode::Subtract:
-					return [](const dtype& a, const dtype& b) { return a - b; };
-				case FieldJoinMode::Divide:
-					return [](const dtype& a, const dtype& b) { return a / b; };
-				case FieldJoinMode::Multiply:
-					return [](const dtype& a, const dtype& b) { return a * b; };
-				case FieldJoinMode::AddWeighted:
-					if constexpr (std::is_base_of_v<IVoxel, dtype>) {
-						// View voxels (Hist/AngularResolved) share their data pointer on copy, so the
-						// (b * ratio) temporary would scale the SOURCE field in place. Blend element-wise
-						// into the target and leave b untouched.
-						return [ratio](const dtype& a, const dtype& b) {
-							if (a.get_bytes() != b.get_bytes())
-								throw RadiationFieldStoreException("Voxel data size mismatch in AddWeighted join");
-							scalarT* av = (scalarT*)a.get_raw();
-							const scalarT* bv = (const scalarT*)b.get_raw();
-							const size_t n = a.get_bytes() / sizeof(scalarT);
-							for (size_t i = 0; i < n; i++)
-								av[i] = av[i] * (1.f - ratio) + bv[i] * ratio;
-							return a;
-						};
-					}
-					else {
-						return [ratio](const dtype& a, const dtype& b) {
-							dtype a1 = (a * (1.f - ratio));
-							dtype b1 = (b * ratio);
-							dtype c = a1 + b1;
-							return static_cast<dtype>(c);
-						};
-					}
-				default:
-					throw RadiationFieldStoreException("Unknown join mode");
+				else if constexpr (JoinTypes::is_join_float<dtype>::value) {
+					return get_float_join_function<dtype>(mode, ratio);
+				}
+				else {
+					static_assert(sizeof(dtype) == 0, "No join function for this voxel data type");
 				}
 			}
 		};

@@ -125,7 +125,8 @@ namespace {
 		auto result = tracer.trace(glm::vec3(0.f), glm::vec3(1.f));
 		std::set<size_t> unique_result(result.begin(), result.end());
 		EXPECT_EQ(result.size(), unique_result.size());
-		EXPECT_EQ(result.size(), 998);
+		// the channel has the field's 1000³ voxels (it had 999³ before VoxelGrid rounded like CartesianRadiationField)
+		EXPECT_EQ(result.size(), 999);
 	}
 
 	TEST(Bresenham, TraceInside) {
@@ -223,7 +224,8 @@ namespace {
 		auto result = tracer.trace(glm::vec3(0.f), glm::vec3(1.f));
 		std::set<size_t> unique_result(result.begin(), result.end());
 		EXPECT_EQ(result.size(), unique_result.size());
-		EXPECT_EQ(result.size(), 998);
+		// the channel has the field's 1000³ voxels (it had 999³ before VoxelGrid rounded like CartesianRadiationField)
+		EXPECT_EQ(result.size(), 999);
 	}
 
 	TEST(LineTracing, TraceInside) {
@@ -315,6 +317,8 @@ namespace {
 		auto result = tracer.trace(glm::vec3(0.f), glm::vec3(1.f));
 		std::set<size_t> unique_result(result.begin(), result.end());
 		EXPECT_EQ(result.size(), unique_result.size());
-		EXPECT_EQ(result.size(), 2870);
+		// the channel has the field's 1000³ voxels (it had 999³ before VoxelGrid rounded like CartesianRadiationField)
+		// the exact diagonal runs through voxel corners, so neighbours touching it at the corners count too
+		EXPECT_EQ(result.size(), 3873);
 	}
 }
