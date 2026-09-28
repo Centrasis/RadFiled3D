@@ -18,14 +18,6 @@ PolarSegmentsBuffer::PolarSegmentsBuffer(const glm::uvec2& segments_count)
 VoxelBuffer* PolarSegmentsBuffer::copy() const
 {
 	PolarSegmentsBuffer* copy = new PolarSegmentsBuffer(this->segments.get_segments_count());
-	for (auto& layer : this->layers)
-	{
-		auto& layer_info = layer.second;
-		auto data = new char[this->voxel_count * layer_info.bytes_per_data_element];
-		auto voxels = new char[this->voxel_count * layer_info.bytes_per_voxel];
-		memcpy(data, layer_info.data, this->voxel_count * layer_info.bytes_per_data_element);
-		memcpy(voxels, layer_info.voxels, this->voxel_count * layer_info.bytes_per_voxel);
-		copy->layers[layer.first] = VoxelLayer(layer_info.bytes_per_voxel, layer_info.bytes_per_data_element, voxels, data, layer_info.unit, layer_info.statistical_error, this->voxel_count);
-	}
+	this->copy_layers_to(*copy);
 	return copy;
 }

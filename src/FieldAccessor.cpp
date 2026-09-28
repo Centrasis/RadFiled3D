@@ -331,6 +331,8 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 		break;
 	case Typing::DType::AngularResolved:
 		break;
+	case Typing::DType::VMFMixture:
+		break;
 	}
 
 	if (voxel == nullptr && dtype == Typing::DType::Hist) {
@@ -344,6 +346,15 @@ IVoxel* RadFiled3D::Storage::V1::FileParser::createVoxelFromBuffer(char* data_bu
 
 	if (voxel == nullptr && dtype == Typing::DType::AngularResolved) {
 		OwningAngularResolvedVoxel<float>* vx = new OwningAngularResolvedVoxel<float>();
+		if (voxel_header_data != nullptr) {
+			vx->init_from_header(voxel_header_data);
+		}
+		vx->set_data(data_buffer);
+		voxel = vx;
+	}
+
+	if (voxel == nullptr && dtype == Typing::DType::VMFMixture) {
+		OwningVMFMixtureVoxel<float>* vx = new OwningVMFMixtureVoxel<float>();
 		if (voxel_header_data != nullptr) {
 			vx->init_from_header(voxel_header_data);
 		}

@@ -105,6 +105,7 @@ VoxelLayer* Storage::V1::BinaryFieldBlockHandler::deserializeLayer(char* data, s
 	VoxelLayer* layer = nullptr;
 	HistogramVoxel<float> hist_template;
 	AngularResolvedVoxel<float> sph_template;
+	VMFMixtureVoxel<float> vmf_template;
 
 	switch (dtype)
 	{
@@ -153,6 +154,11 @@ VoxelLayer* Storage::V1::BinaryFieldBlockHandler::deserializeLayer(char* data, s
 			sph_template.init_from_header(header_data);
 		layer = VoxelLayer::ConstructFromBufferRaw<float, AngularResolvedVoxel<float>>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, sph_template);
 		break;
+	case Typing::DType::VMFMixture:
+		if (header_data != nullptr)
+			vmf_template.init_from_header(header_data);
+		layer = VoxelLayer::ConstructFromBufferRaw<float, VMFMixtureVoxel<float>>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, vmf_template);
+		break;
 	case Typing::DType::UInt64:
 #if defined(__x86_64__) || defined(_M_X64)
 		layer = VoxelLayer::ConstructFromBufferRaw<uint64_t>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
@@ -177,6 +183,7 @@ VoxelLayer* Storage::V1::BinaryFieldBlockHandler::constructOwnedLayer(const File
 
 	HistogramVoxel<float> hist_template;
 	AngularResolvedVoxel<float> sph_template;
+	VMFMixtureVoxel<float> vmf_template;
 	switch (dtype) {
 	case Typing::DType::Float:
 		return VoxelLayer::ConstructWithOwnedDataBuffer<float>(unit, voxel_count, stat_err, (float*)owned_data);
@@ -211,6 +218,9 @@ VoxelLayer* Storage::V1::BinaryFieldBlockHandler::constructOwnedLayer(const File
 	case Typing::DType::AngularResolved:
 		if (header_data != nullptr) sph_template.init_from_header(header_data);
 		return VoxelLayer::ConstructWithOwnedDataBuffer<float, AngularResolvedVoxel<float>>(unit, voxel_count, stat_err, (float*)owned_data, sph_template);
+	case Typing::DType::VMFMixture:
+		if (header_data != nullptr) vmf_template.init_from_header(header_data);
+		return VoxelLayer::ConstructWithOwnedDataBuffer<float, VMFMixtureVoxel<float>>(unit, voxel_count, stat_err, (float*)owned_data, vmf_template);
 	case Typing::DType::UInt64:
 #if defined(__x86_64__) || defined(_M_X64)
 		return VoxelLayer::ConstructWithOwnedDataBuffer<uint64_t>(unit, voxel_count, stat_err, (uint64_t*)owned_data);
@@ -321,6 +331,14 @@ void Storage::V1::BinaryFieldBlockHandler::add_spherical_layer(std::shared_ptr<V
 	if (header_data != nullptr)
 		sph.init_from_header(header_data);
 	field->add_custom_layer<AngularResolvedVoxel<float>, float>(layer, sph, 0.f, unit);
+}
+
+void Storage::V1::BinaryFieldBlockHandler::add_vmf_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data)
+{
+	VMFMixtureVoxel<float> vmf;
+	if (header_data != nullptr)
+		vmf.init_from_header(header_data);
+	field->add_custom_layer<VMFMixtureVoxel<float>, float>(layer, vmf, 0.f, unit);
 }
 
 std::shared_ptr<IRadiationField> RadFiled3D::Storage::V1::BinaryFieldBlockHandler::deserializeField(std::istream& buffer) const

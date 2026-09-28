@@ -93,11 +93,13 @@ class RadFiled3DError : public std::runtime_error {
 
 // This macro is used to return a shared_ptr that does not delete the object. Used for returning regular voxel pointers from radiation field buffers that are not holding their own data.
 #define VOXEL_REFERENCE(vx) std::shared_ptr<IVoxel>(static_cast<IVoxel*>(vx), NonDeletingDeleter())
-#define VOXEL_CAPSULE(vx, T) std::static_pointer_cast<IVoxel>(std::shared_ptr<T>(static_cast<T*>(vx)))
+// Takes ownership of a heap-allocated voxel. Voxels have no virtual destructor, so it is freed through
+// selfDestruct(), which deletes at the concrete (e.g. Owning*) type and so also frees an owned data buffer.
+#define VOXEL_CAPSULE(vx, T) std::static_pointer_cast<IVoxel>(std::shared_ptr<T>(static_cast<T*>(vx), [](T* p) { p->selfDestruct(); }))
 
 #define DECLARE_SCALAR_VOXEL(m, dT, name, parent) \
     py::class_<ScalarVoxel<dT>, std::shared_ptr<ScalarVoxel<dT>>, parent>(m, name)\
-        .def("get_data", &ScalarVoxel<dT>::get_data, py::return_value_policy::reference)\
+        .def("get_data", &ScalarVoxel<dT>::get_data, py::return_value_policy::reference_internal)\
         .def("set_data", [](ScalarVoxel<dT>& v, dT value) {\
             v = value;\
         })\
@@ -114,7 +116,7 @@ class RadFiled3DError : public std::runtime_error {
 
 #define DECLARE_OWNING_SCALAR_VOXEL(m, dT, name, parent) \
     py::class_<OwningScalarVoxel<dT>, std::shared_ptr<OwningScalarVoxel<dT>>, parent>(m, name)\
-        .def("get_data", &OwningScalarVoxel<dT>::get_data, py::return_value_policy::reference)\
+        .def("get_data", &OwningScalarVoxel<dT>::get_data, py::return_value_policy::reference_internal)\
         .def("set_data", [](OwningScalarVoxel<dT>& v, dT value) {\
             v.set_data(&value);\
         })\
@@ -157,6 +159,8 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
         return VOXEL_CAPSULE(vx, HistogramVoxel<float>);
     case Typing::DType::AngularResolved:
         return VOXEL_CAPSULE(vx, AngularResolvedVoxel<float>);
+    case Typing::DType::VMFMixture:
+        return VOXEL_CAPSULE(vx, VMFMixtureVoxel<float>);
     case Typing::DType::UInt64:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint64_t>);
     case Typing::DType::UInt32:
@@ -541,6 +545,33 @@ py::array create_py_array_generic(const T* data, const glm::uvec2& shape, std::s
 template<typename T>
 py::array create_py_array(const T* data, const glm::uvec2& shape, std::shared_ptr<void> ptr, bool copy_data) {
     return create_py_array_generic<T>(data, shape, ptr, copy_data, sizeof(T));
+}
+
+// vMF mixture layers are exposed as (x, y, z, lobes, 5) with the last axis [weight, mean_x, mean_y, mean_z, kappa],
+// strided over the voxel-major buffer like create_py_array_generic.
+py::array create_vmf_py_array(const float* data, const glm::uvec3& shape, size_t lobes, std::shared_ptr<void> ptr, bool copy_data) {
+    const size_t values = VMFMixtureVoxel<float>::values_per_lobe;
+    const size_t voxel_values = values * lobes;
+    const std::array<size_t, 5> target_shape = { static_cast<size_t>(shape.x), static_cast<size_t>(shape.y), static_cast<size_t>(shape.z), lobes, values };
+    const std::array<size_t, 5> strides = {
+        sizeof(float) * voxel_values,
+        sizeof(float) * voxel_values * shape.x,
+        sizeof(float) * voxel_values * shape.x * shape.y,
+        sizeof(float) * values,
+        sizeof(float)
+    };
+    if (copy_data) {
+        const size_t count = voxel_values * shape.x * shape.y * shape.z;
+        auto* buf = new float[count];
+        std::memcpy(buf, data, count * sizeof(float));
+        py::capsule free_buf(buf, [](void* p) { delete[] static_cast<float*>(p); });
+        return py::array(py::array_t<float>(target_shape, strides, buf, free_buf));
+    }
+    // Capsule owns a copy of the parent shared_ptr (see create_py_array_generic).
+    py::capsule cap(new std::shared_ptr<void>(ptr), [](void* p) {
+        delete static_cast<std::shared_ptr<void>*>(p);
+    });
+    return py::array(py::array_t<float>(target_shape, strides, data, cap));
 }
 
 PYBIND11_MODULE(RadFiled3D, m) {
@@ -1139,13 +1170,13 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_dynamic_metadata", [dynamic_metadata_entry](Storage::V1::RadiationFieldMetadata& self, const std::string& key) {
             IVoxel* voxel = dynamic_metadata_entry(self, key);
             return VOXEL_REFERENCE(voxel);
-        }, py::arg("key"), py::return_value_policy::reference)
+        }, py::arg("key"), py::return_value_policy::reference, py::keep_alive<0, 1>())
         .def("get_dynamic_metadata_keys", &Storage::V1::RadiationFieldMetadata::get_dynamic_metadata_keys)
         .def("add_dynamic_histogram_metadata", [dynamic_metadata_entry](Storage::V1::RadiationFieldMetadata& self, const std::string& key, size_t bins, float bin_width) {
             self.set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel<float>>(key, RadFiled3D::HistogramVoxel<float>(bins, bin_width, nullptr));
 			IVoxel* voxel = dynamic_metadata_entry(self, key);
             return VOXEL_REFERENCE(voxel);
-		}, py::arg("key"), py::arg("bins"), py::arg("bin_width"), py::return_value_policy::reference)
+		}, py::arg("key"), py::arg("bins"), py::arg("bin_width"), py::return_value_policy::reference, py::keep_alive<0, 1>())
         .def("add_dynamic_metadata", [dynamic_metadata_entry](Storage::V1::RadiationFieldMetadata& self, const std::string& key, Typing::DType dtype) {
             switch (dtype) {
 		    case Typing::DType::Float:
@@ -1184,7 +1215,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 
             IVoxel* voxel = dynamic_metadata_entry(self, key);
             return VOXEL_REFERENCE(voxel);
-        }, py::arg("key"), py::arg("dtype"), py::return_value_policy::reference);
+        }, py::arg("key"), py::arg("dtype"), py::return_value_policy::reference, py::keep_alive<0, 1>());
 
     // TODO: SWITCH TO USING DECLARE_SCALAR_VOXEL(...) makro
 
@@ -1231,7 +1262,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 #endif
 
     py::class_<ScalarVoxel<glm::vec2>, std::shared_ptr<ScalarVoxel<glm::vec2>>, IVoxel>(m, "Vec2Voxel")
-        .def("get_data", &ScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference)
+        .def("get_data", &ScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference_internal)
         .def("set_data", [](ScalarVoxel<glm::vec2>& v, const glm::vec2& value) {
             v = value;
         })
@@ -1247,7 +1278,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         );
 
 	py::class_<OwningScalarVoxel<glm::vec2>, std::shared_ptr<OwningScalarVoxel<glm::vec2>>, ScalarVoxel<glm::vec2>>(m, "OwningVec2Voxel")
-		.def("get_data", &OwningScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference)
+		.def("get_data", &OwningScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference_internal)
 		.def("set_data", &OwningScalarVoxel<glm::vec2>::set_data)
 		.def(py::self == py::self)
 		.def(py::self /= py::self)
@@ -1261,7 +1292,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 		);
 
     py::class_<ScalarVoxel<glm::vec3>, std::shared_ptr<ScalarVoxel<glm::vec3>>, IVoxel>(m, "Vec3Voxel")
-        .def("get_data", &ScalarVoxel<glm::vec3>::get_data, py::return_value_policy::reference)
+        .def("get_data", &ScalarVoxel<glm::vec3>::get_data, py::return_value_policy::reference_internal)
         .def("set_data", [](ScalarVoxel<glm::vec3>& v, const glm::vec3& value) {
             v = value;
         })
@@ -1277,7 +1308,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         );
 
 	py::class_<OwningScalarVoxel<glm::vec3>, std::shared_ptr<OwningScalarVoxel<glm::vec3>>, ScalarVoxel<glm::vec3>>(m, "OwningVec3Voxel")
-		.def("get_data", &OwningScalarVoxel<glm::vec3>::get_data, py::return_value_policy::reference)
+		.def("get_data", &OwningScalarVoxel<glm::vec3>::get_data, py::return_value_policy::reference_internal)
 		.def("set_data", &OwningScalarVoxel<glm::vec3>::set_data)
 		.def(py::self == py::self)
 		.def(py::self /= py::self)
@@ -1291,7 +1322,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 		);
 
     py::class_<ScalarVoxel<glm::vec4>, std::shared_ptr<ScalarVoxel<glm::vec4>>, IVoxel>(m, "Vec4Voxel")
-        .def("get_data", &ScalarVoxel<glm::vec4>::get_data, py::return_value_policy::reference)
+        .def("get_data", &ScalarVoxel<glm::vec4>::get_data, py::return_value_policy::reference_internal)
         .def("set_data", [](ScalarVoxel<glm::vec4>& v, const glm::vec4& value) {
             v = value;
         })
@@ -1307,7 +1338,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         );
 
 	py::class_<OwningScalarVoxel<glm::vec4>, std::shared_ptr<OwningScalarVoxel<glm::vec4>>, ScalarVoxel<glm::vec4>>(m, "OwningVec4Voxel")
-		.def("get_data", &OwningScalarVoxel<glm::vec4>::get_data, py::return_value_policy::reference)
+		.def("get_data", &OwningScalarVoxel<glm::vec4>::get_data, py::return_value_policy::reference_internal)
 		.def("set_data", &OwningScalarVoxel<glm::vec4>::set_data)
 		.def(py::self == py::self)
 		.def(py::self /= py::self)
@@ -1325,7 +1356,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_bins", &HistogramVoxel<float>::get_bins)
         .def("get_histogram", [](const HistogramVoxel<float>& a) {
             auto histogram = a.get_histogram();
-            py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { static_cast<size_t>(histogram.size()) },
                 { sizeof(float) },
@@ -1335,7 +1366,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         }, py::return_value_policy::reference)
         .def("get_data", [](const HistogramVoxel<float>& a) {
             auto histogram = a.get_histogram();
-            py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { static_cast<size_t>(histogram.size()) },
                 { sizeof(float) },
@@ -1359,7 +1390,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 		.def("get_bins", &OwningHistogramVoxel<float>::get_bins)
 		.def("get_histogram", [](const OwningHistogramVoxel<float>& a) {
 		    auto histogram = a.get_histogram();
-		    py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
+		    py::object cap = py::cast(&a, py::return_value_policy::reference);
 		    return py::array_t<float>(
 			    { static_cast<size_t>(histogram.size()) },
 			    { sizeof(float) },
@@ -1369,7 +1400,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 		}, py::return_value_policy::reference)
         .def("get_data", [](const OwningHistogramVoxel<float>& a) {
             auto histogram = a.get_histogram();
-            py::capsule cap(histogram.data(), [](void* data) { /* No deletion */ });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { static_cast<size_t>(histogram.size()) },
                 { sizeof(float) },
@@ -1394,7 +1425,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_total_segments", &AngularResolvedVoxel<float>::get_total_segments)
         .def("get_segments_data", [](const AngularResolvedVoxel<float>& a) {
             auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { static_cast<size_t>(data.size()) },
                 { sizeof(float) },
@@ -1404,7 +1435,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         }, py::return_value_policy::reference)
         .def("get_data", [](const AngularResolvedVoxel<float>& a) {
             auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) {  });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { a.get_theta_segments(), a.get_phi_segments() },
                 { sizeof(float) * a.get_phi_segments(), sizeof(float) },
@@ -1430,7 +1461,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("get_total_segments", &OwningAngularResolvedVoxel<float>::get_total_segments)
         .def("get_segments_data", [](const OwningAngularResolvedVoxel<float>& a) {
             auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { static_cast<size_t>(data.size()) },
                 { sizeof(float) },
@@ -1440,7 +1471,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
         }, py::return_value_policy::reference)
         .def("get_data", [](const OwningAngularResolvedVoxel<float>& a) {
             auto data = a.get_segments_data();
-            py::capsule cap(data.data(), [](void* data) { });
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
             return py::array_t<float>(
                 { a.get_theta_segments(), a.get_phi_segments() },
                 { sizeof(float) * a.get_phi_segments(), sizeof(float) },
@@ -1454,6 +1485,65 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .def("__repr__",
             [](const OwningAngularResolvedVoxel<float>& a) {
                 return "<RadFiled3D.OwningAngularResolvedVoxel<float> (" + std::to_string(a.get_phi_segments()) + "phi x " + std::to_string(a.get_theta_segments()) + "theta)>";
+            }
+        );
+
+    auto check_lobe = [](const VMFMixtureVoxel<float>& self, size_t k) {
+        if (k >= self.get_lobes())
+            throw py::index_error("Lobe index " + std::to_string(k) + " out of range for a mixture of " + std::to_string(self.get_lobes()) + " lobes");
+    };
+
+    py::class_<VMFMixtureVoxel<float>, std::shared_ptr<VMFMixtureVoxel<float>>, ScalarVoxel<float>>(m, "VMFMixtureVoxel")
+        .def("get_lobes", &VMFMixtureVoxel<float>::get_lobes)
+        .def("get_weight", [check_lobe](const VMFMixtureVoxel<float>& self, size_t k) { check_lobe(self, k); return self.get_weight(k); }, py::arg("k"))
+        .def("get_mean", [check_lobe](const VMFMixtureVoxel<float>& self, size_t k) { check_lobe(self, k); return self.get_mean(k); }, py::arg("k"))
+        .def("get_kappa", [check_lobe](const VMFMixtureVoxel<float>& self, size_t k) { check_lobe(self, k); return self.get_kappa(k); }, py::arg("k"))
+        .def("set_lobe", [check_lobe](VMFMixtureVoxel<float>& self, size_t k, float weight, const glm::vec3& mean, float kappa) {
+            check_lobe(self, k);
+            self.set_lobe(k, weight, mean, kappa);
+        }, py::arg("k"), py::arg("weight"), py::arg("mean"), py::arg("kappa"))
+        .def("set_lobe", [check_lobe](VMFMixtureVoxel<float>& self, size_t k, float weight, const std::array<float, 3>& mean, float kappa) {
+            check_lobe(self, k);
+            self.set_lobe(k, weight, glm::vec3(mean[0], mean[1], mean[2]), kappa);
+        }, py::arg("k"), py::arg("weight"), py::arg("mean"), py::arg("kappa"))
+        .def("density", [](const VMFMixtureVoxel<float>& self, const glm::vec3& direction) { return self.density(direction); }, py::arg("direction"))
+        .def("density", [](const VMFMixtureVoxel<float>& self, const std::array<float, 3>& direction) { return self.density(glm::vec3(direction[0], direction[1], direction[2])); }, py::arg("direction"))
+        .def("get_lobes_data", [](const VMFMixtureVoxel<float>& a) {
+            auto data = a.get_lobes_data();
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
+            return py::array_t<float>(
+                { static_cast<size_t>(data.size()) },
+                { sizeof(float) },
+                data.data(),
+                cap
+            );
+        }, py::return_value_policy::reference)
+        .def("get_data", [](const VMFMixtureVoxel<float>& a) {
+            auto data = a.get_lobes_data();
+            py::object cap = py::cast(&a, py::return_value_policy::reference);
+            return py::array_t<float>(
+                { static_cast<size_t>(a.get_lobes()), VMFMixtureVoxel<float>::values_per_lobe },
+                { sizeof(float) * VMFMixtureVoxel<float>::values_per_lobe, sizeof(float) },
+                data.data(),
+                cap
+            );
+        }, py::return_value_policy::reference)
+        .def("clear", &VMFMixtureVoxel<float>::clear)
+        .def(py::self == py::self)
+        .def_static("merge", [](const VMFMixtureVoxel<float>& a, double weight_a, const VMFMixtureVoxel<float>& b, double weight_b, VMFMixtureVoxel<float>& out) {
+            VMFMixtureVoxel<float>::merge(a, weight_a, b, weight_b, out);
+        }, py::arg("a"), py::arg("weight_a"), py::arg("b"), py::arg("weight_b"), py::arg("out"))
+        .def("__repr__",
+            [](const VMFMixtureVoxel<float>& a) {
+                return "<RadFiled3D.VMFMixtureVoxel<float> (" + std::to_string(a.get_lobes()) + " lobes)>";
+            }
+        );
+
+    py::class_<OwningVMFMixtureVoxel<float>, std::shared_ptr<OwningVMFMixtureVoxel<float>>, VMFMixtureVoxel<float>>(m, "OwningVMFMixtureVoxel")
+        .def(py::init<uint32_t>(), py::arg("lobes"))
+        .def("__repr__",
+            [](const OwningVMFMixtureVoxel<float>& a) {
+                return "<RadFiled3D.OwningVMFMixtureVoxel<float> (" + std::to_string(a.get_lobes()) + " lobes)>";
             }
         );
 
@@ -1480,7 +1570,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
         .value("UINT64", Typing::DType::UInt64)
         .value("UINT32", Typing::DType::UInt32)
         .value("BYTE", Typing::DType::Byte)
-        .value("FLOAT16", Typing::DType::Float16);
+        .value("FLOAT16", Typing::DType::Float16)
+        .value("VMF_MIXTURE", Typing::DType::VMFMixture);
 
     // Whether this build can actually use DType.FLOAT16 (depends on the compiler providing _Float16).
     m.attr("HAS_FLOAT16") = py::bool_(RADFILED3D_HAS_FLOAT16 != 0);
@@ -1560,6 +1651,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     throw RadFiled3DError("For this special type of composite voxel layer, you need to call 'add_histogram_layer' to provide the additional information.");
                 case Typing::DType::AngularResolved:
                     throw RadFiled3DError("For this special type of composite voxel layer, you need to call 'add_spherical_layer' to provide the additional information.");
+                case Typing::DType::VMFMixture:
+                    throw RadFiled3DError("For this special type of composite voxel layer, you need to call 'add_vmf_layer' to provide the additional information.");
                 default:
                     throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(dtype)));
             }
@@ -1569,7 +1662,10 @@ PYBIND11_MODULE(RadFiled3D, m) {
             }, py::arg("name"), py::arg("bins"), py::arg("bin_width"), py::arg("unit"))
             .def("add_spherical_layer", [](VoxelBuffer& self, const std::string& name, size_t phi_segments, size_t theta_segments, const std::string& unit) {
                 self.add_custom_layer<AngularResolvedVoxel<float>>(name, AngularResolvedVoxel<float>(glm::uvec2(phi_segments, theta_segments), nullptr), 0.f, unit);
-            }, py::arg("name"), py::arg("phi_segments"), py::arg("theta_segments"), py::arg("unit"));
+            }, py::arg("name"), py::arg("phi_segments"), py::arg("theta_segments"), py::arg("unit"))
+            .def("add_vmf_layer", [](VoxelBuffer& self, const std::string& name, uint32_t lobes, const std::string& unit) {
+                self.add_custom_layer<VMFMixtureVoxel<float>>(name, VMFMixtureVoxel<float>(lobes, nullptr), 0.f, unit);
+            }, py::arg("name"), py::arg("lobes"), py::arg("unit"));
 
         py::class_<VoxelGridBuffer, std::shared_ptr<VoxelGridBuffer>, VoxelBuffer>(m, "VoxelGridBuffer")
             .def("get_voxel_counts", &VoxelGridBuffer::get_voxel_counts)
@@ -1603,6 +1699,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel<float>>(layer_name, idx));
                     case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<AngularResolvedVoxel<float>>(layer_name, idx));
+                    case Typing::DType::VMFMixture:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<VMFMixtureVoxel<float>>(layer_name, idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(layer_name, idx));
                     case Typing::DType::UInt32:
@@ -1610,7 +1708,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::arg("layer_name"), py::arg("idx"), py::return_value_policy::reference)
+            }, py::arg("layer_name"), py::arg("idx"), py::return_value_policy::reference, py::keep_alive<0, 1>())
             .def("get_voxel", [](VoxelGridBuffer& self, const std::string& layer_name, size_t x, size_t y, size_t z) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1638,6 +1736,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<HistogramVoxel<float>>(layer_name, x, y, z));
                     case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel<AngularResolvedVoxel<float>>(layer_name, x, y, z));
+                    case Typing::DType::VMFMixture:
+                        return VOXEL_REFERENCE(&self.get_voxel<VMFMixtureVoxel<float>>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
                     case Typing::DType::UInt32:
@@ -1645,7 +1745,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, py::return_value_policy::reference, py::keep_alive<0, 1>())
             .def("get_voxel_by_coord", [](VoxelGridBuffer& self, const std::string& layer_name, float x, float y, float z) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer_name, 0).get_type());
                 switch (type) {
@@ -1673,6 +1773,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<HistogramVoxel<float>>(layer_name, x, y, z));
                     case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<AngularResolvedVoxel<float>>(layer_name, x, y, z));
+                    case Typing::DType::VMFMixture:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<VMFMixtureVoxel<float>>(layer_name, x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
                     case Typing::DType::UInt32:
@@ -1680,7 +1782,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, py::return_value_policy::reference, py::keep_alive<0, 1>())
             .def("get_layer_as_ndarray", [](std::shared_ptr<VoxelGridBuffer>& self, const std::string& layer, bool copy) {
                 try {
                     const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
@@ -1732,6 +1834,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                             });
                             return py::array(py::array_t<float>(shape, strides, data, cap));
                         }
+                        case Typing::DType::VMFMixture:
+                            return create_vmf_py_array(self->get_layer<float>(layer), self->get_voxel_counts(), self->get_voxel_flat<VMFMixtureVoxel<float>>(layer, 0).get_lobes(), self, copy);
                     }
 
                     const size_t element_size = layer_info.get_bytes();
@@ -1778,6 +1882,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<HistogramVoxel<float>>(idx));
                     case Typing::DType::AngularResolved:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<AngularResolvedVoxel<float>>(idx));
+                    case Typing::DType::VMFMixture:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<VMFMixtureVoxel<float>>(idx));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(idx));
                     case Typing::DType::UInt32:
@@ -1785,7 +1891,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::arg("idx"), py::return_value_policy::reference)
+                }, py::arg("idx"), py::return_value_policy::reference, py::keep_alive<0, 1>())
                 .def("get_unit", &VoxelLayer::get_unit)
                 .def("get_statistical_error", &VoxelLayer::get_statistical_error)
                 .def("get_voxel_count", &VoxelLayer::get_voxel_count);
@@ -1823,6 +1929,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<glm::vec4>>(x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel<HistogramVoxel<float>>(x, y, z));
+                    case Typing::DType::VMFMixture:
+                        return VOXEL_REFERENCE(&self.get_voxel<VMFMixtureVoxel<float>>(x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(x, y, z));
                     case Typing::DType::UInt32:
@@ -1830,7 +1938,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference)
+                }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference, py::keep_alive<0, 1>())
                 .def("get_voxel_by_coord", [](const VoxelGrid& self, float x, float y, float z) {
                     const Typing::DType type = Typing::Helper::get_dtype(self.get_layer()->get_voxel_flat<IVoxel>(0).get_type());
                     switch (type) {
@@ -1856,6 +1964,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<glm::vec4>>(x, y, z));
                     case Typing::DType::Hist:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<HistogramVoxel<float>>(x, y, z));
+                    case Typing::DType::VMFMixture:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<VMFMixtureVoxel<float>>(x, y, z));
                     case Typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(x, y, z));
                     case Typing::DType::UInt32:
@@ -1863,7 +1973,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
                     }
-                }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference)
+                }, py::arg("x"), py::arg("y"), py::arg("z"), py::return_value_policy::reference, py::keep_alive<0, 1>())
                 .def("get_layer", &VoxelGrid::get_layer)
 				.def("__enter__", [](std::shared_ptr<VoxelGrid>& self) { return self; })
                 .def("__exit__", [](std::shared_ptr<VoxelGrid>& r, py::object exc_type, py::object exc_value, py::object traceback) {
@@ -1899,6 +2009,8 @@ PYBIND11_MODULE(RadFiled3D, m) {
 						    return create_py_array<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case Typing::DType::UInt32:
 						    return create_py_array<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
+					    case Typing::DType::VMFMixture:
+						    return create_vmf_py_array((float*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self->get_layer()->get_voxel_flat<VMFMixtureVoxel<float>>(0).get_lobes(), self, copy);
 					    }
 
 					    const size_t element_size = layer_info.get_bytes();
@@ -1946,7 +2058,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    default:
 				    throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 			    }
-			}, py::return_value_policy::reference)
+			}, py::return_value_policy::reference, py::keep_alive<0, 1>())
 			.def("get_segment_by_coord", [](PolarSegments& self, float phi, float theta) {
 			    const Typing::DType type = Typing::Helper::get_dtype(self.get_layer()->get_voxel_flat<IVoxel>(0).get_type());
 			    switch (type) {
@@ -1975,7 +2087,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
 			    default:
 				    throw RadFiled3DError("Unsupported voxel type: " + std::to_string(static_cast<int>(type)));
 			    }
-			}, py::return_value_policy::reference)
+			}, py::return_value_policy::reference, py::keep_alive<0, 1>())
 			.def("get_layer", &PolarSegments::get_layer)
 			.def("__enter__", [](std::shared_ptr<PolarSegments>& self) { return self; })
 			.def("__exit__", [](std::shared_ptr<PolarSegments>& r, py::object exc_type, py::object exc_value, py::object traceback) {
@@ -2049,7 +2161,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, py::return_value_policy::reference, py::keep_alive<0, 1>())
             .def("get_segment_by_coord", [](const PolarSegmentsBuffer& self, const std::string& layer, float phi, float theta) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_segment_flat<IVoxel>(layer, 0).get_type());
                 switch (type) {
@@ -2078,7 +2190,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                     default:
                         throw RadFiled3DError("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, py::return_value_policy::reference, py::keep_alive<0, 1>())
             .def("get_segment", [](const PolarSegmentsBuffer& self, const std::string& layer, size_t x, size_t y) {
                 const Typing::DType type = Typing::Helper::get_dtype(self.get_voxel_flat<IVoxel>(layer, 0).get_type());
                 switch (type) {
@@ -2107,7 +2219,7 @@ PYBIND11_MODULE(RadFiled3D, m) {
                 default:
                     throw RadFiled3DError("Unsupported segment type: " + std::to_string(static_cast<int>(type)));
                 }
-            }, py::return_value_policy::reference)
+            }, py::return_value_policy::reference, py::keep_alive<0, 1>())
             .def("get_layer_as_ndarray", [](std::shared_ptr<PolarSegmentsBuffer>& self, const std::string& layer, bool copy) {
                 const auto& layer_info = self->get_voxel_flat<IVoxel>(layer, 0);
                 const Typing::DType type = Typing::Helper::get_dtype(layer_info.get_type());

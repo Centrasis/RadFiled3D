@@ -213,6 +213,45 @@ namespace RadFiled3D {
 				}
 			}
 
+			/** Generate a join function for vMF mixture voxels. Mixtures are not joined element-wise but merged with
+			* VMFMixtureVoxel::merge into the target voxel, weighting target and source by (1 - ratio, ratio) for Add and
+			* AddWeighted and equally for Mean. Identity keeps the target. Subtract, Divide and Multiply are not defined for mixtures.
+			* A plain join only knows the ratio (FieldStore::join derives it from the primary particle counts), so weighting
+			* the mixtures by the actual flux of each voxel is the caller's responsibility. The default ratio 0 keeps only the
+			* target, so pass n_source / (n_target + n_source) when calling a store's join directly.
+			* @param mode The mode to join the fields
+			* @param ratio The share of the additional source
+			* @return The join function
+			*/
+			template<typename T = float>
+			static std::function<VMFMixtureVoxel<T>(const VMFMixtureVoxel<T>&, const VMFMixtureVoxel<T>&)> get_vmf_join_function(FieldJoinMode mode, float ratio = 0.f) {
+				double source_weight = 0.5;
+				switch (mode)
+				{
+				case FieldJoinMode::Identity:
+					return [](const VMFMixtureVoxel<T>& a, const VMFMixtureVoxel<T>& b) { return a; };
+				case FieldJoinMode::Add:
+				case FieldJoinMode::AddWeighted:
+					source_weight = std::isfinite(ratio) ? std::clamp(static_cast<double>(ratio), 0.0, 1.0) : 0.5;
+					break;
+				case FieldJoinMode::Mean:
+					break;
+				case FieldJoinMode::Subtract:
+				case FieldJoinMode::Divide:
+				case FieldJoinMode::Multiply:
+					throw RadiationFieldStoreException("Join modes Subtract, Divide and Multiply are not defined for vMF mixture layers");
+				default:
+					throw RadiationFieldStoreException("Unknown join mode");
+				}
+				return [source_weight](const VMFMixtureVoxel<T>& a, const VMFMixtureVoxel<T>& b) {
+					if (a.get_bytes() != b.get_bytes())
+						throw RadiationFieldStoreException("Voxel data size mismatch in join");
+					VMFMixtureVoxel<T> target(a.get_lobes(), (T*)a.get_raw());
+					VMFMixtureVoxel<T>::merge(a, 1.0 - source_weight, b, source_weight, target);
+					return a;
+				};
+			}
+
 			/** Generate a Voxel-level join function (a, b) -> c with a beeing the target voxel, b beeing the additional source voxel and c beeing the result voxel.
 			* Integral values saturate at their type's limits. Floating point values (also the components of vectors and the
 			* elements of histogram and angular voxels) are joined in a wider type and a result not representable in the layer's
@@ -225,7 +264,10 @@ namespace RadFiled3D {
 			*/
 			template<typename dtype, typename scalarT = dtype>
 			static std::function<dtype(const dtype&, const dtype&)> get_join_function(FieldJoinMode mode, float ratio = 0.f) {
-				if constexpr (std::is_base_of_v<IVoxel, dtype>) {
+				if constexpr (std::is_same_v<dtype, VMFMixtureVoxel<scalarT>>) {
+					return get_vmf_join_function<scalarT>(mode, ratio);
+				}
+				else if constexpr (std::is_base_of_v<IVoxel, dtype>) {
 					// Joined element-wise into the target: view voxels (Hist/AngularResolved) share their data pointer on copy,
 					// so arithmetic on voxel temporaries could modify the SOURCE field.
 					const auto join_element = get_join_function<scalarT>(mode, ratio);

@@ -379,6 +379,9 @@ void Storage::V1::FieldStore::join(std::shared_ptr<IRadiationField> target, std:
 				case Typing::DType::AngularResolved:
 					target_channel->merge_voxel_buffer<AngularResolvedVoxel<float>>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<AngularResolvedVoxel<float>, float>(join_mode, ratio));
 					break;
+				case Typing::DType::VMFMixture:
+					target_channel->merge_voxel_buffer<VMFMixtureVoxel<float>>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<VMFMixtureVoxel<float>, float>(join_mode, ratio));
+					break;
 				case Typing::DType::UInt32:
 					target_channel->merge_data_buffer<uint32_t>(layer_name, *channel.second.get(), ExporterHelpers::get_join_function<uint32_t>(join_mode, ratio));
 					break;

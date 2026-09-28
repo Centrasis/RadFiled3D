@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Any, Tuple
+from typing import Any, Sequence, Tuple, Union
 from enum import Enum
 
 
@@ -27,6 +27,7 @@ class DType(Enum):
     UINT32 = 10
     BYTE = 11
     FLOAT16 = 12
+    VMF_MIXTURE = 13
 
 
 class FieldType(Enum):
@@ -479,6 +480,94 @@ class OwningAngularResolvedVoxel(AngularResolvedVoxel):
         ...
 
 
+class VMFMixtureVoxel(Voxel):
+    """
+    Directional distribution of the radiation within a voxel as a mixture of von Mises-Fisher (spherical Gaussian) lobes.
+    Each lobe is stored as 5 values [weight, mean_x, mean_y, mean_z, kappa]:
+    weight is the share of the voxel's radiation carried by the lobe (weights sum to 1, or are all 0 for an empty voxel),
+    mean is the unit direction of travel and kappa >= 0 the concentration (0 is isotropic).
+    Element-wise arithmetic is not defined for mixtures, use merge() to combine two of them.
+    """
+
+    def get_lobes(self) -> int:
+        """
+        Returns the number of lobes of the mixture.
+        """
+        ...
+
+    def get_weight(self, k: int) -> float:
+        """
+        Returns the weight of lobe k.
+        """
+        ...
+
+    def get_mean(self, k: int) -> vec3:
+        """
+        Returns the mean direction of lobe k.
+        """
+        ...
+
+    def get_kappa(self, k: int) -> float:
+        """
+        Returns the concentration kappa of lobe k.
+        """
+        ...
+
+    def set_lobe(self, k: int, weight: float, mean: Union[vec3, Sequence[float]], kappa: float) -> None:
+        """
+        Sets all parameters of lobe k.
+
+        :param k: The lobe index [0, lobes - 1].
+        :param weight: The share of the voxel's radiation carried by the lobe.
+        :param mean: The unit direction of travel.
+        :param kappa: The concentration (>= 0).
+        """
+        ...
+
+    def density(self, direction: Union[vec3, Sequence[float]]) -> float:
+        """
+        Evaluates the mixture density per steradian in the given direction (normalized internally).
+        Each lobe integrates to 1 over the sphere, so the mixture integrates to the sum of the weights.
+        """
+        ...
+
+    def get_lobes_data(self) -> np.ndarray:
+        """
+        Returns all lobe values as a flat numpy view of shape (lobes * 5,).
+        """
+        ...
+
+    def get_data(self) -> np.ndarray:
+        """
+        Returns the lobe values as a numpy view of shape (lobes, 5) with the last axis [weight, mean_x, mean_y, mean_z, kappa].
+        """
+        ...
+
+    def clear(self) -> None:
+        """
+        Sets all lobes to 0.
+        """
+        ...
+
+    @staticmethod
+    def merge(a: "VMFMixtureVoxel", weight_a: float, b: "VMFMixtureVoxel", weight_b: float, out: "VMFMixtureVoxel") -> None:
+        """
+        Writes the mixture a * weight_a + b * weight_b (renormalized) into out, reduced to out.get_lobes() lobes by
+        moment-preserving merging of the lobes with the smallest angle between their means. out may be a or b.
+        """
+        ...
+
+
+class OwningVMFMixtureVoxel(VMFMixtureVoxel):
+    def __init__(self, lobes: int) -> None:
+        """
+        Creates a new OwningVMFMixtureVoxel with the given number of lobes, all set to 0.
+
+        :param lobes: The number of lobes of the mixture.
+        """
+        ...
+
+
 class VoxelBuffer(object):
     def get_voxel_count(self) -> int:
         """
@@ -545,6 +634,8 @@ class VoxelBuffer(object):
         VoxelGridBuffer will return a 3D ndarray with the shape (x, y, z).
         PolarSegmentsBuffer will return a 2D ndarray with the shape (x, y).
         Depending if the layer is a histogram or not, the ndarray will have an additional dimension for the histogram bins.
+        A vMF mixture layer (DType.VMF_MIXTURE) of a VoxelGridBuffer has the shape (x, y, z, lobes, 5) with the last axis
+        [weight, mean_x, mean_y, mean_z, kappa].
         The ndarray will have the dtype depending on the concrete VoxelScalar-Type.
 
         :param layer_name: The name of the layer.
@@ -581,6 +672,17 @@ class VoxelBuffer(object):
         :param layer_name: The name of the layer.
         :param phi_segments: The number of bins along phi angle.
         :param theta_segments: The number of bins along theta angle.
+        :param unit: The unit of the layer.
+        """
+        ...
+
+    def add_vmf_layer(self, layer_name: str, lobes: int, unit: str) -> None:
+        """
+        Adds a new layer storing the directional distribution per voxel as a mixture of von Mises-Fisher lobes.
+        All lobes are initialized to 0. Element-wise arithmetic is not defined for such layers.
+
+        :param layer_name: The name of the layer.
+        :param lobes: The number of lobes per voxel.
         :param unit: The unit of the layer.
         """
         ...
@@ -631,6 +733,7 @@ class VoxelGrid(object):
         """
         Get the voxel grid as a numpy ndarray.
         The ndarray will have the shape (x, y, z) depending on the voxel counts.
+        A vMF mixture layer has the shape (x, y, z, lobes, 5) with the last axis [weight, mean_x, mean_y, mean_z, kappa].
         :param copy: If True, a copy of the data will be returned. If False, a view of the data will be returned.
         :return: The voxel grid as a numpy ndarray.
         """

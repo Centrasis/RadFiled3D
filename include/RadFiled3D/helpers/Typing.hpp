@@ -40,7 +40,8 @@ namespace RadFiled3D {
 			UInt64,
 			UInt32,
 			Byte,
-			Float16
+			Float16,
+			VMFMixture
 		};
 
 		class Helper {

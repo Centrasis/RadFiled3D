@@ -188,6 +188,11 @@ namespace RadFiled3D {
 	protected:
 		std::map<std::string, VoxelLayer> layers;
 		const size_t voxel_count;
+
+		/** Deep copies all layers into target, which must have the same voxel count and no layers yet.
+		* Each voxel of the copy points into the copied data buffer.
+		*/
+		void copy_layers_to(VoxelBuffer& target) const;
 	public:
 		/** Construct a voxel buffer with a given number of voxels
 		* @param voxel_count The number of voxels in the buffer

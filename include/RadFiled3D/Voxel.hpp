@@ -5,11 +5,13 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+#include <glm/geometric.hpp>
 #include "RadFiled3D/helpers/Typing.hpp"
 #include <cstring>
 #include <cmath>
 #include <span>
 #include <numbers>
+#include <algorithm>
 
 
 namespace RadFiled3D {
@@ -151,6 +153,8 @@ namespace RadFiled3D {
 		* @param header The header to initialize the Voxel from
 		*/
 		virtual void init_from_header(const void* header) override {};
+
+		virtual void selfDestruct() override { delete this; }
 
 		/** Create a new ScalarVoxel with the given data buffer
 		* @param data_buffer The data buffer to use
@@ -511,6 +515,15 @@ namespace RadFiled3D {
 		virtual void init_from_header(const void* header) override {
 			this->histogram_definition = *(HistogramVoxel<T>::HistogramDefinition*)header;
 
+		}
+
+		virtual void selfDestruct() override { delete this; }
+
+		/** Compares the bin definition and all bins of two HistogramVoxels */
+		bool operator==(const HistogramVoxel<T>& other) const {
+			return this->histogram_definition.bins == other.histogram_definition.bins
+				&& this->histogram_definition.histogram_bin_width == other.histogram_definition.histogram_bin_width
+				&& std::equal(this->data, this->data + this->histogram_definition.bins, other.data);
 		}
 
 		/** Adds a positive value to the histogram and scores it into the correct bin.
@@ -899,6 +912,14 @@ namespace RadFiled3D {
 			this->angular_definition = *(AngularResolvedVoxel<T>::AngularDefinition*)header;
 		}
 
+		virtual void selfDestruct() override { delete this; }
+
+		/** Compares the segmentation and all segments of two AngularResolvedVoxels */
+		bool operator==(const AngularResolvedVoxel<T>& other) const {
+			return this->angular_definition.segments == other.angular_definition.segments
+				&& std::equal(this->data, this->data + this->get_total_segments(), other.data);
+		}
+
 		/** Adds a value at the given spherical direction
 		* @param phi The phi coordinate in radians
 		* @param theta The theta coordinate in radians
@@ -968,6 +989,361 @@ namespace RadFiled3D {
 
 		virtual void set_data(void* data) override {
 			memcpy(this->data, data, this->get_total_segments() * sizeof(T));
+		}
+	};
+
+	// Lets dependent projects detect the vMF mixture layer type at compile time.
+#define RADFILED3D_HAS_VMF_MIXTURE 1
+
+	/** A VMFMixtureVoxel stores the directional distribution of the radiation within a voxel as a mixture of
+	* von Mises-Fisher (spherical Gaussian) lobes. Each lobe is stored as 5 contiguous values:
+	* [weight, mean_x, mean_y, mean_z, kappa]
+	* weight: share of the voxel's radiation carried by the lobe (weights sum to 1, or are all 0 for an empty voxel)
+	* mean: unit vector of the direction of travel of the radiation
+	* kappa: concentration (>= 0, 0 means isotropic)
+	* Element-wise arithmetic is not defined for a mixture, use VMFMixtureVoxel::merge to combine two mixtures.
+	*/
+	template<typename T = float>
+	class VMFMixtureVoxel : public ScalarVoxel<T> {
+		using typename IVoxel::VoxelBaseHeader;
+	public:
+		static constexpr size_t values_per_lobe = 5;
+
+#pragma pack(push, 4)
+		struct VMFDefinition : public IVoxel::VoxelBaseHeader {
+			uint32_t lobes;
+
+			VMFDefinition(uint32_t lobes = 0) : lobes(lobes) {}
+		};
+#pragma pack(pop)
+
+	protected:
+		VMFDefinition vmf_definition;
+
+		struct MergeLobe {
+			double weight;
+			glm::dvec3 mean;
+			double kappa;
+		};
+
+		/** Normalized vMF density per steradian at cos(angle between mean and direction) */
+		static double lobe_density(double cos_angle, double kappa) {
+			constexpr double inv_4pi = 1.0 / (4.0 * std::numbers::pi);
+			if (kappa < 1e-4)
+				return inv_4pi * (1.0 + kappa * cos_angle);
+			return kappa / (2.0 * std::numbers::pi * -std::expm1(-2.0 * kappa)) * std::exp(kappa * (cos_angle - 1.0));
+		}
+
+		/** Mean resultant length A(kappa) = coth(kappa) - 1/kappa */
+		static double mean_resultant_length(double kappa) {
+			if (kappa < 1e-3)
+				return kappa / 3.0 - kappa * kappa * kappa / 45.0;
+			return 1.0 / std::tanh(kappa) - 1.0 / kappa;
+		}
+
+		/** Inverts A(kappa) = R. The closed-form approximation R(3 - R^2)/(1 - R^2) overestimates kappa by a few
+		* percent in the mid range, which would inflate kappa on every repeated join, so it is refined by Newton steps.
+		*/
+		static double kappa_from_mean_resultant_length(double R) {
+			R = std::clamp(R, 1e-6, 0.999999);
+			double kappa = R * (3.0 - R * R) / (1.0 - R * R);
+			for (int i = 0; i < 4; i++) {
+				const double A = mean_resultant_length(kappa);
+				const double dA = 1.0 - A * A - 2.0 * A / kappa;
+				if (!(dA > 0.0))
+					break;
+				const double next = kappa - (A - R) / dA;
+				kappa = (next > 0.0) ? next : kappa * 0.5;
+			}
+			return kappa;
+		}
+
+	public:
+		/** Create a new VMFMixtureVoxel with 0 lobes and an empty data buffer */
+		VMFMixtureVoxel() noexcept : ScalarVoxel<T>(nullptr), vmf_definition(VMFDefinition(0)) {}
+
+		/** Create a new VMFMixtureVoxel with the given data buffer
+		* @param lobes The number of lobes of the mixture
+		* @param buffer The data buffer holding 5 * lobes values
+		*/
+		VMFMixtureVoxel(uint32_t lobes, T* buffer) : ScalarVoxel<T>(buffer), vmf_definition(lobes) {}
+
+		/** Move constructor */
+		VMFMixtureVoxel(VMFMixtureVoxel&& buffer) noexcept : ScalarVoxel<T>(buffer.data), vmf_definition(buffer.vmf_definition) {
+			buffer.data = nullptr;
+		}
+
+		/** Copy constructor */
+		VMFMixtureVoxel(const VMFMixtureVoxel& buffer) noexcept : ScalarVoxel<T>(buffer.data), vmf_definition(buffer.vmf_definition) {}
+
+		/** Returns the number of lobes of the mixture */
+		inline uint32_t get_lobes() const { return this->vmf_definition.lobes; }
+
+		/** Returns the weight of lobe k */
+		inline T get_weight(size_t k) const { return this->data[k * values_per_lobe]; }
+
+		/** Returns the mean direction of lobe k */
+		inline glm::vec3 get_mean(size_t k) const {
+			const T* lobe = this->data + k * values_per_lobe;
+			return glm::vec3(lobe[1], lobe[2], lobe[3]);
+		}
+
+		/** Returns the concentration kappa of lobe k */
+		inline T get_kappa(size_t k) const { return this->data[k * values_per_lobe + 4]; }
+
+		/** Sets all parameters of lobe k
+		* @param k The lobe index [0, lobes - 1]
+		* @param weight The share of the voxel's radiation carried by the lobe
+		* @param mean The unit direction of travel
+		* @param kappa The concentration (>= 0)
+		*/
+		void set_lobe(size_t k, T weight, const glm::vec3& mean, T kappa) {
+			T* lobe = this->data + k * values_per_lobe;
+			lobe[0] = weight;
+			lobe[1] = static_cast<T>(mean.x);
+			lobe[2] = static_cast<T>(mean.y);
+			lobe[3] = static_cast<T>(mean.z);
+			lobe[4] = kappa;
+		}
+
+		/** Returns a span over all 5 * lobes values [weight, mean_x, mean_y, mean_z, kappa] per lobe */
+		inline std::span<T> get_lobes_data() const {
+			return std::span<T>(this->data, values_per_lobe * this->vmf_definition.lobes);
+		}
+
+		/** Evaluates the mixture density per steradian in the given direction.
+		* Each lobe integrates to 1 over the sphere, so the mixture integrates to the sum of the weights.
+		* @param direction The direction to evaluate (normalized internally)
+		* @return The density per steradian
+		*/
+		T density(const glm::vec3& direction) const {
+			const glm::dvec3 d(direction);
+			const double d_len = glm::length(d);
+			if (!(d_len > 0.0))
+				return T(0);
+			const glm::dvec3 dir = d / d_len;
+			double sum = 0.0;
+			for (size_t k = 0; k < this->vmf_definition.lobes; k++) {
+				const T* lobe = this->data + k * values_per_lobe;
+				const double weight = static_cast<double>(lobe[0]);
+				if (weight == 0.0)
+					continue;
+				glm::dvec3 mean(static_cast<double>(lobe[1]), static_cast<double>(lobe[2]), static_cast<double>(lobe[3]));
+				const double mean_len = glm::length(mean);
+				if (mean_len > 0.0)
+					mean /= mean_len;
+				sum += weight * lobe_density(glm::dot(mean, dir), std::max(0.0, static_cast<double>(lobe[4])));
+			}
+			return static_cast<T>(sum);
+		}
+
+		/** Builds the mixture a * weight_a + b * weight_b (both inputs normalized to their own weight sum, the result
+		* renormalized to 1) and reduces it to out.get_lobes() lobes by repeatedly merging the two lobes with the smallest
+		* angle between their means. Merging preserves the first moment: the mean resultant vectors A(kappa) * mean are
+		* averaged by weight and the merged kappa is recovered from the resulting length.
+		* An input whose weights are all 0 does not contribute; if both are empty, out is cleared.
+		* out may alias a or b.
+		*/
+		static void merge(const VMFMixtureVoxel<T>& a, double weight_a, const VMFMixtureVoxel<T>& b, double weight_b, VMFMixtureVoxel<T>& out) {
+			std::vector<MergeLobe> lobes;
+			lobes.reserve(a.get_lobes() + b.get_lobes());
+
+			const auto collect = [&lobes](const VMFMixtureVoxel<T>& src, double src_weight) {
+				double sum = 0.0;
+				for (size_t k = 0; k < src.get_lobes(); k++)
+					sum += std::max(0.0, static_cast<double>(src.get_weight(k)));
+				if (!(sum > 0.0) || !(src_weight > 0.0))
+					return;
+				for (size_t k = 0; k < src.get_lobes(); k++) {
+					const double w = static_cast<double>(src.get_weight(k));
+					if (!(w > 0.0))
+						continue;
+					glm::dvec3 mean(src.get_mean(k));
+					const double mean_len = glm::length(mean);
+					if (mean_len > 0.0)
+						mean /= mean_len;
+					lobes.push_back({ w / sum * src_weight, mean, std::max(0.0, static_cast<double>(src.get_kappa(k))) });
+				}
+			};
+			collect(a, weight_a);
+			collect(b, weight_b);
+
+			double total = 0.0;
+			for (const auto& lobe : lobes)
+				total += lobe.weight;
+			for (auto& lobe : lobes)
+				lobe.weight /= total;
+
+			const size_t target = out.get_lobes();
+			while (lobes.size() > target && lobes.size() >= 2) {
+				size_t best_i = 0, best_j = 1;
+				double best_cos = -2.0;
+				for (size_t i = 0; i < lobes.size(); i++) {
+					for (size_t j = i + 1; j < lobes.size(); j++) {
+						const double c = glm::dot(lobes[i].mean, lobes[j].mean);
+						if (c > best_cos) {
+							best_cos = c;
+							best_i = i;
+							best_j = j;
+						}
+					}
+				}
+
+				const MergeLobe& l1 = lobes[best_i];
+				const MergeLobe& l2 = lobes[best_j];
+				const double w = l1.weight + l2.weight;
+				const glm::dvec3 r = (l1.weight * mean_resultant_length(l1.kappa) * l1.mean + l2.weight * mean_resultant_length(l2.kappa) * l2.mean) / w;
+				const double R = glm::length(r);
+				MergeLobe merged;
+				merged.weight = w;
+				merged.mean = (R > 1e-12) ? r / R : ((l1.weight >= l2.weight) ? l1.mean : l2.mean);
+				merged.kappa = kappa_from_mean_resultant_length(R);
+				lobes[best_i] = merged;
+				lobes.erase(lobes.begin() + best_j);
+			}
+
+			if (target == 0)
+				return;
+			std::vector<T> result(values_per_lobe * target, T(0));
+			for (size_t k = 0; k < std::min(lobes.size(), target); k++) {
+				T* lobe = result.data() + k * values_per_lobe;
+				lobe[0] = static_cast<T>(lobes[k].weight);
+				lobe[1] = static_cast<T>(lobes[k].mean.x);
+				lobe[2] = static_cast<T>(lobes[k].mean.y);
+				lobe[3] = static_cast<T>(lobes[k].mean.z);
+				lobe[4] = static_cast<T>(lobes[k].kappa);
+			}
+			std::copy(result.begin(), result.end(), out.data);
+		}
+
+		/** Returns the type of the voxel as a string */
+		virtual std::string get_type() const override {
+			return "vmf_mixture";
+		}
+
+		/** Returns the size of the voxel object in bytes, excluding the data */
+		virtual size_t get_voxel_bytes() const override { return sizeof(VMFMixtureVoxel<T>); }
+
+		/** Returns the size of the data in bytes */
+		virtual size_t get_bytes() const override { return sizeof(T) * values_per_lobe * this->vmf_definition.lobes; }
+
+		/** Returns the reference to the first element in the data buffer */
+		inline T& get_data() const { return *this->data; }
+
+		/** Returns a raw pointer to the data buffer */
+		virtual void* get_raw() const override { return this->data; }
+
+		/** Default assignment operator */
+		VMFMixtureVoxel<T>& operator=(const VMFMixtureVoxel<T>& other) = default;
+
+		// Element-wise arithmetic has no meaning for a mixture. The inherited ScalarVoxel operators would silently act on the first weight only.
+		VMFMixtureVoxel<T>& operator=(const T& val) = delete;
+		VMFMixtureVoxel<T>& operator+=(const T& rhs) = delete;
+		VMFMixtureVoxel<T>& operator-=(const T& rhs) = delete;
+		VMFMixtureVoxel<T>& operator*=(const T& rhs) = delete;
+		VMFMixtureVoxel<T>& operator/=(const T& rhs) = delete;
+		VMFMixtureVoxel<T>& operator+=(const VMFMixtureVoxel<T>& rhs) = delete;
+		VMFMixtureVoxel<T>& operator-=(const VMFMixtureVoxel<T>& rhs) = delete;
+		VMFMixtureVoxel<T>& operator*=(const VMFMixtureVoxel<T>& rhs) = delete;
+		VMFMixtureVoxel<T>& operator/=(const VMFMixtureVoxel<T>& rhs) = delete;
+
+		/** Returns the header for serialization */
+		virtual IVoxel::VoxelBaseHeader get_header() const override {
+			return IVoxel::VoxelBaseHeader(sizeof(VMFMixtureVoxel<T>::VMFDefinition), (void*)&this->vmf_definition);
+		}
+
+		/** Initializes the Voxel from a header block (deserialization) */
+		virtual void init_from_header(const void* header) override {
+			this->vmf_definition = *(VMFMixtureVoxel<T>::VMFDefinition*)header;
+		}
+
+		virtual void selfDestruct() override { delete this; }
+
+		/** Compares the lobe count and all lobe values of two VMFMixtureVoxels */
+		bool operator==(const VMFMixtureVoxel<T>& other) const {
+			return this->vmf_definition.lobes == other.vmf_definition.lobes
+				&& std::equal(this->data, this->data + values_per_lobe * this->vmf_definition.lobes, other.data);
+		}
+
+		/** Sets all lobes to 0 */
+		void clear() {
+			std::fill(this->data, this->data + values_per_lobe * this->vmf_definition.lobes, T(0));
+		}
+	};
+
+	/** Owning version of the VMFMixtureVoxel class. Owns the data buffer and frees it on destruction. */
+	template<typename T = float>
+	class OwningVMFMixtureVoxel : public VMFMixtureVoxel<T> {
+	public:
+		using typename VMFMixtureVoxel<T>::VMFDefinition;
+		using VMFMixtureVoxel<T>::values_per_lobe;
+
+		OwningVMFMixtureVoxel(uint32_t lobes = 0) : VMFMixtureVoxel<T>(lobes, (lobes > 0) ? new T[values_per_lobe * lobes]() : nullptr) {}
+
+		OwningVMFMixtureVoxel(uint32_t lobes, T* buffer) : VMFMixtureVoxel<T>(lobes, (lobes > 0) ? new T[values_per_lobe * lobes] : nullptr) {
+			if (lobes > 0)
+				memcpy(this->data, buffer, values_per_lobe * lobes * sizeof(T));
+		}
+
+		OwningVMFMixtureVoxel(const OwningVMFMixtureVoxel<T>& buffer) : VMFMixtureVoxel<T>(buffer) {
+			const size_t count = values_per_lobe * this->get_lobes();
+			this->data = nullptr;
+			if (count > 0 && buffer.data != nullptr) {
+				this->data = new T[count];
+				memcpy(this->data, buffer.data, count * sizeof(T));
+			}
+		}
+
+		OwningVMFMixtureVoxel(OwningVMFMixtureVoxel<T>&& buffer) noexcept : VMFMixtureVoxel<T>(buffer) {
+			buffer.data = nullptr;
+		}
+
+		// Deep copy / buffer stealing: the inherited defaulted assignment only copies the data pointer (see OwningHistogramVoxel).
+		OwningVMFMixtureVoxel<T>& operator=(const OwningVMFMixtureVoxel<T>& buffer) {
+			if (this == &buffer)
+				return *this;
+			T* old = this->data;
+			this->vmf_definition = buffer.vmf_definition;
+			const size_t count = values_per_lobe * this->get_lobes();
+			if (count > 0 && buffer.data != nullptr) {
+				this->data = new T[count];
+				memcpy(this->data, buffer.data, count * sizeof(T));
+			} else {
+				this->data = nullptr;
+			}
+			if (old != nullptr)
+				delete[] old;
+			return *this;
+		}
+
+		OwningVMFMixtureVoxel<T>& operator=(OwningVMFMixtureVoxel<T>&& buffer) noexcept {
+			if (this == &buffer)
+				return *this;
+			T* old = this->data;
+			this->vmf_definition = buffer.vmf_definition;
+			this->data = buffer.data;
+			buffer.data = nullptr;
+			if (old != nullptr)
+				delete[] old;
+			return *this;
+		}
+
+		~OwningVMFMixtureVoxel() {
+			if (this->data != nullptr)
+				delete[] this->data;
+		}
+
+		virtual void selfDestruct() override { delete this; }
+
+		virtual void init_from_header(const void* header) override {
+			this->vmf_definition = *(VMFDefinition*)header;
+			if (this->data != nullptr)
+				delete[] this->data;
+			this->data = (this->get_lobes() > 0) ? new T[values_per_lobe * this->get_lobes()]() : nullptr;
+		}
+
+		virtual void set_data(void* data) override {
+			memcpy(this->data, data, values_per_lobe * this->get_lobes() * sizeof(T));
 		}
 	};
 };

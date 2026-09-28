@@ -76,6 +76,7 @@ namespace RadFiled3D {
 				*/
 				static void add_hist_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, float max_energy_eV, const std::string& unit, void* header_data);
 				static void add_spherical_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data);
+				static void add_vmf_layer(std::shared_ptr<VoxelBuffer> field, const std::string& layer, size_t bytes_per_element, const std::string& unit, void* header_data);
 
 				/** Builds a layer that takes ownership of `owned_data` (already filled with the
 				* voxel data) and constructs the per-voxel wrappers for it. No fill, no copy. */
