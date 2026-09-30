@@ -124,6 +124,12 @@ jobs:
       run: |
         $whl = Get-ChildItem -Path dist\*.whl | Select-Object -First 1
         python -m pip install $whl.FullName
+    - name: Test with pytest
+      # Tested here rather than in a separate tag-only job, so a broken wheel is caught on
+      # every push and no publish job can run without its platform's tests having passed.
+      run: |
+        python -m pip install pytest numpy
+        python -m pytest tests/
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7
       with:
@@ -161,6 +167,8 @@ jobs:
         CIBW_ENVIRONMENT_PASS_LINUX: "GITHUB_REF"
         CIBW_BUILD: "${{ matrix.python-name }}-manylinux_x86_64"
         CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
+        CIBW_TEST_REQUIRES: "pytest numpy"
+        CIBW_TEST_COMMAND: "python -m pytest {project}/tests"
         CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
         CIBW_MANYLINUX_PYPY_X86_64_IMAGE: "manylinux_2_28"
         # DType.FLOAT16 needs _Float16 (GCC >= 12). manylinux_2_28 (AlmaLinux 8) can provide it,
@@ -183,6 +191,8 @@ jobs:
         CIBW_ENVIRONMENT_PASS_LINUX: "GITHUB_REF"
         CIBW_BUILD: "${{ matrix.python-name }}-*"
         CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
+        CIBW_TEST_REQUIRES: "pytest numpy"
+        CIBW_TEST_COMMAND: "python -m pytest {project}/tests"
         CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
         CIBW_MANYLINUX_PYPY_X86_64_IMAGE: "manylinux2014"
       with:
@@ -237,86 +247,6 @@ jobs:
       with:
         name: build-macos-artifact-${{ matrix.python-name }}
         path: dist/*.whl
-  test-linux:
-    strategy:
-      max-parallel: 5
-      matrix:
-        include:
-          - python-version: 3.11
-            python-name: cp311
-          - python-version: 3.12
-            python-name: cp312
-          - python-version: 3.13
-            python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    name: Test on Linux ${{ matrix.python-version }}
-    needs:
-      - build-linux
-    steps:
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-      - uses: actions/checkout@v7
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: build-linux-artifact-${{ matrix.python-version }}
-          path: dist/
-      - name: Install built wheel ${{ matrix.python-version }}
-        run: |
-          python -m pip install ./dist/*manylinux_2_28_x86_64.whl
-      - name: Test with pytest
-        run: |
-          python -m pip install pytest numpy
-          python -m pytest tests/ --junit-xml=test-results.xml
-      - name: Surface failing tests
-        if: always()
-        uses: pmeier/pytest-results-action@main
-        with:
-          path: test-results.xml
-          summary: true
-          display-options: fEX
-          fail-on-empty: true
-          title: Test results py${{ matrix.python-version }} (Linux)
-  test-windows:
-    strategy:
-      max-parallel: 5
-      matrix:
-        include:
-          - python-version: 3.12
-            python-name: cp312
-          - python-version: 3.13
-            python-name: cp313
-          - python-version: 3.14
-            python-name: cp314
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: windows-latest
-    name: Test on Windows ${{ matrix.python-version }}
-    needs:
-      - build-windows
-    steps:
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-      - uses: actions/checkout@v7
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: build-windows-artifact-${{ matrix.python-version }}
-          path: dist/
-      - name: Install built wheel ${{ matrix.python-version }}
-        run: |
-          $whl = Get-ChildItem -Path dist\*.whl | Select-Object -First 1
-          python -m pip install $whl.FullName
-      - name: Test with pytest
-        run: |
-          python -m pip install pytest numpy
-          python -m pytest tests/
   publish-linux:
     runs-on: ubuntu-latest
     strategy:
@@ -333,8 +263,15 @@ jobs:
             python-name: cp314
     if: startsWith(github.ref, 'refs/tags/')
     name: Publish on Linux ${{ matrix.python-version }}
+    # A release is all-or-nothing: every publish waits on every platform's build (each of
+    # which now runs that platform's pytest) and on the sanitizer suite. Otherwise one broken
+    # platform still uploads the rest, leaving a half-published version on PyPI.
     needs:
-      - test-linux
+      - memory-safety-linux
+      - build-source
+      - build-linux
+      - build-windows
+      - build-macos
     environment:
       name: pypi
       url: https://pypi.org/p/RadFiled3D
@@ -356,9 +293,15 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Publish source distribution
+    # A release is all-or-nothing: every publish waits on every platform's build (each of
+    # which now runs that platform's pytest) and on the sanitizer suite. Otherwise one broken
+    # platform still uploads the rest, leaving a half-published version on PyPI.
     needs:
+      - memory-safety-linux
       - build-source
-      - test-linux
+      - build-linux
+      - build-windows
+      - build-macos
     environment:
       name: pypi
       url: https://pypi.org/p/RadFiled3D
@@ -390,8 +333,15 @@ jobs:
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Publish on Windows ${{ matrix.python-version }}
+    # A release is all-or-nothing: every publish waits on every platform's build (each of
+    # which now runs that platform's pytest) and on the sanitizer suite. Otherwise one broken
+    # platform still uploads the rest, leaving a half-published version on PyPI.
     needs:
-      - test-windows
+      - memory-safety-linux
+      - build-source
+      - build-linux
+      - build-windows
+      - build-macos
     environment:
       name: pypi
       url: https://pypi.org/p/RadFiled3D
@@ -432,9 +382,14 @@ jobs:
         python-name: [cp311, cp312, cp313, cp314]
     if: startsWith(github.ref, 'refs/tags/')
     name: Publish on macOS arm64 ${{ matrix.python-name }}
-    # cibuildwheel runs the pytest suite against each macOS wheel it builds, so
-    # build-macos is the equivalent gate that test-linux is for the Linux wheels.
+    # A release is all-or-nothing: every publish waits on every platform's build (each of
+    # which now runs that platform's pytest) and on the sanitizer suite. Otherwise one broken
+    # platform still uploads the rest, leaving a half-published version on PyPI.
     needs:
+      - memory-safety-linux
+      - build-source
+      - build-linux
+      - build-windows
       - build-macos
     environment:
       name: pypi
