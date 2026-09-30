@@ -1,7 +1,7 @@
-#include "RadFiled3D/VoxelGrid.hpp"
-#include "RadFiled3D/RadiationField.hpp"
+#include "radfiled3d/voxel_grid.hpp"
+#include "radfiled3d/radiation_field.hpp"
 #include <iostream>
-#include "RadFiled3D/storage/RadiationFieldStore.hpp"
+#include "radfiled3d/storage/radiation_field_store.hpp"
 #include <memory>
 #include <vector>
 #include <chrono>
@@ -19,8 +19,8 @@
 #include "sys/sysinfo.h"
 #endif
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Storage;
+using namespace radfiled3d;
+using namespace radfiled3d::storage;
 
 namespace {
 	class Storage : public ::testing::Test {
@@ -104,19 +104,19 @@ namespace {
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -182,19 +182,19 @@ namespace {
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",

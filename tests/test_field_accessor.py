@@ -1,4 +1,6 @@
-from RadFiled3D.RadFiled3D import CartesianFieldAccessor, PolarFieldAccessor, uvec2, PolarRadiationField, FieldType, FieldStore, StoreVersion, CartesianRadiationField, DType, vec3, RadiationFieldMetadataV1, RadiationFieldSimulationMetadataV1, RadiationFieldXRayTubeMetadataV1, RadiationFieldSoftwareMetadataV1, VoxelCollectionAccessor, VoxelCollectionRequest, VoxelCollection
+from radfiled3d import PolarRadiationField, FieldType, CartesianRadiationField, DType, RadiationFieldMetadataV1, RadiationFieldSimulationMetadataV1, RadiationFieldXRayTubeMetadataV1, RadiationFieldSoftwareMetadataV1, VoxelCollectionAccessor, VoxelCollectionRequest, VoxelCollection
+from radfiled3d.glm import uvec2, vec3
+from radfiled3d.store import CartesianFieldAccessor, PolarFieldAccessor, FieldStore, StoreVersion
 import numpy as np
 import pickle
 
@@ -34,7 +36,7 @@ def test_get_store_version_first_call_in_fresh_process(tmp_path):
     FieldStore.store(field, METADATA, path, StoreVersion.V1)
 
     # get_store_version must work as the very first FieldStore call (registry auto-init).
-    code = f"from RadFiled3D.RadFiled3D import FieldStore; print(FieldStore.get_store_version({path!r}))"
+    code = f"from radfiled3d.store import FieldStore; print(FieldStore.get_store_version({path!r}))"
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert "V1" in result.stdout
@@ -57,7 +59,7 @@ def test_construction():
 
 
 def test_float16_layer_roundtrip(tmp_path):
-    import RadFiled3D.RadFiled3D as _core
+    import radfiled3d as _core
     if not getattr(_core, "HAS_FLOAT16", False):
         import pytest
         pytest.skip("build has no float16 support (compiler lacks _Float16)")
@@ -457,7 +459,7 @@ def test_missing_file_reports_itself(tmp_path):
     stream was opened without checking that the file was there.
     """
     import pytest
-    from RadFiled3D.RadFiled3D import RadiationFieldStoreException
+    from radfiled3d import RadiationFieldStoreException
 
     missing = str(tmp_path / "does_not_exist.rf3")
     calls = [
@@ -514,7 +516,7 @@ def test_non_rf3_file_is_rejected(tmp_path):
     decode it and python raised UnicodeDecodeError instead of the real error.
     """
     import pytest
-    from RadFiled3D.RadFiled3D import RadiationFieldStoreException
+    from radfiled3d import RadiationFieldStoreException
 
     foreign = tmp_path / "picture.png"
     foreign.write_bytes(b"\x89PNG\r\n\x1a\n\xb0\x00\x1f\x7fhello world")

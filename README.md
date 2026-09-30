@@ -59,7 +59,12 @@ built automatically, but will take some time.
 - Python >= 3.11
 
 #### CMake
-In order to use the module directly from another C++ Project, you can integrate it by adding the local location of this repository via `add_subdirectory()` and then link against the target `libRadFiled3D`. All classes are then available from the namespace `RadFiled3D`. Check the [Example](./examples/cxx/example01.cpp) or the [First Test File](./tests/basic.cpp) as a first reference.
+In order to use the module directly from another C++ Project, you can integrate it by adding the local location of this repository via `add_subdirectory()` and then link against the target `radfiled3d`. All classes are then available from the namespace `radfiled3d`. Check the [Example](./examples/cxx/example01.cpp) or the [First Test File](./tests/basic.cpp) as a first reference.
+
+> **Naming (since 1.4.0).** Namespaces and file names are lowercase — `radfiled3d`,
+> `radfiled3d::storage`, `radfiled3d::typing`, and headers such as
+> `<radfiled3d/storage/radiation_field_store.hpp>`. Class, struct and enum names keep their
+> PascalCase (`CartesianRadiationField`, `DType`). The CMake target is `radfiled3d`.
 
 #### Python
 The Python package is built with [scikit-build-core](https://scikit-build-core.readthedocs.io/), the standard PEP 517 backend for CMake projects. It drives the CMake/pybind11 build automatically; no `setup.py` is required. CMake and Ninja are provisioned by the build backend if they are not already present.
@@ -77,25 +82,31 @@ Disclaimer: Not all methods support keyword arguments as they need to be defined
 ## From Python
 Simple example on how to create and store a radiation field. Find more in the example file: [Example](./examples/python/example01.py)
 ```python
-from RadFiled3D.RadFiled3D import vec3, CartesianRadiationField, DType
-from RadFiled3D.utils import FieldStore, StoreVersion
-from RadFiled3D.metadata.v1 import Metadata
+from radfiled3d import CartesianRadiationField, DType
+from radfiled3d.glm import vec3
+from radfiled3d.store import FieldStore, StoreVersion
+from radfiled3d.metadata.v1 import Metadata
 
 
 # Creating a cartesian radiation field
 field = CartesianRadiationField(vec3(2.5, 2.5, 2.5), vec3(0.05, 0.05, 0.05))
-# defining a channel and a layer on it
-field.add_channel("channel1").add_layer("layer1", "unit1", DType.FLOAT32)
+# channels are dict-like: indexing returns the channel, creating it if needed.
+# A layer needs a unit and a dtype, so it is always created explicitly.
+field["channel1"].add_layer("layer1", "unit1", DType.FLOAT32)
 
-# accessing the voxels by using numpy arrays
-array = field.get_channel("channel1").get_layer_as_ndarray("layer1")
+# checking what a field or a channel holds
+assert "channel1" in field
+assert "layer1" in field["channel1"]
+
+# indexing a channel with a layer name gives the voxels as a numpy array
+array = field["channel1"]["layer1"]
 assert array.shape == (50, 50, 50, 1)
 
 # modify voxels content by using numpy array as no data is copied, just referenced
 array[2:5, 2:5, 2:5] = 2.0
 
 # addressing a voxel by providing a point in space
-voxel = field.get_channel("channel1").get_voxel_by_coord("layer1", 0.1, 2.4, 2.1)
+voxel = field["channel1"].get_voxel_by_coord("layer1", 0.1, 2.4, 2.1)
 
 # Store changes to a file
 metadata = Metadata.default()
@@ -106,15 +117,30 @@ field2 = FieldStore.load("test01.rf3")
 metadata2 = FieldStore.load_metadata("test01.rf3")
 ```
 
+### Channels and layers as mappings
+A field behaves like a dict of channels and a channel like a dict of layers:
+
+| Expression | Meaning |
+| ---------- | ------- |
+| `field["channel"]` | the channel, **created on first access** if it does not exist |
+| `"channel" in field` | whether the channel exists |
+| `channel["layer"]` | the layer's voxels as a zero-copy numpy view |
+| `"layer" in channel` | whether the layer exists |
+
+Layers are the one asymmetry: they are never created implicitly, because a layer needs a unit
+and a data type. Indexing a layer that does not exist raises a `KeyError` telling you to call
+`add_layer(name, unit, dtype)` first. The explicit `add_channel` / `get_channel` /
+`get_layer_as_ndarray` methods remain available and do exactly the same thing.
+
 ### Integrating with pyTorch
-RadFiled3D comes with a submodule at `RadFiled3D.pytorch`. This module provides some dataset classes to support the usage. Datasets can be loaded from folders or .zip-Files.
+RadFiled3D comes with a submodule at `radfiled3d.pytorch`. This module provides some dataset classes to support the usage. Datasets can be loaded from folders or .zip-Files.
 ```python
 import torch
-from RadFiled3D.pytorch import DataLoaderBuilder
-from RadFiled3D.pytorch.datasets import MetadataLoadMode
-from RadFiled3D.pytorch.datasets.cartesian import CartesianFieldSingleLayerDataset
-from RadFiled3D.pytorch.helpers import RadiationFieldHelper
-from RadFiled3D.pytorch.types import DirectionalInput, TrainingInputData
+from radfiled3d.pytorch import DataLoaderBuilder
+from radfiled3d.pytorch.datasets import MetadataLoadMode
+from radfiled3d.pytorch.datasets.cartesian import CartesianFieldSingleLayerDataset
+from radfiled3d.pytorch.helpers import RadiationFieldHelper
+from radfiled3d.pytorch.types import DirectionalInput, TrainingInputData
 
 
 # Extend one of the provided dataset classes to match the output to the current needs
@@ -172,10 +198,10 @@ if __name__ == "__main__":
 #### Direct integration with RadField3D datasets
 Directly iterate RadField3D datasets either by loading whole fields or iterating each voxel independently. The dataset classes will return pyTorch compatible NamedTuples, that preserve the structure of the raw radiation fields and layers.
 ```python
-from RadFiled3D.pytorch import DataLoaderBuilder
-from RadFiled3D.pytorch.datasets.radfield3d import RadField3DDataset, RadField3DVoxelwiseDataset
+from radfiled3d.pytorch import DataLoaderBuilder
+from radfiled3d.pytorch.datasets.radfield3d import RadField3DDataset, RadField3DVoxelwiseDataset
 # import the pyTorch compatible datatypes
-from RadFiled3D.pytorch.types import DirectionalInput, PositionalInput, RadiationField, TrainingInputData
+from radfiled3d.pytorch.types import DirectionalInput, PositionalInput, RadiationField, TrainingInputData
 
 
 if __name__ == "__main__":
@@ -236,10 +262,11 @@ This method takes two points as the definition of the considered line-segment an
 
 [Example](./examples/python/example02.py) usage:
 ```python
-from RadFiled3D.RadFiled3D import vec3, GridTracerFactory, GridTracerAlgorithm, CartesianRadiationField, DType
+from radfiled3d import GridTracerFactory, GridTracerAlgorithm, CartesianRadiationField, DType
+from radfiled3d.glm import vec3
 
 field = CartesianRadiationField(vec3(1.0, 1.0, 1.0), vec3(0.01, 0.01, 0.01))
-field.add_channel("test").add_layer("flux", "counts", DType.INT32)
+field["test"].add_layer("flux", "counts", DType.INT32)
 
 tracer = GridTracerFactory.construct(field, GridTracerAlgorithm.SAMPLING)
 indices = tracer.trace(vec3(0.5, 0.5, 0.0), vec3(0.5, 0.85, 1.0))
@@ -248,7 +275,7 @@ indices = tracer.trace(vec3(0.5, 0.5, 0.0), vec3(0.5, 0.85, 1.0))
 # which x varies fastest, exactly like the flat voxel indices the tracer returns.
 # Flattening it with order="F" therefore keeps the view, and the increments land
 # in the field itself -- .flatten() would copy and the writes would be lost.
-hits_counts = field.get_channel("test").get_layer_as_ndarray("flux")
+hits_counts = field["test"]["flux"]
 hits_counts.reshape(-1, order="F")[indices] += 1
 
 # ... and the 3D view of the same data, for plotting or further processing
@@ -258,9 +285,10 @@ hits_per_voxel = hits_counts[..., 0]
 ### Faster loading of field series
 As the *RadFiled3D* format possesses a dynamic structure, the loading of a radiation field requires the discovery of channels and layers as well as calculating the binary entry points of channels, layers and voxels. When loading datasets for machine learning, the structure of the fields loaded will likely be constant for each dataset. Therefore, the binary entry points can be precalculated to access only those parts of the *RadFiled3D* files that are really needed to increase the loading speed and to reduce the needed memory. This is relealized by the **FieldAccessors** objects.
 ```python
-from RadFiled3D.RadFiled3D import CartesianFieldAccessor, FieldType, uvec3
-from RadFiled3D.utils import FieldStore
-from RadFiled3D.metadata.v1 import Metadata
+from radfiled3d import FieldType
+from radfiled3d.glm import uvec3
+from radfiled3d.store import CartesianFieldAccessor, FieldStore
+from radfiled3d.metadata.v1 import Metadata
 
 accessor: CartesianFieldAccessor = FieldStore.construct_field_accessor("a_file.rf3")
 field_type = accessor.get_field_type()
@@ -278,17 +306,17 @@ voxel = accessor.access_voxel("a_similar_file.rf3", "channel1", "layer1", uvec3(
 
 Simple example on how to create and store a radiation field. Find more in the example file: [Example](./examples/cxx/example01.cpp)
 ```c++
-#include <RadFiled3D/storage/RadiationFieldStore.hpp>
-#include <RadFiled3D/RadiationField.hpp>
+#include <radfiled3d/storage/radiation_field_store.hpp>
+#include <radfiled3d/radiation_field.hpp>
 #include <memory>
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Storage;
+using namespace radfiled3d;
+using namespace radfiled3d::storage;
 
 int main() {
     auto field = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f)); // field extents: 2.5 m x 2.5 m x 2.5 m and voxel extents: 5 cm x 5 cm x 5 cm
 
-    auto metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
+    auto metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
         // learn about the existing data fields from the example file in ./examples/cxx/example01.cpp
     );
 
@@ -301,7 +329,7 @@ int main() {
 
 ### Available Voxel Datatypes
 In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datatype. But in order to deserialize them from a file or use them from Python, there is only a specific list implemented. The Available datatypes are:
-| C++ Type   | RadFiled3D.DType  |
+| C++ Type   | radfiled3d.DType  |
 | --------   | ------------  |
 | float      | DType.FLOAT32 |
 | double     | DType.FLOAT64 |
@@ -318,10 +346,18 @@ In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datat
 | glm::vec4     | DType.VEC4 |
 | HistogramVoxel<float> | DType.HISTOGRAM |
 | AngularResolvedVoxel<float> | DType.ANGULAR |
+| VMFMixtureVoxel<float> | DType.VMF_MIXTURE |
+
+The three composite types are not created through `add_layer`, because each needs extra
+structure: use `add_histogram_layer(name, bins, bin_width, unit)`,
+`add_spherical_layer(name, segments, unit)` or `add_vmf_layer(name, lobes, unit)`. A vMF mixture
+stores `lobes` x 5 floats per voxel (`weight, mean_x, mean_y, mean_z, kappa`), so a layer has
+shape `(x, y, z, lobes, 5)`. It is part of the core format and always available -- unlike
+float16, it has no compiler or library prerequisite.
 
 `DType.FLOAT16` requires a compiler that provides `_Float16` (GCC >= 12, a recent clang). Builds
 without it compile the type out and raise a clear error when it is used, so check
-`RadFiled3D.RadFiled3D.HAS_FLOAT16` before relying on it — it is not available in every published
+`radfiled3d.HAS_FLOAT16` before relying on it — it is not available in every published
 wheel (for 1.3.6 the manylinux_2_28 and musllinux wheels have it, the manylinux2014 and Windows
 ones do not).
 
@@ -331,7 +367,7 @@ RadFiled3D defines a field structure, that provides the user with the possibilit
 - *CartesianRadiationField*: Segments a room defined by an extent of the room itself and each cuboid voxel into a set of voxels. Each voxel can be addressed by a 3D position (coordinate: x, y, z), a 3D index (number of the voxel in each dimension) or a flat 1D index.
 - *PolarRadiationField*: Segements the surface of a unit sphere into surface segments. Each segment (voxel) can be addressed by a 2D position (coordinate: theta, phi), a 2D index (number of the segment in each dimension) or a flat 1D index.
 
-Fields are then partitioned into channels (`VoxelGridBuffer`/`PolarSegmentsBuffer`). All channels share the same size and resolution. A channel is again partitioned into layers (`VoxelGrid`/`PolarSegment`). Each layer holds the actual voxel data and can be constructed from various data types (float, double, uint32_t, uint64_t, glm::vec2, glm::vec3, glm::vec4, N-D-Histogram (list of floats)). Additionally, a layer has a unit string assigned to it as well as a statistical uncertainty to perserve those information.
+Fields are then partitioned into channels (`VoxelGridBuffer`/`PolarSegmentsBuffer`). All channels share the same size and resolution. A channel is again partitioned into layers (`VoxelGrid`/`PolarSegment`). Each layer holds the actual voxel data and can be constructed from various data types (float, double, uint32_t, uint64_t, glm::vec2, glm::vec3, glm::vec4, N-D-Histogram (list of floats), angular-resolved segment grids and von Mises-Fisher mixtures). Additionally, a layer has a unit string assigned to it as well as a statistical uncertainty to perserve those information.
 
 ## Dependencies
 RadFiled3D comes with a possibly low amount of dependencies. We integrated the OpenGL Math Library (GLM) just to provide those datatypes out of the box and as GLM is a head-only library we suspect no issues by doing so.

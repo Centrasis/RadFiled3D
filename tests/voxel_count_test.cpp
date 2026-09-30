@@ -1,14 +1,14 @@
-#include "RadFiled3D/VoxelGrid.hpp"
-#include "RadFiled3D/RadiationField.hpp"
-#include "RadFiled3D/storage/RadiationFieldStore.hpp"
-#include "RadFiled3D/storage/Types.hpp"
+#include "radfiled3d/voxel_grid.hpp"
+#include "radfiled3d/radiation_field.hpp"
+#include "radfiled3d/storage/radiation_field_store.hpp"
+#include "radfiled3d/storage/types.hpp"
 #include "gtest/gtest.h"
 #include <cstdio>
 #include <memory>
 #include <string>
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Storage;
+using namespace radfiled3d;
+using namespace radfiled3d::storage;
 
 namespace {
 	TEST(FieldCreationTest, ChannelsMatchTheFieldsVoxelCount) {
@@ -29,9 +29,9 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.2f), glm::vec3(0.02f));
 		ASSERT_EQ(field->get_voxel_counts(), glm::uvec3(60));
 		field->add_channel("c")->add_layer<float>("flux", 1.f, "");
-		auto metadata = std::make_shared<V1::RadiationFieldMetadata>(
-			FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(1, "", "", FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(glm::vec3(0.f), glm::vec3(0.f), 0.f, "")),
-			FiledTypes::V1::RadiationFieldMetadataHeader::Software("", "", "", "")
+		auto metadata = std::make_shared<v1::RadiationFieldMetadata>(
+			filed_types::v1::RadiationFieldMetadataHeader::Simulation(1, "", "", filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(glm::vec3(0.f), glm::vec3(0.f), 0.f, "")),
+			filed_types::v1::RadiationFieldMetadataHeader::Software("", "", "", "")
 		);
 		FieldStore::store(field, metadata, file, StoreVersion::V1);
 

@@ -1,0 +1,709 @@
+#pragma once
+#include <string>
+#include <memory>
+#include <glm/vec3.hpp>
+#include <cstring>
+#include <fstream>
+#include <stdexcept>
+#include "radfiled3d/radiation_field.hpp"
+#include "radfiled3d/storage/types.hpp"
+#include <utility>
+#include <type_traits>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <glm/glm.hpp>
+#include <radfiled3d/storage/field_accessor.hpp>
+#include <radfiled3d/helpers/saturating_arithmetic.hpp>
+#include <radfiled3d/helpers/typing.hpp>
+#include <radfiled3d/storage/metadata_serializer.hpp>
+#include <radfiled3d/storage/metadata_accessor.hpp>
+#include <radfiled3d/storage/field_serializer.hpp>
+
+
+namespace radfiled3d {
+	namespace storage {
+		/** Opens a RadFiled3D file for binary reading.
+		* Every API that takes a file path should obtain its stream here, so that a
+		* missing or unreadable file is reported as such instead of surfacing later
+		* as a confusing parse error (an empty stream used to be reported as
+		* "Found version string: '' was invalid!").
+		* @param file The path of the file to open
+		* @return The opened input stream, positioned at the beginning
+		* @throws RadiationFieldStoreException if the path does not exist, is a
+		*         directory, or cannot be opened for reading
+		*/
+		std::ifstream open_file_for_reading(const std::string& file);
+
+		/** Reads the file version header from the start of a stream.
+		* Rejects anything that does not begin with a RadFiled3D version header, so that
+		* an unrelated file is reported as such instead of failing later with a confusing
+		* parse error (binary header bytes used to be pasted verbatim into the message,
+		* which surfaced in python as a UnicodeDecodeError).
+		* @param stream The stream to read from; on success it is left positioned just after
+		*        the header, on failure it is rewound to the beginning
+		* @param file_name Optional path, quoted in the error message when known
+		* @return The version string, e.g. "1.1"
+		* @throws RadiationFieldStoreException if the data is not a RadFiled3D (.rf3) file
+		*/
+		std::string read_file_version_header(std::istream& stream, const std::string& file_name = std::string());
+
+		/** The mode how to join two radiation fields.
+		* Identity: Use the value of the target field
+		* Add: Add the values of the target and the additional source field
+		* Mean: Calculate the mean of the values of the target and the additional source field
+		* Subtract: Subtract the values of the additional source field from the target field
+		* Devide: Devide the values of the target field by the values of the additional source field
+		* Multiply: Multiply the values of the target field by the values of the additional source field
+		*/
+		enum class FieldJoinMode {
+			/* Use the value of the target field */
+			Identity = 0,
+			/* Add the values of the target and the additional source field */
+			Add = 1,
+			/* Calculate the mean of the values of the target and the additional source field */
+			Mean = 2,
+			/* Subtract the values of the additional source field from the target field */
+			Subtract = 3,
+			/* Divide the values of the target field by the values of the additional source field */
+			Divide = 4,
+			/* Multiply the values of the target field by the values of the additional source field */
+			Multiply = 5,
+			/* Add the values of the target and the additional source field with a weighting ratio based on the primary particles */
+			AddWeighted = 6
+		};
+
+		/** The mode to join the fields.
+		* All modes stack on each other. So Strict includes all checks of higher modes. The following mode includes all modes except for Strict and so on.
+		* The modes are as follows:
+		* Strict: Check if the metadata is equal. If not, throw an exception
+		* MetadataSimulationSimilar: Check if the metadata is similar (e.g. Geometry, Radiation-Direction, xray-tube). If not, throw an exception
+		* MetadataSoftwareEqual: Check if the software metadata is equal. If not, throw an exception
+		* MetadataSoftwareSimilar: Check if the software metadata is similar (e.g. Software-Name, Software-Repository). If not, throw an exception
+		* FieldStructureOnly: Check if the fields share the same channel-layer structure. If not, throw an exception
+		* FieldUnitsOnly: Check if the fields layers share the same units. If not, throw an exception
+		* NoChecks: Do not perform any semantic checks. Technical checks will still be performed
+		*/
+		enum class FieldJoinCheckMode {
+			/* Check if the metadata and field structure is equal. If not, throw an exception */
+			Strict = 0,
+			/* Check if the metadata is similar (e.g. Geometry, Radiation-Direction, xray-tube). If not, throw an exception */
+			MetadataSimulationSimilar = 1,
+			/* Check if the software metadata is equal. If not, throw an exception */
+			MetadataSoftwareEqual = 2,
+			/* Check if the software metadata is similar (e.g. Software-Name, Software-Repository). If not, throw an exception */
+			MetadataSoftwareSimilar = 3,
+			/* Check if the fields share the same channel-layer structure. If not, throw an exception */
+			FieldStructureOnly = 4,
+			/* Check if the fields layers share the same units. If not, throw an exception */
+			FieldUnitsOnly = 5,
+			/* Do not perform any semantic checks. Technical checks will still be performed */
+			NoChecks = 6
+		};
+
+		/** Type traits of the join arithmetic (see ExporterHelpers::get_join_function). */
+		namespace join_types {
+			template<typename T>
+			struct is_float16 : std::false_type {};
+#if RADFILED3D_HAS_FLOAT16
+			template<>
+			struct is_float16<typing::float16> : std::true_type {};
+#endif
+
+			/** Floating point types a join evaluates in a wider type. */
+			template<typename T>
+			struct is_join_float : std::bool_constant<std::is_floating_point_v<T> || is_float16<T>::value> {};
+
+			/** Wider type in which joins of the floating point type T are evaluated: double, or long double for double. */
+			template<typename T>
+			using wide_float_t = std::conditional_t<std::is_same_v<T, double> || std::is_same_v<T, long double>, long double, double>;
+
+			/** Largest finite value of the floating point type T. */
+			template<typename T>
+			constexpr long double float_max() {
+				if constexpr (is_float16<T>::value)
+					return 65504.0L;
+				else
+					return static_cast<long double>(std::numeric_limits<T>::max());
+			}
+
+			/** Name of the floating point type T for messages. */
+			template<typename T>
+			std::string float_name() {
+				if constexpr (is_float16<T>::value)
+					return "float16";
+				else if constexpr (std::is_same_v<T, float>)
+					return "float32";
+				else if constexpr (std::is_same_v<T, double>)
+					return "float64";
+				else
+					return "long double";
+			}
+
+			template<typename T>
+			struct is_glm_vec : std::false_type {};
+			template<glm::length_t L, typename T, glm::qualifier Q>
+			struct is_glm_vec<glm::vec<L, T, Q>> : std::true_type {};
+		}
+
+		class ExporterHelpers {
+		public:
+			/** Perform the actual merge of the fields
+			* @param target The target field
+			* @param additional_source The additional source field
+			* @param mode The mode to join the fields
+			*/
+			template<typename FieldT>
+			static void ensure_channels(std::shared_ptr<FieldT> target, std::shared_ptr<FieldT> additional_source) {
+				for (auto& channel : additional_source->get_channels()) {
+					if (!target->has_channel(channel.first)) {
+						target->add_channel(channel.first);
+					}
+				}
+			}
+
+			/** Narrows a join result evaluated in a wider type to T. A result that is not representable as T although both
+			* joined values were finite (e.g. the sum of two huge fp16 values) is reported instead of being stored as inf or nan.
+			* Non-finite input values are passed on unchanged.
+			*/
+			template<typename T, typename W>
+			static T narrow_join_result(W result, W a, W b) {
+				if (std::isfinite(a) && std::isfinite(b) && (!std::isfinite(result) || std::fabs(static_cast<long double>(result)) > join_types::float_max<T>())) {
+					throw RadiationFieldStoreException(
+						"Joining the values " + std::to_string(static_cast<long double>(a)) + " and " + std::to_string(static_cast<long double>(b))
+						+ " yields " + std::to_string(static_cast<long double>(result)) + ", which is not representable as " + join_types::float_name<T>()
+						+ ". The join was aborted instead of storing a degenerated value."
+					);
+				}
+				return static_cast<T>(result);
+			}
+
+			/** Join function for a floating point type T: evaluated in wide_float_t<T>, so an intermediate result (e.g. the
+			* sum inside a mean of two huge values) cannot overflow, and narrowed with narrow_join_result.
+			*/
+			template<typename T>
+			static std::function<T(const T&, const T&)> get_float_join_function(FieldJoinMode mode, float ratio) {
+				using W = join_types::wide_float_t<T>;
+				auto wrap = [](auto op) {
+					return [op](const T& a, const T& b) {
+						const W wa = static_cast<W>(a);
+						const W wb = static_cast<W>(b);
+						return narrow_join_result<T, W>(op(wa, wb), wa, wb);
+					};
+				};
+				const W r = static_cast<W>(ratio);
+				switch (mode)
+				{
+				case FieldJoinMode::Add:
+					return wrap([](W a, W b) { return a + b; });
+				case FieldJoinMode::Mean:
+					return wrap([](W a, W b) { return (a + b) / W(2); });
+				case FieldJoinMode::Identity:
+					return [](const T& a, const T& b) { return a; };
+				case FieldJoinMode::Subtract:
+					return wrap([](W a, W b) { return a - b; });
+				case FieldJoinMode::Divide:
+					return wrap([](W a, W b) { return a / b; });
+				case FieldJoinMode::Multiply:
+					return wrap([](W a, W b) { return a * b; });
+				case FieldJoinMode::AddWeighted:
+					return wrap([r](W a, W b) { return a * (W(1) - r) + b * r; });
+				default:
+					throw RadiationFieldStoreException("Unknown join mode");
+				}
+			}
+
+			/** Generate a join function for vMF mixture voxels. Mixtures are not joined element-wise but merged with
+			* VMFMixtureVoxel::merge into the target voxel, weighting target and source by (1 - ratio, ratio) for Add and
+			* AddWeighted and equally for Mean. Identity keeps the target. Subtract, Divide and Multiply are not defined for mixtures.
+			* A plain join only knows the ratio (FieldStore::join derives it from the primary particle counts), so weighting
+			* the mixtures by the actual flux of each voxel is the caller's responsibility. The default ratio 0 keeps only the
+			* target, so pass n_source / (n_target + n_source) when calling a store's join directly.
+			* @param mode The mode to join the fields
+			* @param ratio The share of the additional source
+			* @return The join function
+			*/
+			template<typename T = float>
+			static std::function<VMFMixtureVoxel<T>(const VMFMixtureVoxel<T>&, const VMFMixtureVoxel<T>&)> get_vmf_join_function(FieldJoinMode mode, float ratio = 0.f) {
+				double source_weight = 0.5;
+				switch (mode)
+				{
+				case FieldJoinMode::Identity:
+					return [](const VMFMixtureVoxel<T>& a, const VMFMixtureVoxel<T>& b) { return a; };
+				case FieldJoinMode::Add:
+				case FieldJoinMode::AddWeighted:
+					source_weight = std::isfinite(ratio) ? std::clamp(static_cast<double>(ratio), 0.0, 1.0) : 0.5;
+					break;
+				case FieldJoinMode::Mean:
+					break;
+				case FieldJoinMode::Subtract:
+				case FieldJoinMode::Divide:
+				case FieldJoinMode::Multiply:
+					throw RadiationFieldStoreException("Join modes Subtract, Divide and Multiply are not defined for vMF mixture layers");
+				default:
+					throw RadiationFieldStoreException("Unknown join mode");
+				}
+				return [source_weight](const VMFMixtureVoxel<T>& a, const VMFMixtureVoxel<T>& b) {
+					if (a.get_bytes() != b.get_bytes())
+						throw RadiationFieldStoreException("Voxel data size mismatch in join");
+					VMFMixtureVoxel<T> target(a.get_lobes(), (T*)a.get_raw());
+					VMFMixtureVoxel<T>::merge(a, 1.0 - source_weight, b, source_weight, target);
+					return a;
+				};
+			}
+
+			/** Generate a Voxel-level join function (a, b) -> c with a beeing the target voxel, b beeing the additional source voxel and c beeing the result voxel.
+			* Integral values saturate at their type's limits. Floating point values (also the components of vectors and the
+			* elements of histogram and angular voxels) are joined in a wider type and a result not representable in the layer's
+			* type raises an exception, so no join silently degenerates data.
+			* @param mode The mode to join the fields
+			* @param ratio The ratio to use for the weighted join mode. Default is 0.f meaning only the data of the target voxel is used.
+			* @return The join function
+			* @tparam dtype The data type of the field
+			* @tparam scalarT The scalar type of the field
+			*/
+			template<typename dtype, typename scalarT = dtype>
+			static std::function<dtype(const dtype&, const dtype&)> get_join_function(FieldJoinMode mode, float ratio = 0.f) {
+				if constexpr (std::is_same_v<dtype, VMFMixtureVoxel<scalarT>>) {
+					return get_vmf_join_function<scalarT>(mode, ratio);
+				}
+				else if constexpr (std::is_base_of_v<IVoxel, dtype>) {
+					// Joined element-wise into the target: view voxels (Hist/AngularResolved) share their data pointer on copy,
+					// so arithmetic on voxel temporaries could modify the SOURCE field.
+					const auto join_element = get_join_function<scalarT>(mode, ratio);
+					return [join_element](const dtype& a, const dtype& b) {
+						if (a.get_bytes() != b.get_bytes())
+							throw RadiationFieldStoreException("Voxel data size mismatch in join");
+						scalarT* av = (scalarT*)a.get_raw();
+						const scalarT* bv = (const scalarT*)b.get_raw();
+						const size_t n = a.get_bytes() / sizeof(scalarT);
+						for (size_t i = 0; i < n; i++)
+							av[i] = join_element(av[i], bv[i]);
+						return a;
+					};
+				}
+				else if constexpr (join_types::is_glm_vec<dtype>::value) {
+					const auto join_component = get_join_function<typename dtype::value_type>(mode, ratio);
+					return [join_component](const dtype& a, const dtype& b) {
+						dtype c;
+						for (glm::length_t i = 0; i < dtype::length(); i++)
+							c[i] = join_component(a[i], b[i]);
+						return c;
+					};
+				}
+				else if constexpr (std::is_integral_v<dtype>) {
+					// Integral layers (e.g. 8-bit masks) saturate at the type's limits instead of wrapping around.
+					switch (mode)
+					{
+					case FieldJoinMode::Add:
+						return [](const dtype& a, const dtype& b) { return saturating_arithmetic::add<dtype>(a, b); };
+					case FieldJoinMode::Mean:
+						return [](const dtype& a, const dtype& b) { return saturating_arithmetic::mean<dtype>(a, b); };
+					case FieldJoinMode::Identity:
+						return [](const dtype& a, const dtype& b) { return a; };
+					case FieldJoinMode::Subtract:
+						return [](const dtype& a, const dtype& b) { return saturating_arithmetic::subtract<dtype>(a, b); };
+					case FieldJoinMode::Divide:
+						return [](const dtype& a, const dtype& b) { return saturating_arithmetic::divide<dtype>(a, b); };
+					case FieldJoinMode::Multiply:
+						return [](const dtype& a, const dtype& b) { return saturating_arithmetic::multiply<dtype>(a, b); };
+					case FieldJoinMode::AddWeighted:
+						return [ratio](const dtype& a, const dtype& b) { return saturating_arithmetic::blend<dtype>(a, b, ratio); };
+					default:
+						throw RadiationFieldStoreException("Unknown join mode");
+					}
+				}
+				else if constexpr (join_types::is_join_float<dtype>::value) {
+					return get_float_join_function<dtype>(mode, ratio);
+				}
+				else {
+					static_assert(sizeof(dtype) == 0, "No join function for this voxel data type");
+				}
+			}
+		};
+
+		class IRadiationFieldExporter {
+		public:
+			/** Store the radiation field to a file
+			* @param field The radiation field to store
+			* @param metadata The metadata of the radiation field
+			* @param file The file to store the radiation field to
+			*/
+			void store(std::shared_ptr<IRadiationField> field, std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> metadata, const std::string& file) const;
+
+			/** Serialize the radiation field to a stream
+			* @param stream The stream to serialize the radiation field to
+			* @param field The radiation field to serialize
+			* @param metadata The metadata of the radiation field
+			*/
+			virtual void serialize(std::ostream& stream, std::shared_ptr<IRadiationField> field, std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> metadata) const = 0;
+
+			/** Merge the radiation field to the one of an existing
+			* @param target The radiation field to join to
+			* @param additional_source The radiation field to join from
+			* @param metadata The metadata of the radiation field
+			* @param join_mode The mode to join the fields
+			* @param check_mode The mode to check the fields
+			* @param ratio The ratio to use for the weighted join mode. Default is 0.f meaning only the data of the target field is used.
+			*/
+			virtual void join(std::shared_ptr<IRadiationField> target, std::shared_ptr<IRadiationField> additional_source, FieldJoinMode join_mode, FieldJoinCheckMode check_mode, float ratio = 0.f) const = 0;
+		};
+
+		class IRadiationFieldImporter {
+		public:
+			/** Load the radiation field from a file
+			* @param file The file to load the radiation field from
+			* @return The radiation field
+			* @param file The file to load the radiation field from
+			* @return The radiation field
+			* @throw RadiationFieldStoreException If the file does not exist or the file is corrupted
+			*/
+			std::shared_ptr<IRadiationField> load(const std::string& file) const;
+
+			/** Fully retrieves the metadata of the radiation field from a file
+			* @param file The file to get the metadata from
+			* @return The metadata of the radiation field
+			* @throw RadiationFieldStoreException If the file does not exist or the file is corrupted
+			*/
+			std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> load_metadata(const std::string& file) const;
+
+			/** Quickly peeks at the mandatory metadata header of the radiation field from a file
+			* @param file The file to get the metadata from
+			* @return The metadata header of the radiation field
+			* @throw RadiationFieldStoreException If the file does not exist or the file is corrupted
+			*/
+			std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> peek_metadata(const std::string& file) const;
+
+			/** Load the radiation field from a buffer
+			* @param buffer The buffer to load the radiation field from
+			* @return The radiation field
+			* @throw RadiationFieldStoreException If the buffer is corrupted
+			*/
+			virtual std::shared_ptr<IRadiationField> load(std::istream& buffer) const = 0;
+
+			/** Fully retrieves the metadata of the radiation field from a buffer
+			* @param buffer The buffer to get the metadata from
+			* @return The metadata of the radiation field
+			* @throw RadiationFieldStoreException If the buffer is corrupted
+			*/
+			virtual std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> load_metadata(std::istream& buffer) const = 0;
+
+			/** Quickly peeks at the mandatory metadata header of the radiation field from a buffer
+			* @param buffer The buffer to get the metadata from
+			* @return The metadata header of the radiation field
+			* @throw RadiationFieldStoreException If the buffer is corrupted
+			*/
+			virtual std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> peek_metadata(std::istream& buffer) const = 0;
+
+			/** Load a single layer from a buffer without loding the entire radiation field
+			* @param buffer The buffer to load the radiation field from
+			* @return The radiation field
+			* @throw RadiationFieldStoreException If the buffer is corrupted
+			*/
+			virtual std::shared_ptr<VoxelLayer> load_single_layer(std::istream& buffer, const std::string& channel, const std::string& layer) const = 0;
+
+			/** Peeks at the field type of the radiation field from a buffer
+			* @param buffer The buffer to get the metadata from
+			* @return The field type of the radiation field
+			* @throw RadiationFieldStoreException If the buffer is corrupted
+			*/
+			virtual FieldType peek_field_type(std::istream& file_stream) const = 0;
+		};
+
+		/**
+		* Data class for storing the valid range of file versions that a FieldStore can handle.
+		*/
+		struct FieldStoreVersionValidityRange {
+			struct {
+				char min;
+				char max;
+			} major;
+
+			struct {
+				char min;
+				char max;
+			} minor;
+
+			/**
+			* Constructs the Version range from pairs.
+			* @param major_range (min, max)
+			* @param minor_range (min, max)
+			*/
+			FieldStoreVersionValidityRange(const std::pair<char, char>& major_range, const std::pair<char, char>& minor_range)
+				: major{ major_range.first, major_range.second },
+				  minor{ minor_range.first, minor_range.second }
+			{}
+		};
+
+		class BasicFieldStore : public IRadiationFieldExporter, public IRadiationFieldImporter {
+		private:
+			std::string file_version;
+			FieldStoreVersionValidityRange validity_range;
+			radfiled3d::storage::MetadataSerializer* metadata_serializer;
+			radfiled3d::storage::BinaryFieldBlockHandler* field_serializer;
+			radfiled3d::storage::MetadataAccessor* metadata_accessor;
+
+		protected:
+			/**
+			* @param file_version The file version string to paste into each file.
+			* @param validity_range The range of file versions that can be loaded by this store (All major versions of rnage and the minor version range applying to the max major versions)
+			*/
+			BasicFieldStore(
+				const std::string& file_version,
+				const FieldStoreVersionValidityRange& validity_range,
+				radfiled3d::storage::MetadataSerializer* metadata_serializer,
+				radfiled3d::storage::BinaryFieldBlockHandler* field_serializer,
+				radfiled3d::storage::MetadataAccessor* metadata_accessor
+			) : file_version(file_version),
+				validity_range(validity_range),
+				metadata_serializer(metadata_serializer),
+				field_serializer(field_serializer),
+				metadata_accessor(metadata_accessor)
+			{}
+
+			inline MetadataSerializer& get_metadata_serializer() const {
+				return *this->metadata_serializer;
+			}
+
+			inline MetadataAccessor& get_metadata_accessor() const {
+				return *this->metadata_accessor;
+			}
+
+			inline BinaryFieldBlockHandler& get_field_serializer() const {
+				return *this->field_serializer;
+			}
+
+		public:
+			virtual ~BasicFieldStore() {
+				delete this->metadata_serializer;
+				delete this->field_serializer;
+				delete this->metadata_accessor;
+			}
+
+			/** Serialize the radiation field to a stream
+			* @param stream The stream to serialize the radiation field to
+			* @param field The radiation field to serialize
+			* @param metadata The metadata of the radiation field
+			*/
+			virtual void serialize(std::ostream& stream, std::shared_ptr<IRadiationField> field, std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> metadata) const override;
+
+			virtual void validate_file_version(std::istream& stream) const;
+			virtual std::shared_ptr<IRadiationField> load(std::istream& buffer) const override;
+
+			/** Fully retrieves the metadata of the radiation field from a file
+			* @param buffer The buffer to get the metadata from
+			* @return The metadata of the radiation field
+			* @throw RadiationFieldStoreException If the file does not exist or the file is corrupted
+			*/
+			virtual std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> load_metadata(std::istream& buffer) const override;
+
+			/** Quickly peeks at the mandatory metadata header of the radiation field from a file
+			* @param file The file to get the metadata from
+			* @return The metadata header of the radiation field
+			* @throw RadiationFieldStoreException If the file does not exist or the file is corrupted
+			*/
+			virtual std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> peek_metadata(std::istream& buffer) const override;
+
+			FieldType peek_field_type(std::istream& file_stream) const override;
+
+			/**
+			* Checks, if the version_str (x.y) is supported by this field store according to the FieldStoreVersionValidityRange.
+			* @param version_str version string of the form "x.y"
+			* @return true, if major version in range or, if major version == max major version, if additionally checks if the minor version is in range
+			*/
+			inline bool check_version_string_validity(const std::string& version_str) const {
+				size_t location_of_dot = version_str.find(".");
+				if (location_of_dot == std::string::npos || location_of_dot >= version_str.length() - 1)
+					throw RadiationFieldStoreException("Found version string: '" + version_str + "' was invalid!");
+
+				int major_version = std::stoi(version_str.substr(0, location_of_dot));
+				int minor_version = std::stoi(version_str.substr(location_of_dot + 1));
+
+				// check if major version is in range. If major version < max major version --> assume all minor versions are valid.
+				bool is_supported = (major_version >= this->validity_range.major.min && major_version <= this->validity_range.major.max);
+				is_supported &= (minor_version >= this->validity_range.minor.min && minor_version <= this->validity_range.minor.max) || (major_version < this->validity_range.major.max);
+				return is_supported;
+			}
+		};
+
+		namespace v1 {
+			class FieldStore : public BasicFieldStore {
+			public:
+				FieldStore() : BasicFieldStore(
+					/**
+					* Version 1.0: Basic Version used for papers: RadFiled3D and RadField3D-NN
+					* Version 1.1: Downward compatible adding of spherical voxels
+					*/
+					"1.1",
+					FieldStoreVersionValidityRange(
+						{1, 1},		// major version == 1
+						{0, 1}		// minor version in [0..1]
+					),
+					new v1::MetadataSerializer(),
+					(radfiled3d::storage::BinaryFieldBlockHandler*)new radfiled3d::storage::v1::BinaryFieldBlockHandler(),
+					new v1::MetadataAccessor()
+				) {}
+
+				/** Merge the radiation field to the one of an existing
+				* @param target The radiation field to join to
+				* @param additional_source The radiation field to join from
+				* @param metadata The metadata of the radiation field
+				* @param mode The mode to join the fields
+				*/
+				virtual void join(std::shared_ptr<IRadiationField> target, std::shared_ptr<IRadiationField> additional_source, FieldJoinMode join_mode, FieldJoinCheckMode check_mode, float ratio = 0.f) const override;
+
+				/** Load a single layer from a buffer without loding the entire radiation field
+				* @param buffer The buffer to load the radiation field from
+				* @return The radiation field
+				* @throw RadiationFieldStoreException If the buffer is corrupted
+				*/
+				virtual std::shared_ptr<VoxelLayer> load_single_layer(std::istream& buffer, const std::string& channel, const std::string& layer) const override;
+
+				/** Replace the metadata and the channels of a field in an existing V1 file, keeping all other channels of the file.
+				* See radfiled3d::storage::FieldStore::replace, which also handles missing files and file locking.
+				* @param field The radiation field whose channels replace the file's channels
+				* @param metadata The metadata replacing the file's metadata
+				* @param file The existing V1 file to update
+				* @throw RadiationFieldStoreException If the file has a different field type or grid than the field
+				*/
+				void replace(std::shared_ptr<IRadiationField> field, std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> metadata, const std::string& file) const;
+			};
+		};
+
+		/** This class should be used to accutally store and load radiation fields.
+		* It will automatically detect the version of the file and use the correct store to load the radiation field.
+		* When using the same versions multiple times, the class will cache the store to avoid unnecessary reinitialization.
+		*/
+		class FieldStore {
+		protected:
+			static bool file_lock_synchronization;
+
+			static const BasicFieldStore* get_store_by(std::istream& buffer);
+			static const BasicFieldStore* get_store_by(StoreVersion version);
+		public:
+			/** Initialize the store instance on first use.
+			*/
+			static void ensure_registered_stores();
+
+			/** Enable or disable file transaction synchronization. This will make sure, that only one process can perform transactions such as joining on a file at a time and that other processes are queued.
+			* Default is disabled
+			* @param enable Enable or disable the synchronization
+			*/
+			[[deprecated("This feature is highly experimental and not tested on platforms!")]]
+			static void enable_file_lock_synchronization(bool enable) {
+				FieldStore::file_lock_synchronization = enable;
+			}
+
+			/** Get the version of the store that created a buffer
+			* @param buffer The buffer to get the store version from
+			* @return The store version of the buffer
+			* @note The buffer will be reset to the beginning
+			*/
+			static StoreVersion get_store_version(const std::string& file);
+			static StoreVersion get_store_version(std::istream& buffer);
+
+			/** Store the radiation field to a file
+			* @param field The radiation field to store
+			* @param metadata The metadata of the radiation field
+			* @param file The file to store the radiation field to
+			* @param version The version of the store to use
+			*/
+			static void store(std::shared_ptr<IRadiationField> field, std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> metadata, const std::string& file, StoreVersion version = StoreVersion::V1);
+
+			/** Serialize the radiation field to a stream
+			* @param stream The stream to serialize the radiation field to
+			* @param field The radiation field to serialize
+			* @param metadata The metadata of the radiation field
+			* @param version The version of the store to use
+			*/
+			static void serialize(std::ostream& stream, std::shared_ptr<IRadiationField> field, std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> metadata, StoreVersion version = StoreVersion::V1);
+
+			/** Load the radiation field from a file
+			* @param file The file to load the radiation field from
+			* @return The radiation field
+			*/
+			static std::shared_ptr<IRadiationField> load(const std::string& file);
+
+			/** Load the radiation field from a buffer
+			* @param buffer The buffer to load the radiation field from
+			* @return The radiation field
+			*/
+			static std::shared_ptr<IRadiationField> load(std::istream& buffer);
+
+			/** Fully retrieves the metadata of the radiation field from a file
+			* @param file The file to get the metadata from
+			* @return The metadata of the radiation field
+			*/
+			static std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> load_metadata(const std::string& file);
+
+			/** Fully retrieves the metadata of the radiation field from a buffer
+			* @param buffer The buffer to get the metadata from
+			* @return The metadata of the radiation field
+			*/
+			static std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> load_metadata(std::istream& buffer);
+
+			/** Quickly peeks at the mandatory metadata header of the radiation field from a file
+			* @param file The file to get the metadata from
+			* @return The metadata header of the radiation field
+			*/
+			static std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> peek_metadata(const std::string& file);
+
+			/** Quickly peeks at the mandatory metadata header of the radiation field from a buffer. Resets the file stream to the beginning
+			* @param buffer The buffer to get the metadata from
+			* @return The metadata header of the radiation field
+			*/
+			static FieldType peek_field_type(std::istream& file_stream);
+
+			/** Loads a single layer from a buffer without loding the entire radiation field
+			* @param buffer The buffer to load the radiation field from
+			* @return The radiation field
+			* @throw RadiationFieldStoreException If the buffer is corrupted
+			*/
+			static std::shared_ptr<VoxelLayer> load_single_layer(std::istream& buffer, const std::string& channel, const std::string& layer);
+
+			/** Quickly peeks at the mandatory metadata header of the radiation field from a buffer
+			* @param buffer The buffer to get the metadata from
+			* @return The metadata header of the radiation field
+			*/
+			static std::shared_ptr<radfiled3d::storage::RadiationFieldMetadata> peek_metadata(std::istream& buffer);
+
+			/** Merge the radiation field to the one of an existing file
+			* Creates a new stored radiation field if no radiation field was present at the file path.
+			* @param field The radiation field to join
+			* @param metadata The metadata of the radiation field
+			* @param file The file to join the radiation field to
+			* @param join_mode The mode to join the fields
+			* @param check_mode The mode to check the fields
+			* @param fallback_version The version of the store to use if the file does not exist
+			*/
+			static void join(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, FieldJoinMode join_mode, FieldJoinCheckMode check_mode = FieldJoinCheckMode::MetadataSimulationSimilar, StoreVersion fallback_version = StoreVersion::V1);
+
+			/** Replace the metadata and the channels of a field in an existing file, keeping all other channels of the file.
+			* Channels of the file that the field does not contain (e.g. a geometry channel stored once) are copied byte for byte
+			* without being loaded, channels the field contains are written from the field. The channel order is the same as
+			* store() would produce. The file is written to a temporary file next to it first and then replaces it, so it stays
+			* intact if writing fails. If the file does not exist, the field is stored as with store().
+			* @param field The radiation field whose channels replace the file's channels
+			* @param metadata The metadata replacing the file's metadata
+			* @param file The file to update
+			* @param version The version of the store to use; must match the version of an existing file
+			* @throw RadiationFieldStoreException If the file has a different version, field type or grid than the field
+			*/
+			static void replace(std::shared_ptr<IRadiationField> field, std::shared_ptr<RadiationFieldMetadata> metadata, const std::string& file, StoreVersion version = StoreVersion::V1);
+		
+			/** Construct a field accessor from a file, that can be used for all files that share the same structure (metadata-size and field structure)
+			* This is useful when parsing large datasets.
+			* @param file The file to construct the accessor from
+			* @return The field accessor
+			*/
+			static std::shared_ptr<FieldAccessor> construct_accessor(const std::string& file);
+
+			/** Construct a field accessor from a buffer, that can be used for all files that share the same structure (metadata-size and field structure)
+			* This is useful when parsing large datasets.
+			* @param buffer The buffer to construct the accessor from
+			* @return The field accessor
+			*/
+			static std::shared_ptr<FieldAccessor> construct_accessor(std::istream& buffer);
+		};
+	};
+}

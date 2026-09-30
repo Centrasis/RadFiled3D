@@ -1,9 +1,9 @@
-#include "RadFiled3D/VoxelGrid.hpp"
-#include "RadFiled3D/RadiationField.hpp"
+#include "radfiled3d/voxel_grid.hpp"
+#include "radfiled3d/radiation_field.hpp"
 #include <iostream>
-#include "RadFiled3D/storage/RadiationFieldStore.hpp"
-#include "RadFiled3D/storage/FieldAccessor.hpp"
-#include "RadFiled3D/dataset/helpers.hpp"
+#include "radfiled3d/storage/radiation_field_store.hpp"
+#include "radfiled3d/storage/field_accessor.hpp"
+#include "radfiled3d/dataset/helpers.hpp"
 #include <memory>
 #include <vector>
 #include <chrono>
@@ -21,8 +21,8 @@
 #include <unistd.h>
 #endif
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Storage;
+using namespace radfiled3d;
+using namespace radfiled3d::storage;
 
 // Detect AddressSanitizer (GCC defines __SANITIZE_ADDRESS__; Clang exposes it via __has_feature).
 #if defined(__SANITIZE_ADDRESS__)
@@ -76,19 +76,19 @@ namespace {
 
 		channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -135,19 +135,19 @@ namespace {
 
 		auto result = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -188,19 +188,19 @@ namespace {
 
 		channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -242,19 +242,19 @@ namespace {
 
 		channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -293,19 +293,19 @@ namespace {
 
 		field->add_channel("empty");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -340,19 +340,19 @@ namespace {
 
 		channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -416,19 +416,19 @@ namespace {
 
 		channel = std::static_pointer_cast<VoxelGridBuffer>(field->add_channel("empty"));
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -447,7 +447,7 @@ namespace {
 
 		auto serialized = FieldAccessor::Serialize(accessor.get());
 
-		std::shared_ptr<V1::CartesianFieldAccessor> accessor2 = std::dynamic_pointer_cast<V1::CartesianFieldAccessor>(FieldAccessor::Deserialize(serialized));
+		std::shared_ptr<v1::CartesianFieldAccessor> accessor2 = std::dynamic_pointer_cast<v1::CartesianFieldAccessor>(FieldAccessor::Deserialize(serialized));
 
 		EXPECT_EQ(accessor->getFieldType(), accessor2->getFieldType());
 		EXPECT_EQ(accessor->getFieldDataOffset(), accessor2->getFieldDataOffset());
@@ -479,19 +479,19 @@ namespace {
 		channel->add_layer<float>("doserate", 0.0f, "Gy/s");
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -507,16 +507,16 @@ namespace {
 		channel->get_voxel_flat<ScalarVoxel<float>>("doserate", 10) = 25.f;
 		EXPECT_NO_THROW(FieldStore::store(field, metadata, "test02.rf3", StoreVersion::V1));
 
-		std::vector<Dataset::VoxelCollectionRequest> reqs;
-		reqs.push_back(Dataset::VoxelCollectionRequest("test01.rf3", { 1, 2, 3 }));
-		reqs.push_back(Dataset::VoxelCollectionRequest("test02.rf3", { 1, 2, 4, 10 }));
+		std::vector<dataset::VoxelCollectionRequest> reqs;
+		reqs.push_back(dataset::VoxelCollectionRequest("test01.rf3", { 1, 2, 3 }));
+		reqs.push_back(dataset::VoxelCollectionRequest("test02.rf3", { 1, 2, 4, 10 }));
 
 		std::ifstream file("test01.rf3", std::ios::binary);
 		std::shared_ptr<FieldAccessor> accessor = FieldStore::construct_accessor(file);
 
 		// construct the multi voxel accesso and load voxels
-		Dataset::VoxelCollectionAccessor vx_accessor = Dataset::VoxelCollectionAccessor(accessor, { "test_channel" }, { "doserate", "spectra" });
-		std::shared_ptr<Dataset::VoxelCollection> collection = vx_accessor.access(reqs);
+		dataset::VoxelCollectionAccessor vx_accessor = dataset::VoxelCollectionAccessor(accessor, { "test_channel" }, { "doserate", "spectra" });
+		std::shared_ptr<dataset::VoxelCollection> collection = vx_accessor.access(reqs);
 
 		EXPECT_EQ(collection->channels.size(), 1);
 		EXPECT_EQ(collection->channels["test_channel"].layers.size(), 2);

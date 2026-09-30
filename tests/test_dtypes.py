@@ -1,4 +1,5 @@
-from RadFiled3D.RadFiled3D import vec2, vec3, vec4, uvec3, CartesianRadiationField, RadiationFieldMetadataV1, RadiationFieldMetadataHeaderV1, RadiationFieldSimulationMetadataV1, RadiationFieldXRayTubeMetadataV1, RadiationFieldSoftwareMetadataV1
+from radfiled3d import CartesianRadiationField, RadiationFieldMetadataV1, RadiationFieldMetadataHeaderV1, RadiationFieldSimulationMetadataV1, RadiationFieldXRayTubeMetadataV1, RadiationFieldSoftwareMetadataV1
+from radfiled3d.glm import vec2, vec3, vec4, uvec3
 import pickle
 
 
@@ -126,3 +127,30 @@ def test_pickle_support():
     assert loaded_header.simulation.geometry == original_header.simulation.geometry
     assert loaded_header.software.name == original_header.software.name
     assert loaded_header.software.version == original_header.software.version
+
+
+def test_float64_voxel():
+    """DType.FLOAT64 layers must yield a usable Float64Voxel, not a bare Voxel.
+
+    ScalarVoxel<double> used to be missing from the bindings, so get_voxel() on such a
+    layer returned the base class without get_data().
+    """
+    from radfiled3d import CartesianRadiationField, DType, Float64Voxel, Voxel
+    from radfiled3d.glm import vec3
+
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
+    channel = field["channel"]
+    channel.add_layer("energy", "Gy", DType.FLOAT64)
+    assert channel["energy"].dtype == "float64"
+
+    voxel = channel.get_voxel("energy", 0, 0, 0)
+    assert isinstance(voxel, Float64Voxel), f"expected Float64Voxel, got {type(voxel).__name__}"
+    assert isinstance(voxel, Voxel)
+
+    voxel.set_data(2.5)
+    assert voxel.get_data() == 2.5
+    # the voxel is a view onto the layer, so the write is visible in the ndarray
+    assert channel["energy"][0, 0, 0, 0] == 2.5
+
+    channel["energy"][0, 0, 1] = 4.0
+    assert channel.get_voxel("energy", 0, 0, 1).get_data() == 4.0

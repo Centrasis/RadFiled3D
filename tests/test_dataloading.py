@@ -1,6 +1,8 @@
-from RadFiled3D.RadFiled3D import CartesianRadiationField, FieldShape, CartesianFieldAccessor, StoreVersion, DType, vec2, vec3, uvec3, RadiationFieldMetadataHeaderV1
-from RadFiled3D.utils import FieldStore
-from RadFiled3D.metadata.v1 import Metadata
+from radfiled3d import CartesianRadiationField, FieldShape, DType, RadiationFieldMetadataHeaderV1
+from radfiled3d.glm import vec2, vec3, uvec3
+from radfiled3d.store import CartesianFieldAccessor, StoreVersion
+from radfiled3d.store import FieldStore
+from radfiled3d.metadata.v1 import Metadata
 import numpy as np
 
 

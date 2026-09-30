@@ -1,8 +1,8 @@
-from RadFiled3D.RadFiled3D import FieldShape
+from radfiled3d import FieldShape
 from plotly import graph_objects as go
 import sys
-from RadFiled3D.metadata.v1 import Metadata
-from RadFiled3D.utils import FieldStore
+from radfiled3d.metadata.v1 import Metadata
+from radfiled3d.store import FieldStore
 
 
 # This file demonstrates how to load a radiation field files metadata and which information can be extracted from it.

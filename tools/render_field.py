@@ -1,5 +1,5 @@
-from RadFiled3D.utils import FieldStore
-from RadFiled3D.RadFiled3D import CartesianRadiationField, HistogramVoxel
+from radfiled3d.store import FieldStore
+from radfiled3d import CartesianRadiationField, HistogramVoxel
 from argparse import ArgumentParser
 import os
 from rich import print

@@ -1,4 +1,5 @@
-from RadFiled3D.RadFiled3D import vec3, GridTracerFactory, GridTracerAlgorithm, CartesianRadiationField
+from radfiled3d import GridTracerFactory, GridTracerAlgorithm, CartesianRadiationField
+from radfiled3d.glm import vec3
 
 
 def test_sampling_algorithm():

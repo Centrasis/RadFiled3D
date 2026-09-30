@@ -1,0 +1,147 @@
+#include <radfiled3d/helpers/typing.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+#include <stdexcept>
+#include <algorithm>
+#include <cstdint>
+
+using namespace radfiled3d;
+
+
+typing::DType typing::Helper::get_dtype(const std::string& dtype)
+{
+	if (dtype == typing::Helper::get_plain_type_name<float>()) {
+		return typing::DType::Float;
+	}
+#if RADFILED3D_HAS_FLOAT16
+	if (dtype == typing::Helper::get_plain_type_name<radfiled3d::typing::float16>()) {
+		return typing::DType::Float16;
+	}
+#else
+	if (dtype == std::string("float16")) {
+		throw std::runtime_error("RadFiled3D was built without float16 support (the compiler lacks _Float16; needs GCC >= 12 or a modern Clang). Rebuild with a newer toolset to read float16 fields.");
+	}
+#endif
+	if (dtype == typing::Helper::get_plain_type_name<double>()) {
+		return typing::DType::Double;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<int>()) {
+		return typing::DType::Int;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<char>()) {
+		return typing::DType::Char;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<uint8_t>()) {
+		return typing::DType::Byte;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<unsigned char>()) {
+		return typing::DType::Byte;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<uint64_t>()) {
+		return typing::DType::UInt64;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<unsigned long long>()) {
+		return typing::DType::UInt64;
+	}
+	if (dtype == std::string("unsigned long")) {
+		// Legacy spelling from older files (the canonical name is now uint64_t). Map by the reader's
+		// own width: 64-bit on LP64, 32-bit on LLP64 - matching how such files were originally written.
+		return (sizeof(unsigned long) == 8) ? typing::DType::UInt64 : typing::DType::UInt32;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<uint32_t>()) {
+		return typing::DType::UInt32;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<unsigned long>()) {
+		return typing::DType::UInt32;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<glm::vec3>()) {
+		return typing::DType::Vec3;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<glm::vec2>()) {
+		return typing::DType::Vec2;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<glm::vec4>()) {
+		return typing::DType::Vec4;
+	}
+	if (dtype == std::string("histogram")) {
+		return typing::DType::Hist;
+	}
+	if (dtype == std::string("spherical")) {
+		return typing::DType::AngularResolved;
+	}
+	if (dtype == std::string("vmf_mixture")) {
+		return typing::DType::VMFMixture;
+	}
+
+	std::string vec_prefix = "glm::vec<";
+	const std::string struct_prefix = "struct ";
+	const std::string class_prefix = "class ";
+	if (dtype.compare(0, struct_prefix.size(), struct_prefix) == 0) {
+		vec_prefix = struct_prefix + vec_prefix;
+	} else {
+		if (dtype.compare(0, class_prefix.size(), class_prefix) == 0) {
+			vec_prefix = class_prefix + vec_prefix;
+		}
+	}
+
+	if (dtype.compare(0, vec_prefix.size(), vec_prefix) == 0) {
+		// check for vector type, if the file was created by a different compiler
+		std::string shrunk_dtype = dtype.substr(vec_prefix.size());
+		shrunk_dtype.erase(std::remove(shrunk_dtype.begin(), shrunk_dtype.end(), ' '), shrunk_dtype.end());
+		const std::string vec2_prefix = "2,float";
+		const std::string vec3_prefix = "3,float";
+		const std::string vec4_prefix = "4,float";
+		if (shrunk_dtype.compare(0, vec3_prefix.size(), vec3_prefix) == 0) {
+			return typing::DType::Vec3;
+		}
+		if (shrunk_dtype.compare(0, vec2_prefix.size(), vec2_prefix) == 0) {
+			return typing::DType::Vec2;
+		}
+		if (shrunk_dtype.compare(0, vec4_prefix.size(), vec4_prefix) == 0) {
+			return typing::DType::Vec4;
+		}
+	}
+
+	throw std::runtime_error("Unknown data type: " + dtype);
+}
+
+size_t radfiled3d::typing::Helper::get_bytes_of_dtype(typing::DType dtype)
+{
+	switch (dtype) {
+	case typing::DType::Float:
+		return sizeof(float);
+	case typing::DType::Float16:
+#if RADFILED3D_HAS_FLOAT16
+		return sizeof(radfiled3d::typing::float16);
+#else
+		throw std::runtime_error("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
+#endif
+	case typing::DType::Double:
+		return sizeof(double);
+	case typing::DType::Int:
+		return sizeof(int);
+	case typing::DType::Char:
+		return sizeof(char);
+	case typing::DType::UInt64:
+		return sizeof(uint64_t);
+	case typing::DType::UInt32:
+		return sizeof(uint32_t);
+	case typing::DType::Vec3:
+		return sizeof(glm::vec3);
+	case typing::DType::Vec2:
+		return sizeof(glm::vec2);
+	case typing::DType::Vec4:
+		return sizeof(glm::vec4);
+	case typing::DType::Byte:
+		return sizeof(uint8_t);
+	case typing::DType::Hist:
+		return sizeof(float);
+	case typing::DType::AngularResolved:
+		return sizeof(float);
+	case typing::DType::VMFMixture:
+		return sizeof(float);
+	default:
+		throw std::runtime_error("Unknown data type");
+	}
+}

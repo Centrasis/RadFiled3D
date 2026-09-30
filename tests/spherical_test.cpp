@@ -1,15 +1,15 @@
-#include "RadFiled3D/Voxel.hpp"
-#include "RadFiled3D/RadiationField.hpp"
-#include "RadFiled3D/storage/RadiationFieldStore.hpp"
-#include "RadFiled3D/storage/FieldAccessor.hpp"
-#include "RadFiled3D/storage/Types.hpp"
+#include "radfiled3d/voxel.hpp"
+#include "radfiled3d/radiation_field.hpp"
+#include "radfiled3d/storage/radiation_field_store.hpp"
+#include "radfiled3d/storage/field_accessor.hpp"
+#include "radfiled3d/storage/types.hpp"
 #include "gtest/gtest.h"
 #include <cmath>
 #include <fstream>
 #include <cstdio>
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Storage;
+using namespace radfiled3d;
+using namespace radfiled3d::storage;
 
 namespace {
 	// Fixture class for tests that create .rf3 files — ensures cleanup via TearDown
@@ -173,14 +173,14 @@ namespace {
 
 		channel->get_voxel<ScalarVoxel<float>>("doserate", 0, 5, 0) = 42.f;
 
-		auto metadata = std::make_shared<V1::RadiationFieldMetadata>(
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		auto metadata = std::make_shared<v1::RadiationFieldMetadata>(
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				1000, "test_geom", "test_physics",
-				Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 0.f, 1.f), 15000.f, "test_tube"
 				)
 			),
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 		);
 
 		FieldStore::store(field, metadata, "test_spherical.rf3");
@@ -307,14 +307,14 @@ namespace {
 			for (size_t i = 0; i < 8; i++)
 				sph.get_segments_data()[i] = value;
 
-			auto metadata = std::make_shared<V1::RadiationFieldMetadata>(
-				Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+			auto metadata = std::make_shared<v1::RadiationFieldMetadata>(
+				storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 					1000, "geom", "physics",
-					Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+					storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 						glm::vec3(0, 0, -1), glm::vec3(0, 0, 1), 15000.f, "tube"
 					)
 				),
-				Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
+				storage::filed_types::v1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 			);
 			return std::make_pair(field, metadata);
 		};
@@ -348,14 +348,14 @@ namespace {
 			sph.get_segments_data()[i] = static_cast<float>(i + 1);
 		ch->get_voxel<ScalarVoxel<float>>("flux", 1, 1, 1) = 42.f;
 
-		auto metadata = std::make_shared<V1::RadiationFieldMetadata>(
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		auto metadata = std::make_shared<v1::RadiationFieldMetadata>(
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100, "geom", "physics",
-				Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(0, 0, -1), glm::vec3(0, 0, 1), 15000.f, "tube"
 				)
 			),
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 		);
 		FieldStore::store(field, metadata, "test_spherical_accessor.rf3");
 
@@ -374,7 +374,7 @@ namespace {
 		{
 			std::ifstream stream1("test_spherical_accessor.rf3", std::ios::binary);
 			auto accessor = FieldStore::construct_accessor(stream1);
-			auto cartesian_accessor = std::dynamic_pointer_cast<Storage::V1::CartesianFieldAccessor>(accessor);
+			auto cartesian_accessor = std::dynamic_pointer_cast<storage::v1::CartesianFieldAccessor>(accessor);
 			ASSERT_NE(cartesian_accessor, nullptr);
 
 			std::ifstream stream2("test_spherical_accessor.rf3", std::ios::binary);
@@ -397,14 +397,14 @@ namespace {
 		auto field = std::make_shared<CartesianRadiationField>(glm::vec3(1.f), glm::vec3(0.5f));
 		field->add_channel("beam");
 
-		auto metadata = std::make_shared<V1::RadiationFieldMetadata>(
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		auto metadata = std::make_shared<v1::RadiationFieldMetadata>(
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100, "geom", "physics",
-				Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(0, 0, -1), glm::vec3(0, 0, 1), 15000.f, "tube"
 				)
 			),
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 		);
 
 		metadata->set_dynamic_custom_metadata<AngularResolvedVoxel<float>>("angular_reference", AngularResolvedVoxel<float>(glm::uvec2(8, 4), nullptr));
@@ -418,7 +418,7 @@ namespace {
 
 		FieldStore::store(field, metadata, "test_spherical_metadata.rf3");
 
-		auto loaded_metadata = std::dynamic_pointer_cast<V1::RadiationFieldMetadata>(FieldStore::load_metadata("test_spherical_metadata.rf3"));
+		auto loaded_metadata = std::dynamic_pointer_cast<v1::RadiationFieldMetadata>(FieldStore::load_metadata("test_spherical_metadata.rf3"));
 		ASSERT_NE(loaded_metadata, nullptr);
 
 		auto& loaded_float = loaded_metadata->get_dynamic_metadata<ScalarVoxel<float>>("test_value");
@@ -453,14 +453,14 @@ namespace {
 		ch->get_voxel<ScalarVoxel<float>>("flux", 0, 0, 0) = 100.f;
 		ch->get_voxel<ScalarVoxel<glm::vec3>>("direction", 0, 0, 0) = glm::vec3(1.f, 0.f, 0.f);
 
-		auto metadata = std::make_shared<V1::RadiationFieldMetadata>(
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		auto metadata = std::make_shared<v1::RadiationFieldMetadata>(
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100, "geom", "physics",
-				Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(0, 0, -1), glm::vec3(0, 0, 1), 15000.f, "tube"
 				)
 			),
-			Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
+			storage::filed_types::v1::RadiationFieldMetadataHeader::Software("test", "1.0", "", "")
 		);
 		FieldStore::store(field, metadata, "test_spherical_mixed.rf3");
 

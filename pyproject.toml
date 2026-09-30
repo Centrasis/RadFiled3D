@@ -34,10 +34,10 @@ Homepage = "https://pypi.org/project/RadFiled3D/"
 # scikit-build-core: drives the CMake/pybind11 build the standard PEP 517 way.
 # ---------------------------------------------------------------------------
 [tool.scikit-build]
-# Pure-python sources live under python/RadFiled3D and map to the RadFiled3D
-# package; the native pybind module (and its .pyi stub) is added into the same
-# package by CMake's install() rules.
-wheel.packages = ["python/RadFiled3D"]
+# Pure-python sources live under python/radfiled3d and map to the radfiled3d
+# import package (the distribution is still named RadFiled3D); the native pybind
+# module radfiled3d._core is added into the same package by CMake's install() rules.
+wheel.packages = ["python/radfiled3d"]
 cmake.version = ">=3.16"
 cmake.build-type = "Release"
 build.verbose = false
@@ -71,9 +71,9 @@ include = [
     "include/**/*.hpp",
     "src/*.cpp",
     "python/bindings/*.cpp",
-    "python/RadFiled3D/**/*.py",
-    "python/RadFiled3D/RadFiled3D.pyi",
-    "python/RadFiled3D/py.typed",
+    "python/radfiled3d/**/*.py",
+    "python/radfiled3d/_core.pyi",
+    "python/radfiled3d/py.typed",
     "build_tools/*.py",
     "tests/*.py",
     "tests/*.cpp",

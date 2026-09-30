@@ -1,6 +1,7 @@
-from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, AngularResolvedVoxel, OwningAngularResolvedVoxel, VoxelGridBuffer, uvec2
-from RadFiled3D.utils import FieldStore, StoreVersion
-from RadFiled3D.metadata.v1 import Metadata
+from radfiled3d import CartesianRadiationField, DType, AngularResolvedVoxel, OwningAngularResolvedVoxel, VoxelGridBuffer
+from radfiled3d.glm import vec3, uvec2
+from radfiled3d.store import FieldStore, StoreVersion
+from radfiled3d.metadata.v1 import Metadata
 import numpy as np
 import os
 from typing import cast

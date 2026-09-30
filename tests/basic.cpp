@@ -1,8 +1,8 @@
-#include "RadFiled3D/VoxelGrid.hpp"
-#include "RadFiled3D/RadiationField.hpp"
+#include "radfiled3d/voxel_grid.hpp"
+#include "radfiled3d/radiation_field.hpp"
 #include <iostream>
-#include "RadFiled3D/storage/RadiationFieldStore.hpp"
-#include "RadFiled3D/storage/Types.hpp"
+#include "radfiled3d/storage/radiation_field_store.hpp"
+#include "radfiled3d/storage/types.hpp"
 #include <memory>
 #include <limits>
 #include <cmath>
@@ -14,8 +14,8 @@
 #include <thread>
 #include <shared_mutex>
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Storage;
+using namespace radfiled3d;
+using namespace radfiled3d::storage;
 
 namespace {
 	class Storage : public ::testing::Test {
@@ -179,19 +179,19 @@ namespace {
 	}
 
 	TEST(Voxels, VoxelModificationHistograms) {
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -339,19 +339,19 @@ namespace {
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -359,7 +359,7 @@ namespace {
 			)
 		);
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test01.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test01.rf3", StoreVersion::V1));
 	}
 
 	TEST(Storage, Load) {
@@ -369,19 +369,19 @@ namespace {
 		channel->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel->add_layer<float>("doserate", 25.3f, "Gy/s");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -390,10 +390,10 @@ namespace {
 		);
 		metadata->add_dynamic_metadata<uint8_t>("test_byte", static_cast<uint8_t>(5));
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test02.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test02.rf3", StoreVersion::V1));
 
 		std::shared_ptr<CartesianRadiationField> field2 = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test02.rf3"));
-		auto metadata2 = std::static_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::peek_metadata("test02.rf3"))->get_header();
+		auto metadata2 = std::static_pointer_cast<radfiled3d::storage::v1::RadiationFieldMetadata>(FieldStore::peek_metadata("test02.rf3"))->get_header();
 		EXPECT_EQ(field2->get_field_dimensions(), field->get_field_dimensions());
 		EXPECT_EQ(field2->get_voxel_dimensions(), field->get_voxel_dimensions());
 		EXPECT_EQ(field2->get_voxel_counts(), field->get_voxel_counts());
@@ -410,7 +410,7 @@ namespace {
 		EXPECT_EQ(strcmp(metadata2.simulation.physics_list, "FTFP_BERT"), 0);
 
 		auto metadata_full = FieldStore::load_metadata("test02.rf3");
-		uint8_t test_byte = std::static_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(metadata_full)->get_dynamic_metadata<ScalarVoxel<uint8_t>>("test_byte").get_data();
+		uint8_t test_byte = std::static_pointer_cast<radfiled3d::storage::v1::RadiationFieldMetadata>(metadata_full)->get_dynamic_metadata<ScalarVoxel<uint8_t>>("test_byte").get_data();
 		EXPECT_EQ(test_byte, 5);
 		
 		auto channels = field2->get_channels();
@@ -437,19 +437,19 @@ namespace {
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 		channel->add_layer<float>("doserate", 10.f, "Gy/s");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -457,7 +457,7 @@ namespace {
 			)
 		);
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test03.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test03.rf3", StoreVersion::V1));
 
 		std::shared_ptr<CartesianRadiationField> field2 = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test03.rf3"));
 		auto metadata2 = FieldStore::load_metadata("test03.rf3");
@@ -495,14 +495,14 @@ namespace {
 		channel->get_voxel<ScalarVoxel<float>>("doserate", 7, 1, 8) = -3.5f;
 		channel->get_voxel<ScalarVoxel<glm::vec3>>("dirs", 7, 1, 8).get_data() = glm::vec3(1.f, -2.f, 4.f);
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100, "geom", "FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 0.f), 100.f, "XRayTube")),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software("test", "1.0", "repo", "commit"));
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software("test", "1.0", "repo", "commit"));
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", StoreVersion::V1));
 
 		std::shared_ptr<CartesianRadiationField> field2 = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test05.rf3"));
 		ASSERT_NE(field2, nullptr);
@@ -533,19 +533,19 @@ namespace {
 	}
 
 	TEST(Storage, MetadataHists) {
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -555,16 +555,16 @@ namespace {
 		{
 			size_t bins = 150;
 			float bin_width = 4.6f;
-			RadFiled3D::HistogramVoxel<float> hist(bins, bin_width, nullptr);
-			metadata->set_dynamic_custom_metadata<RadFiled3D::HistogramVoxel<float>>("test_hist", hist);
-			RadFiled3D::HistogramVoxel<float>& new_hist = *static_cast<RadFiled3D::HistogramVoxel<float>*>(metadata->get_dynamic_metadata().at("test_hist"));
+			radfiled3d::HistogramVoxel<float> hist(bins, bin_width, nullptr);
+			metadata->set_dynamic_custom_metadata<radfiled3d::HistogramVoxel<float>>("test_hist", hist);
+			radfiled3d::HistogramVoxel<float>& new_hist = *static_cast<radfiled3d::HistogramVoxel<float>*>(metadata->get_dynamic_metadata().at("test_hist"));
 			for (size_t i = 0; i < 10; i++)
 				new_hist.get_histogram()[i] = 1.f * i;
 			EXPECT_EQ(new_hist.get_bins(), bins);
 			EXPECT_EQ(new_hist.get_histogram_bin_width(), bin_width);
 		}
 
-		RadFiled3D::HistogramVoxel<float>* voxel = static_cast<RadFiled3D::HistogramVoxel<float>*>(metadata->get_dynamic_metadata().at("test_hist"));
+		radfiled3d::HistogramVoxel<float>* voxel = static_cast<radfiled3d::HistogramVoxel<float>*>(metadata->get_dynamic_metadata().at("test_hist"));
 
 		for (size_t i = 0; i < 10; i++)
 			EXPECT_FLOAT_EQ(voxel->get_histogram()[i], 1.f * i);
@@ -578,19 +578,19 @@ namespace {
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 		channel->add_layer<float>("doserate", 15.f, "Gy/s");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -598,7 +598,7 @@ namespace {
 			)
 		);
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test04.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test04.rf3", StoreVersion::V1));
 
 		std::shared_ptr<CartesianRadiationField> field2 = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f));
 		std::shared_ptr<VoxelGridBuffer> channel2 = std::static_pointer_cast<VoxelGridBuffer>(field2->add_channel("test_channel"));
@@ -612,9 +612,9 @@ namespace {
 
 		auto metadata2 = FieldStore::peek_metadata("test04.rf3");
 
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test04.rf3", FieldJoinMode::Add));
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test04.rf3", FieldJoinMode::Add));
 
-		metadata = std::dynamic_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::load_metadata("test04.rf3"));
+		metadata = std::dynamic_pointer_cast<radfiled3d::storage::v1::RadiationFieldMetadata>(FieldStore::load_metadata("test04.rf3"));
 		// primary_particle_count is a uint64_t inside a #pragma pack(4) header, so it can sit at a
 		// 4-byte-aligned offset. Read it into an aligned temporary before comparing: binding EXPECT_EQ's
 		// const uint64_t& straight to the packed field is a misaligned reference (UBSan alignment).
@@ -629,19 +629,19 @@ namespace {
 			EXPECT_EQ(field3->get_channel("test_channel")->get_voxel_flat<ScalarVoxel<float>>("doserate", i).get_data(), combined_doserate);
 		}
 
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -649,14 +649,14 @@ namespace {
 			)
 		);
 
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test04.rf3", FieldJoinMode::AddWeighted));
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test04.rf3", FieldJoinMode::AddWeighted));
 
 		vx1 = field3->get_channel("test_channel")->get_voxel_flat<ScalarVoxel<float>>("doserate", 0);
 		vx2 = channel2->get_voxel_flat<ScalarVoxel<float>>("doserate", 0);
 		const float combined_doserate2 = vx1.get_data() * 2/3 + vx2.get_data() * 1/3;
 
 		std::shared_ptr<CartesianRadiationField> field4 = std::static_pointer_cast<CartesianRadiationField>(FieldStore::load("test04.rf3"));
-		metadata = std::dynamic_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::load_metadata("test04.rf3"));
+		metadata = std::dynamic_pointer_cast<radfiled3d::storage::v1::RadiationFieldMetadata>(FieldStore::load_metadata("test04.rf3"));
 		// packed uint64_t (see the note above): compare via an aligned temporary, not a reference bind.
 		EXPECT_EQ(static_cast<uint64_t>(metadata->get_header().simulation.primary_particle_count), 300u);
 		EXPECT_EQ(metadata->get_header().simulation.tube.max_energy_eV, 100.f);
@@ -668,20 +668,20 @@ namespace {
 		}
 	}
 
-	std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> make_join_test_metadata() {
-		return std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+	std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> make_join_test_metadata() {
+		return std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -699,7 +699,7 @@ namespace {
 			return field;
 		};
 		std::remove("test08.rf3");
-		auto metadata = std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(make_join_test_metadata());
+		auto metadata = std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(make_join_test_metadata());
 
 		auto first = make_field(200, 100);
 		first->get_channel("geometry")->get_voxel_flat<ScalarVoxel<uint8_t>>("mask", 1) = static_cast<uint8_t>(0);
@@ -716,7 +716,7 @@ namespace {
 
 	TEST(Storage, JoinTakesOverLayersMissingInTarget) {
 		std::remove("test09.rf3");
-		auto metadata = std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(make_join_test_metadata());
+		auto metadata = std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(make_join_test_metadata());
 
 		auto existing = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
 		std::static_pointer_cast<VoxelGridBuffer>(existing->add_channel("radiation"))->add_layer<float>("flux", 1.f, "");
@@ -767,7 +767,7 @@ namespace {
 		auto first = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
 		make_radiation(first, 1.f);
 		add_geometry(first);
-		FieldStore::replace(first, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test10.rf3");
+		FieldStore::replace(first, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test10.rf3");
 
 		auto update = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
 		make_radiation(update, 5.f);
@@ -775,12 +775,12 @@ namespace {
 		auto header = updated_metadata->get_header();
 		header.simulation.primary_particle_count = 500;
 		updated_metadata->set_header(header);
-		EXPECT_NO_THROW(FieldStore::replace(update, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(updated_metadata), "test10.rf3"));
+		EXPECT_NO_THROW(FieldStore::replace(update, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(updated_metadata), "test10.rf3"));
 
 		auto expected = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
 		make_radiation(expected, 5.f);
 		add_geometry(expected);
-		FieldStore::store(expected, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(updated_metadata), "test10_expected.rf3");
+		FieldStore::store(expected, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(updated_metadata), "test10_expected.rf3");
 		auto read_all = [](const std::string& file) {
 			std::ifstream stream(file, std::ios::binary);
 			return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
@@ -791,11 +791,11 @@ namespace {
 		EXPECT_EQ(loaded->get_channel("scatter_field")->get_voxel_flat<ScalarVoxel<float>>("flux", 3).get_data(), 5.f);
 		EXPECT_EQ(loaded->get_channel("geometry")->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", 5).get_data(), 255);
 		EXPECT_EQ(loaded->get_channel("geometry")->get_voxel_flat<ScalarVoxel<uint8_t>>("Patient", 4).get_data(), 0);
-		EXPECT_EQ(static_cast<uint64_t>(std::dynamic_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::load_metadata("test10.rf3"))->get_header().simulation.primary_particle_count), 500u);
+		EXPECT_EQ(static_cast<uint64_t>(std::dynamic_pointer_cast<radfiled3d::storage::v1::RadiationFieldMetadata>(FieldStore::load_metadata("test10.rf3"))->get_header().simulation.primary_particle_count), 500u);
 
 		auto other_grid = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.1f));
 		make_radiation(other_grid, 9.f);
-		EXPECT_THROW(FieldStore::replace(other_grid, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test10.rf3"), RadiationFieldStoreException);
+		EXPECT_THROW(FieldStore::replace(other_grid, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test10.rf3"), RadiationFieldStoreException);
 		EXPECT_EQ(read_all("test10.rf3"), read_all("test10_expected.rf3"));
 
 		std::remove("test10.rf3");
@@ -820,15 +820,15 @@ namespace {
 		EXPECT_THROW(ExporterHelpers::get_join_function<glm::vec3>(FieldJoinMode::Add)(huge_vec, huge_vec), RadiationFieldStoreException);
 
 #if RADFILED3D_HAS_FLOAT16
-		const Typing::float16 big = static_cast<Typing::float16>(60000.f);
-		EXPECT_EQ(static_cast<float>(ExporterHelpers::get_join_function<Typing::float16>(FieldJoinMode::Mean)(big, big)), 60000.f);
-		EXPECT_THROW(ExporterHelpers::get_join_function<Typing::float16>(FieldJoinMode::Add)(big, big), RadiationFieldStoreException);
+		const typing::float16 big = static_cast<typing::float16>(60000.f);
+		EXPECT_EQ(static_cast<float>(ExporterHelpers::get_join_function<typing::float16>(FieldJoinMode::Mean)(big, big)), 60000.f);
+		EXPECT_THROW(ExporterHelpers::get_join_function<typing::float16>(FieldJoinMode::Add)(big, big), RadiationFieldStoreException);
 #endif
 	}
 
 	TEST(Storage, JoinNeverDegeneratesFloatLayers) {
 		std::remove("test11.rf3");
-		auto metadata = std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(make_join_test_metadata());
+		auto metadata = std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(make_join_test_metadata());
 		const float huge = std::numeric_limits<float>::max() * 0.75f;
 		auto make_field = [huge]() {
 			auto field = std::make_shared<CartesianRadiationField>(glm::vec3(0.2f), glm::vec3(0.05f));
@@ -860,23 +860,23 @@ namespace {
 	}
 
 	TEST(SaturatingArithmetic, ClampsInsteadOfWrapping) {
-		EXPECT_EQ(SaturatingArithmetic::add<uint8_t>(200, 100), 255);
-		EXPECT_EQ(SaturatingArithmetic::subtract<uint8_t>(5, 10), 0);
-		EXPECT_EQ(SaturatingArithmetic::multiply<uint8_t>(16, 16), 255);
-		EXPECT_EQ(SaturatingArithmetic::divide<uint8_t>(7, 0), 255);
-		EXPECT_EQ(SaturatingArithmetic::mean<uint8_t>(255, 255), 255);
-		EXPECT_EQ(SaturatingArithmetic::blend<uint8_t>(255, 255, 0.3f), 255);
-		EXPECT_EQ(SaturatingArithmetic::add<int8_t>(-100, -100), -128);
-		EXPECT_EQ(SaturatingArithmetic::subtract<int8_t>(100, -100), 127);
-		EXPECT_EQ(SaturatingArithmetic::multiply<int8_t>(-100, 2), -128);
-		EXPECT_EQ(SaturatingArithmetic::multiply<int8_t>(-100, -2), 127);
-		EXPECT_EQ(SaturatingArithmetic::divide<int8_t>(-128, -1), 127);
-		EXPECT_EQ(SaturatingArithmetic::mean<int8_t>(3, -4), 0);
-		EXPECT_EQ(SaturatingArithmetic::add<int>(std::numeric_limits<int>::max(), 1), std::numeric_limits<int>::max());
-		EXPECT_EQ(SaturatingArithmetic::add<uint64_t>(std::numeric_limits<uint64_t>::max(), 1), std::numeric_limits<uint64_t>::max());
-		EXPECT_EQ(SaturatingArithmetic::multiply<int64_t>(std::numeric_limits<int64_t>::min(), -1), std::numeric_limits<int64_t>::max());
-		EXPECT_EQ(SaturatingArithmetic::add<uint8_t>(3, 4), 7);
-		EXPECT_EQ(SaturatingArithmetic::multiply<int>(-6, 7), -42);
+		EXPECT_EQ(saturating_arithmetic::add<uint8_t>(200, 100), 255);
+		EXPECT_EQ(saturating_arithmetic::subtract<uint8_t>(5, 10), 0);
+		EXPECT_EQ(saturating_arithmetic::multiply<uint8_t>(16, 16), 255);
+		EXPECT_EQ(saturating_arithmetic::divide<uint8_t>(7, 0), 255);
+		EXPECT_EQ(saturating_arithmetic::mean<uint8_t>(255, 255), 255);
+		EXPECT_EQ(saturating_arithmetic::blend<uint8_t>(255, 255, 0.3f), 255);
+		EXPECT_EQ(saturating_arithmetic::add<int8_t>(-100, -100), -128);
+		EXPECT_EQ(saturating_arithmetic::subtract<int8_t>(100, -100), 127);
+		EXPECT_EQ(saturating_arithmetic::multiply<int8_t>(-100, 2), -128);
+		EXPECT_EQ(saturating_arithmetic::multiply<int8_t>(-100, -2), 127);
+		EXPECT_EQ(saturating_arithmetic::divide<int8_t>(-128, -1), 127);
+		EXPECT_EQ(saturating_arithmetic::mean<int8_t>(3, -4), 0);
+		EXPECT_EQ(saturating_arithmetic::add<int>(std::numeric_limits<int>::max(), 1), std::numeric_limits<int>::max());
+		EXPECT_EQ(saturating_arithmetic::add<uint64_t>(std::numeric_limits<uint64_t>::max(), 1), std::numeric_limits<uint64_t>::max());
+		EXPECT_EQ(saturating_arithmetic::multiply<int64_t>(std::numeric_limits<int64_t>::min(), -1), std::numeric_limits<int64_t>::max());
+		EXPECT_EQ(saturating_arithmetic::add<uint8_t>(3, 4), 7);
+		EXPECT_EQ(saturating_arithmetic::multiply<int>(-6, 7), -42);
 	}
 
 	TEST(Storage, JoinFieldsChecks) {
@@ -887,19 +887,19 @@ namespace {
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 		channel->add_layer<float>("doserate", 15.f, "Gy/s");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				100,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -907,7 +907,7 @@ namespace {
 			)
 		);
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", StoreVersion::V1));
 
 		std::shared_ptr<CartesianRadiationField> field2 = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f));
 		std::shared_ptr<VoxelGridBuffer> channel2 = std::static_pointer_cast<VoxelGridBuffer>(field2->add_channel("test_channel"));
@@ -917,19 +917,19 @@ namespace {
 
 		auto metadata2 = FieldStore::peek_metadata("test05.rf3");
 
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				101,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -937,78 +937,78 @@ namespace {
 			)
 		);
 
-		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::Strict), RadiationFieldStoreException);
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::MetadataSimulationSimilar));
+		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::Strict), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::MetadataSimulationSimilar));
 
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				101,
 				"other geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
 				"commit"
 			)
 		);
-		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::MetadataSimulationSimilar), RadiationFieldStoreException);
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::MetadataSoftwareEqual));
+		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::MetadataSimulationSimilar), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::MetadataSoftwareEqual));
 
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				101,
 				"other geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.2",
 				"repo",
 				"commit"
 			)
 		);
-		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::MetadataSoftwareEqual), RadiationFieldStoreException);
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::MetadataSoftwareSimilar));
+		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::MetadataSoftwareEqual), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::MetadataSoftwareSimilar));
 
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				101,
 				"other geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test2",
 				"1.2",
 				"repo",
 				"commit3"
 			)
 		);
-		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::MetadataSoftwareSimilar), RadiationFieldStoreException);
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::FieldStructureOnly));
+		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::MetadataSoftwareSimilar), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::FieldStructureOnly));
 
 		field2->add_channel("other channel");
-		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::FieldStructureOnly), RadiationFieldStoreException);
-		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::FieldUnitsOnly));
+		EXPECT_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::FieldStructureOnly), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::FieldUnitsOnly));
 
 		std::shared_ptr<CartesianRadiationField> field3 = std::make_shared<CartesianRadiationField>(glm::vec3(2.5f), glm::vec3(0.05f));
 		field3->add_channel("other channel than ever");
@@ -1016,8 +1016,8 @@ namespace {
 		channel3->add_layer<float>("doserate", 10.f, "Gy");
 		channel3->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 		channel3->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
-		EXPECT_THROW(FieldStore::join(field3, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::FieldUnitsOnly), RadiationFieldStoreException);
-		EXPECT_NO_THROW(FieldStore::join(field3, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, RadFiled3D::Storage::FieldJoinCheckMode::NoChecks));
+		EXPECT_THROW(FieldStore::join(field3, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::FieldUnitsOnly), RadiationFieldStoreException);
+		EXPECT_NO_THROW(FieldStore::join(field3, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test05.rf3", FieldJoinMode::Add, radfiled3d::storage::FieldJoinCheckMode::NoChecks));
 	}
 
 	TEST(Storage, LoadSingleLayer) {
@@ -1028,19 +1028,19 @@ namespace {
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 		channel->add_layer<float>("doserate", 15.f, "Gy/s");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				1,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -1048,7 +1048,7 @@ namespace {
 			)
 		);
 
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test06.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test06.rf3", StoreVersion::V1));
 
 		std::ifstream file("test06.rf3");
 		auto type = FieldStore::peek_field_type(file);
@@ -1071,19 +1071,19 @@ namespace {
 		channel->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
 		channel->add_layer<float>("doserate", 15.f, "Gy/s");
 
-		std::shared_ptr<RadFiled3D::Storage::V1::RadiationFieldMetadata> metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		std::shared_ptr<radfiled3d::storage::v1::RadiationFieldMetadata> metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				1,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -1092,44 +1092,44 @@ namespace {
 		);
 
 		FieldStore::enable_file_lock_synchronization(true);
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test07.rf3", StoreVersion::V1));
-		EXPECT_NO_THROW(FieldStore::join(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test07.rf3", FieldJoinMode::Add, FieldJoinCheckMode::Strict));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test07.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::join(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test07.rf3", FieldJoinMode::Add, FieldJoinCheckMode::Strict));
 
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				0,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
 				"commit"
 			)
 		);
-		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test07.rf3", StoreVersion::V1));
+		EXPECT_NO_THROW(FieldStore::store(field, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test07.rf3", StoreVersion::V1));
 		// launch 10 threads that will try to join the field at the same time
 		std::vector<std::thread> threads;
-		metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>(
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation(
+		metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation(
 				1,
 				"geom",
 				"FTFP_BERT",
-				RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Simulation::XRayTube(
+				radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Simulation::XRayTube(
 					glm::vec3(1.f, 0.f, 0.f),
 					glm::vec3(0.f, 0.f, 0.f),
 					100.f,
 					"XRayTube"
 				)
 			),
-			RadFiled3D::Storage::FiledTypes::V1::RadiationFieldMetadataHeader::Software(
+			radfiled3d::storage::filed_types::v1::RadiationFieldMetadataHeader::Software(
 				"test",
 				"1.0",
 				"repo",
@@ -1148,7 +1148,7 @@ namespace {
 					channel2->add_layer<float>("doserate", 10.f, "Gy/s");
 					channel2->add_layer<glm::vec3>("dirs", glm::vec3(0.f), "normalized direction");
 					channel2->add_custom_layer<HistogramVoxel<float>>("spectra", HistogramVoxel<float>(26, 10.f, nullptr), .123f, "");
-					EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<RadFiled3D::Storage::RadiationFieldMetadata>(metadata), "test07.rf3", FieldJoinMode::Add, FieldJoinCheckMode::MetadataSimulationSimilar));
+					EXPECT_NO_THROW(FieldStore::join(field2, std::static_pointer_cast<radfiled3d::storage::RadiationFieldMetadata>(metadata), "test07.rf3", FieldJoinMode::Add, FieldJoinCheckMode::MetadataSimulationSimilar));
 					a++;
 				}
 			}));
@@ -1158,7 +1158,7 @@ namespace {
 			thread.join();
 		}
 
-		metadata = std::dynamic_pointer_cast<RadFiled3D::Storage::V1::RadiationFieldMetadata>(FieldStore::load_metadata("test07.rf3"));
+		metadata = std::dynamic_pointer_cast<radfiled3d::storage::v1::RadiationFieldMetadata>(FieldStore::load_metadata("test07.rf3"));
 		EXPECT_EQ(metadata->get_header().simulation.primary_particle_count, 100);
 	}*/
 }
@@ -1188,7 +1188,7 @@ TEST(Storage, MissingFileReportsItself) {
 }
 
 TEST(Storage, MissingDynamicMetadataKeyReportsItself) {
-	auto metadata = std::make_shared<RadFiled3D::Storage::V1::RadiationFieldMetadata>();
+	auto metadata = std::make_shared<radfiled3d::storage::v1::RadiationFieldMetadata>();
 	metadata->add_dynamic_metadata<float>("known_key", 1.f);
 
 	try {

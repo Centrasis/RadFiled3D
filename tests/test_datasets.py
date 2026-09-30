@@ -7,10 +7,11 @@ except ImportError:
 
 def test_radfield3d_voxelwise_dataset():
     if TORCH_INSTALLED:
-        from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, FieldShape
-        from RadFiled3D.utils import FieldStore, StoreVersion
-        from RadFiled3D.metadata.v1 import Metadata
-        from RadFiled3D.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset, TrainingInputData
+        from radfiled3d import CartesianRadiationField, DType, FieldShape
+        from radfiled3d.glm import vec3
+        from radfiled3d.store import FieldStore, StoreVersion
+        from radfiled3d.metadata.v1 import Metadata
+        from radfiled3d.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset, TrainingInputData
         import os
         import random
         import numpy as np
@@ -45,7 +46,7 @@ def test_radfield3d_voxelwise_dataset():
         ds_len = 3 * field.get_voxel_counts().x * field.get_voxel_counts().y * field.get_voxel_counts().z
         assert len(dataset) == ds_len, f"Dataset length does not match expected voxel count: {len(dataset)} != {ds_len}"
 
-        test_in: TrainingInputData = dataset.__getitems__([random.randint(0, len(dataset)) for _ in range(100)])
+        test_in: TrainingInputData = dataset.__getitems__([random.randrange(len(dataset)) for _ in range(100)])
         assert test_in.ground_truth.scatter_field.error.shape[0] == 100, "Ground truth error shape does not match expected batch size."
         assert test_in.ground_truth.scatter_field.flux.shape[0] == 100, "Ground truth fluence shape does not match expected batch size."
         assert test_in.ground_truth.scatter_field.spectrum.shape[0] == 100, "Ground truth spectrum shape does not match expected batch size."
@@ -58,7 +59,8 @@ def test_radfield3d_voxelwise_dataset():
 
 
 def _make_simple_field():
-    from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType
+    from radfiled3d import CartesianRadiationField, DType
+    from radfiled3d.glm import vec3
     field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.1, 0.1, 0.1))
     field.add_channel("channel1")
     field.get_channel("channel1").add_layer("doserate", "Gy/s", DType.FLOAT32)
@@ -69,9 +71,9 @@ def test_file_paths_is_plain_list(tmp_path):
     """file_paths must be a plain in-memory list."""
     if not TORCH_INSTALLED:
         return
-    from RadFiled3D.utils import FieldStore, StoreVersion
-    from RadFiled3D.metadata.v1 import Metadata
-    from RadFiled3D.pytorch.datasets.cartesian import CartesianFieldDataset
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
+    from radfiled3d.pytorch.datasets.cartesian import CartesianFieldDataset
 
     files = []
     for i in range(3):
@@ -92,9 +94,9 @@ def test_zip_file_paths_populated_from_archive(tmp_path):
     if not TORCH_INSTALLED:
         return
     import zipfile
-    from RadFiled3D.utils import FieldStore, StoreVersion
-    from RadFiled3D.metadata.v1 import Metadata
-    from RadFiled3D.pytorch.datasets.cartesian import CartesianFieldDataset
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
+    from radfiled3d.pytorch.datasets.cartesian import CartesianFieldDataset
 
     names = []
     for i in range(2):
@@ -117,10 +119,11 @@ def _make_voxelwise_dataset(tmp_path, n_files=4, tube_bins=32, hist_bins=32):
     (file, linear voxel index) and whose radiation_direction encodes the file
     index, so batch alignment can be checked unambiguously. tube_bins and hist_bins
     can differ to exercise the prefetch cache sizing."""
-    from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, FieldShape
-    from RadFiled3D.utils import FieldStore, StoreVersion
-    from RadFiled3D.metadata.v1 import Metadata
-    from RadFiled3D.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset
+    from radfiled3d import CartesianRadiationField, DType, FieldShape
+    from radfiled3d.glm import vec3
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
+    from radfiled3d.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset
     import numpy as np
 
     spectrum = np.zeros((tube_bins, 2), dtype=np.float32)
@@ -164,7 +167,7 @@ def test_getitems_without_prefetch(tmp_path):
     """The non-prefetched __getitems__ branch must work when no cache is set up."""
     if not TORCH_INSTALLED:
         return
-    from RadFiled3D.pytorch.datasets.radfield3d import TrainingInputData
+    from radfiled3d.pytorch.datasets.radfield3d import TrainingInputData
     ds = _make_voxelwise_dataset(tmp_path, n_files=4)
     assert ds.cached_fields is None and ds.cached_metadata is None
     vpf = ds.voxels_per_field
@@ -209,7 +212,7 @@ def test_prefetch_roundtrip(tmp_path):
     if not TORCH_INSTALLED:
         return
     import torch
-    from RadFiled3D.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset
+    from radfiled3d.pytorch.datasets.radfield3d import RadField3DVoxelwiseDataset
 
     ds = _make_voxelwise_dataset(tmp_path, n_files=4, tube_bins=64, hist_bins=32)
     files = list(ds.file_paths)
@@ -239,9 +242,9 @@ def test_pickle_drops_accessor(tmp_path):
     if not TORCH_INSTALLED:
         return
     import pickle
-    from RadFiled3D.utils import FieldStore, StoreVersion
-    from RadFiled3D.metadata.v1 import Metadata
-    from RadFiled3D.pytorch.datasets.cartesian import CartesianSingleVoxelDataset
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
+    from radfiled3d.pytorch.datasets.cartesian import CartesianSingleVoxelDataset
 
     files = []
     for i in range(3):
@@ -266,9 +269,9 @@ def test_zip_buffer_cache(tmp_path):
     if not TORCH_INSTALLED:
         return
     import zipfile
-    from RadFiled3D.utils import FieldStore, StoreVersion
-    from RadFiled3D.metadata.v1 import Metadata
-    from RadFiled3D.pytorch.datasets.cartesian import CartesianFieldDataset
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
+    from radfiled3d.pytorch.datasets.cartesian import CartesianFieldDataset
 
     names = []
     for i in range(2):
@@ -291,9 +294,10 @@ def test_zip_buffer_cache(tmp_path):
 
 
 def _make_radfield3d_files(tmp_path, n_files=1, with_geometry=False):
-    from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, FieldShape
-    from RadFiled3D.utils import FieldStore, StoreVersion
-    from RadFiled3D.metadata.v1 import Metadata
+    from radfiled3d import CartesianRadiationField, DType, FieldShape
+    from radfiled3d.glm import vec3
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
     import numpy as np
 
     spectrum = np.zeros((150, 2), dtype=np.float32)
@@ -332,7 +336,7 @@ def test_radfield3d_dataset_access_field_arrays_matches_legacy(tmp_path):
     if not TORCH_INSTALLED:
         return
     import torch
-    from RadFiled3D.pytorch.datasets.radfield3d import RadField3DDataset
+    from radfiled3d.pytorch.datasets.radfield3d import RadField3DDataset
 
     files = _make_radfield3d_files(tmp_path, n_files=1)
     ds = RadField3DDataset(file_paths=files)
@@ -356,7 +360,7 @@ def test_radfield3d_dataset_with_geometry(tmp_path):
     if not TORCH_INSTALLED:
         return
     import torch
-    from RadFiled3D.pytorch.datasets.radfield3d import RadField3DDatasetWithGeometry
+    from radfiled3d.pytorch.datasets.radfield3d import RadField3DDatasetWithGeometry
 
     files = _make_radfield3d_files(tmp_path, n_files=1, with_geometry=True)
     ds = RadField3DDatasetWithGeometry(file_paths=files)
@@ -369,11 +373,12 @@ def test_radfield3d_dataset_with_geometry(tmp_path):
 
 def test_radfield3d_dataset():
     if TORCH_INSTALLED:
-        from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, FieldShape
-        from RadFiled3D.utils import FieldStore, StoreVersion
-        from RadFiled3D.metadata.v1 import Metadata
-        from RadFiled3D.pytorch.datasets.radfield3d import RadField3DDataset, TrainingInputData
-        from RadFiled3D.pytorch.radiationfieldloader import DataLoaderBuilder
+        from radfiled3d import CartesianRadiationField, DType, FieldShape
+        from radfiled3d.glm import vec3
+        from radfiled3d.store import FieldStore, StoreVersion
+        from radfiled3d.metadata.v1 import Metadata
+        from radfiled3d.pytorch.datasets.radfield3d import RadField3DDataset, TrainingInputData
+        from radfiled3d.pytorch.radiationfieldloader import DataLoaderBuilder
         import os
         import numpy as np
 

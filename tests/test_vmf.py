@@ -1,6 +1,8 @@
-from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, VMFMixtureVoxel, OwningVMFMixtureVoxel, VoxelGridBuffer, FieldJoinMode, FieldJoinCheckMode
-from RadFiled3D.utils import FieldStore, StoreVersion
-from RadFiled3D.metadata.v1 import Metadata
+from radfiled3d import CartesianRadiationField, DType, VMFMixtureVoxel, OwningVMFMixtureVoxel, VoxelGridBuffer
+from radfiled3d.glm import vec3
+from radfiled3d.store import FieldJoinMode, FieldJoinCheckMode
+from radfiled3d.store import FieldStore, StoreVersion
+from radfiled3d.metadata.v1 import Metadata
 import numpy as np
 import pytest
 from typing import cast
@@ -139,3 +141,21 @@ def test_vmf_join_subtract_raises(tmp_path):
     FieldStore.store(field, Metadata.default(), filename, StoreVersion.V1)
     with pytest.raises(Exception, match="vMF mixture"):
         FieldStore.join(field, Metadata.default(), filename, FieldJoinMode.SUBTRACT, FieldJoinCheckMode.NO_CHECKS)
+
+
+def test_vmf_merge_rejects_zero_lobe_output():
+    """out's lobe count is the merge target, so a 0-lobe out cannot hold the result."""
+    import pytest
+
+    a = OwningVMFMixtureVoxel(2)
+    b = OwningVMFMixtureVoxel(2)
+    a.set_lobe(0, 1.0, vec3(1.0, 0.0, 0.0), 5.0)
+    b.set_lobe(0, 1.0, vec3(0.0, 1.0, 0.0), 5.0)
+
+    with pytest.raises(Exception) as excinfo:
+        VMFMixtureVoxel.merge(a, 0.5, b, 0.5, OwningVMFMixtureVoxel(0))
+    assert "0 lobes" in str(excinfo.value)
+
+    out = OwningVMFMixtureVoxel(1)
+    VMFMixtureVoxel.merge(a, 0.5, b, 0.5, out)
+    assert abs(out.get_weight(0) - 1.0) < 1e-6

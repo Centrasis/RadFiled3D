@@ -1,4 +1,5 @@
-from RadFiled3D.RadFiled3D import vec3, GridTracerFactory, GridTracerAlgorithm, CartesianRadiationField, DType
+from radfiled3d import GridTracerFactory, GridTracerAlgorithm, CartesianRadiationField, DType
+from radfiled3d.glm import vec3
 from plotly import graph_objects as go
 
 # This file demonstrates how to accumulate the voxels intersected by a line segment

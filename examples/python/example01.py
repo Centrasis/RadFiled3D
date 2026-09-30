@@ -1,6 +1,7 @@
-from RadFiled3D.RadFiled3D import CartesianRadiationField, vec3, DType, StoreVersion
-from RadFiled3D.metadata.v1 import Metadata
-from RadFiled3D.utils import FieldStore
+from radfiled3d import CartesianRadiationField, DType
+from radfiled3d.glm import vec3
+from radfiled3d.metadata.v1 import Metadata
+from radfiled3d.store import FieldStore, StoreVersion
 import numpy as np
 
 ## See the C++ example for more details on the API usage
@@ -14,8 +15,10 @@ if __name__ == "__main__":
         vec3(0.1, 0.1, 0.1),
     )
     print(f"Field: {crf}")
-    # Add a channel to the field
-    channel = crf.add_channel("scattering")
+    # Channels behave like a dict on the field: indexing returns the channel and
+    # creates it if it does not exist yet. crf.add_channel("scattering") also works.
+    channel = crf["scattering"]
+    print(f"Channel exists now: {'scattering' in crf}")
 
     # Add layers to the channel that spanns voxels over the whole field
     # that each store one element of the given data type
@@ -26,15 +29,22 @@ if __name__ == "__main__":
     channel.add_layer("directions", "", DType.VEC3)
 
     print(channel.get_layers())
+    print(f"Layer 'doserate' present: {'doserate' in channel}, layer 'dose' present: {'dose' in channel}")
+
+    # Layers are dict-like too, but -- unlike channels -- they are never created
+    # implicitly, because a new layer needs a unit and a data type:
+    try:
+        channel["dose"]
+    except KeyError as e:
+        print(f"Accessing a missing layer tells you what to do: {e}")
 
     # Access a voxel from a layer and set its data using explicit methods
     voxel = channel.get_voxel("doserate", 0, 0, 0)
     voxel.set_data(1.0)
 
-    # Access a voxel from a layer using the pythonic way
-    # Load an entire layer as a numpy array
+    # Indexing a channel with a layer name yields that layer as a numpy array.
     # Note that the data is not copied, so changes to the array will be reflected in the field
-    array = channel.get_layer_as_ndarray("doserate")
+    array = channel["doserate"]
     print("Doserate array:")
     print(f"Dtype: {array.dtype} shape: {array.shape}")
     print(f"Check updated data: {array[0, 0, 0]}")
@@ -49,7 +59,7 @@ if __name__ == "__main__":
     print(f"Check updated data: {chk_voxel.get_data()}")
 
     # The conversion to numpy even works for more complex data types
-    array = channel.get_layer_as_ndarray("directions")
+    array = channel["directions"]
     print("Directions array:")
     print(f"Dtype: {array.dtype} shape: {array.shape}")
 

@@ -1,15 +1,15 @@
-#include <RadFiled3D/dataset/helpers.hpp>
-#include <RadFiled3D/storage/FieldAccessor.hpp>
+#include <radfiled3d/dataset/helpers.hpp>
+#include <radfiled3d/storage/field_accessor.hpp>
 #include <istream>
 #include <fstream>
-#include <RadFiled3D/storage/RadiationFieldStore.hpp>
+#include <radfiled3d/storage/radiation_field_store.hpp>
 
 
-using namespace RadFiled3D;
-using namespace RadFiled3D::Dataset;
+using namespace radfiled3d;
+using namespace radfiled3d::dataset;
 
 
-std::shared_ptr<VoxelCollection> RadFiled3D::Dataset::VoxelCollectionAccessor::access(const std::vector<VoxelCollectionRequest>& requests)
+std::shared_ptr<VoxelCollection> radfiled3d::dataset::VoxelCollectionAccessor::access(const std::vector<VoxelCollectionRequest>& requests)
 {
 	size_t voxelsCount = 0;
 	for (const auto& request : requests) {
@@ -19,7 +19,7 @@ std::shared_ptr<VoxelCollection> RadFiled3D::Dataset::VoxelCollectionAccessor::a
 
 	voxelsCount = 0;
 	for (const auto& request : requests) {
-		std::ifstream buffer = Storage::open_file_for_reading(request.filePath);
+		std::ifstream buffer = storage::open_file_for_reading(request.filePath);
 		for (const std::string& channel : this->channels) {
 			for (const std::string& layer : this->layers) {
 				auto voxels = this->accessor->accessVoxelsRawFlat(buffer, channel, layer, request.voxelIndices);
@@ -43,7 +43,7 @@ std::shared_ptr<VoxelCollection> RadFiled3D::Dataset::VoxelCollectionAccessor::a
 }
 
 
-RadFiled3D::Dataset::VoxelCollection::VoxelCollection(const std::vector<std::string>& channels, const std::vector<std::string>& layers, size_t voxelCount)
+radfiled3d::dataset::VoxelCollection::VoxelCollection(const std::vector<std::string>& channels, const std::vector<std::string>& layers, size_t voxelCount)
 {
 	for (auto& channelName : channels) {
 		this->channels[channelName] = Channel();
@@ -56,7 +56,7 @@ RadFiled3D::Dataset::VoxelCollection::VoxelCollection(const std::vector<std::str
 	}
 }
 
-char* RadFiled3D::Dataset::VoxelCollection::extract_data_buffer_from(const std::string& channel, const std::string& layer)
+char* radfiled3d::dataset::VoxelCollection::extract_data_buffer_from(const std::string& channel, const std::string& layer)
 {
 	Channel& targetChannel = this->channels[channel];
 	Layer& targetLayer = targetChannel.layers[layer];
