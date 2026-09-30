@@ -120,7 +120,7 @@ VoxelLayer* storage::v1::BinaryFieldBlockHandler::deserializeLayer(char* data, s
 		throw std::runtime_error("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
 #endif
 	case typing::DType::Double:
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 		layer = VoxelLayer::ConstructFromBufferRaw<double>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 #else
 		throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
@@ -160,8 +160,15 @@ VoxelLayer* storage::v1::BinaryFieldBlockHandler::deserializeLayer(char* data, s
 		layer = VoxelLayer::ConstructFromBufferRaw<float, VMFMixtureVoxel<float>>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true, vmf_template);
 		break;
 	case typing::DType::UInt64:
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 		layer = VoxelLayer::ConstructFromBufferRaw<uint64_t>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
+#else
+		throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
+#endif
+		break;
+	case typing::DType::Int64:
+#if RADFILED3D_HAS_64BIT
+		layer = VoxelLayer::ConstructFromBufferRaw<int64_t>(std::string(layer_desc.unit), voxel_count, layer_desc.statistical_error, data + mem_pos, true);
 #else
 		throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
 #endif
@@ -195,7 +202,7 @@ VoxelLayer* storage::v1::BinaryFieldBlockHandler::constructOwnedLayer(const file
 		throw std::runtime_error("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
 #endif
 	case typing::DType::Double:
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 		return VoxelLayer::ConstructWithOwnedDataBuffer<double>(unit, voxel_count, stat_err, (double*)owned_data);
 #else
 		delete[] owned_data; throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
@@ -222,8 +229,14 @@ VoxelLayer* storage::v1::BinaryFieldBlockHandler::constructOwnedLayer(const file
 		if (header_data != nullptr) vmf_template.init_from_header(header_data);
 		return VoxelLayer::ConstructWithOwnedDataBuffer<float, VMFMixtureVoxel<float>>(unit, voxel_count, stat_err, (float*)owned_data, vmf_template);
 	case typing::DType::UInt64:
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 		return VoxelLayer::ConstructWithOwnedDataBuffer<uint64_t>(unit, voxel_count, stat_err, (uint64_t*)owned_data);
+#else
+		delete[] owned_data; throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
+#endif
+	case typing::DType::Int64:
+#if RADFILED3D_HAS_64BIT
+		return VoxelLayer::ConstructWithOwnedDataBuffer<int64_t>(unit, voxel_count, stat_err, (int64_t*)owned_data);
 #else
 		delete[] owned_data; throw std::runtime_error("Can't load 64-bit file in 32-bit system!");
 #endif

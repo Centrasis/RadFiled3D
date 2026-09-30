@@ -31,7 +31,6 @@ from ._core import (
     Voxel,
     AngularResolvedVoxel,
     ByteVoxel,
-    Float16Voxel,
     Float32Voxel,
     Float64Voxel,
     HistogramVoxel,
@@ -46,7 +45,6 @@ from ._core import (
     Vec4Voxel,
     OwningAngularResolvedVoxel,
     OwningByteVoxel,
-    OwningFloat16Voxel,
     OwningFloat32Voxel,
     OwningFloat64Voxel,
     OwningHistogramVoxel,
@@ -87,6 +85,12 @@ from ._core import (
     VoxelCollectionAccessor,
     VoxelCollectionRequest,
 )
+
+# Float16 needs a compiler providing _Float16 (see HAS_FLOAT16), so these two classes
+# are absent from builds without it -- importing them unconditionally would make the
+# whole package fail to import on such a build (the windows and glibc 2.17 wheels).
+if HAS_FLOAT16:
+    from ._core import Float16Voxel, OwningFloat16Voxel
 
 # Derived rather than repeated: every name imported above is public.
 __all__ = [name for name in globals() if not name.startswith("_")]

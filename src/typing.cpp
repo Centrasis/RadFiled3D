@@ -49,6 +49,16 @@ typing::DType typing::Helper::get_dtype(const std::string& dtype)
 		// own width: 64-bit on LP64, 32-bit on LLP64 - matching how such files were originally written.
 		return (sizeof(unsigned long) == 8) ? typing::DType::UInt64 : typing::DType::UInt32;
 	}
+	if (dtype == typing::Helper::get_plain_type_name<int64_t>()) {
+		return typing::DType::Int64;
+	}
+	if (dtype == typing::Helper::get_plain_type_name<long long>()) {
+		return typing::DType::Int64;
+	}
+	if (dtype == std::string("long")) {
+		// Legacy spelling, resolved by the reader's own width like "unsigned long" above.
+		return (sizeof(long) == 8) ? typing::DType::Int64 : typing::DType::Int;
+	}
 	if (dtype == typing::Helper::get_plain_type_name<uint32_t>()) {
 		return typing::DType::UInt32;
 	}
@@ -125,6 +135,8 @@ size_t radfiled3d::typing::Helper::get_bytes_of_dtype(typing::DType dtype)
 		return sizeof(char);
 	case typing::DType::UInt64:
 		return sizeof(uint64_t);
+	case typing::DType::Int64:
+		return sizeof(int64_t);
 	case typing::DType::UInt32:
 		return sizeof(uint32_t);
 	case typing::DType::Vec3:

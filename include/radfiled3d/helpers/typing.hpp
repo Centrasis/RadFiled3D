@@ -15,6 +15,15 @@
 #define RADFILED3D_HAS_FLOAT16 0
 #endif
 
+// True on 64-bit targets. This used to be spelled `defined(__x86_64__) || defined(_M_X64)`,
+// which is an *architecture* test, not a width test: on arm64 (Apple silicon, aarch64 linux)
+// it is false, so every 64-bit layer wrongly reported "Can't load 64-bit file in 32-bit system".
+#if SIZE_MAX > 0xFFFFFFFFu
+#define RADFILED3D_HAS_64BIT 1
+#else
+#define RADFILED3D_HAS_64BIT 0
+#endif
+
 namespace radfiled3d {
 	namespace typing {
 #if RADFILED3D_HAS_FLOAT16
@@ -41,7 +50,8 @@ namespace radfiled3d {
 			UInt32,
 			Byte,
 			Float16,
-			VMFMixture
+			VMFMixture,
+			Int64
 		};
 
 		class Helper {
@@ -83,6 +93,10 @@ namespace radfiled3d {
 		// it actually is 64 bits; otherwise it keeps its legacy spelling (read as a 32-bit unsigned).
 		template<> inline std::string Helper::get_plain_type_name<unsigned long>() { return (sizeof(unsigned long) == 8) ? "uint64_t" : "unsigned long"; }
 		template<> inline std::string Helper::get_plain_type_name<unsigned long long>() { return "uint64_t"; }
+		// Signed 64-bit, same story: int64_t is `long` on LP64 and `long long` on LLP64/macOS,
+		// so both spellings are pinned and only canonicalise when they really are 64 bits.
+		template<> inline std::string Helper::get_plain_type_name<long>()           { return (sizeof(long) == 8) ? "int64_t" : "long"; }
+		template<> inline std::string Helper::get_plain_type_name<long long>()      { return "int64_t"; }
 #if RADFILED3D_HAS_FLOAT16
 		template<> inline std::string Helper::get_plain_type_name<float16>()       { return "float16"; }
 #endif

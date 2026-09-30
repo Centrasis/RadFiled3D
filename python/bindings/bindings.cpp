@@ -163,6 +163,8 @@ std::shared_ptr<IVoxel> encapsulate_voxel(IVoxel* vx) {
         return VOXEL_CAPSULE(vx, VMFMixtureVoxel<float>);
     case typing::DType::UInt64:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint64_t>);
+    case typing::DType::Int64:
+        return VOXEL_CAPSULE(vx, ScalarVoxel<int64_t>);
     case typing::DType::UInt32:
         return VOXEL_CAPSULE(vx, ScalarVoxel<uint32_t>);
     }
@@ -1191,6 +1193,9 @@ PYBIND11_MODULE(_core, m) {
 			case typing::DType::UInt64:
 				self.add_dynamic_metadata<uint64_t>(key, 0ull);
 				break;
+			case typing::DType::Int64:
+				self.add_dynamic_metadata<int64_t>(key, 0LL);
+				break;
             case typing::DType::Char:
 				self.add_dynamic_metadata<char>(key, 0);
                 break;
@@ -1245,7 +1250,7 @@ PYBIND11_MODULE(_core, m) {
         });
 #endif
 
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 	DECLARE_SCALAR_VOXEL(m, uint64_t, "UInt64Voxel", IVoxel);
 	DECLARE_OWNING_SCALAR_VOXEL(m, uint64_t, "OwningUInt64Voxel", ScalarVoxel<uint64_t>);
 #endif
@@ -1262,10 +1267,11 @@ PYBIND11_MODULE(_core, m) {
 	DECLARE_SCALAR_VOXEL(m, int, "Int32Voxel", IVoxel);
 	DECLARE_OWNING_SCALAR_VOXEL(m, int, "OwningInt32Voxel", ScalarVoxel<int>);
 
-#if defined(__x86_64__) || defined(_M_X64)
+	// int64_t is exactly 64 bits wherever it exists and is distinct from every other
+	// registered scalar, so this is unconditional: gating it on __x86_64__ left the class
+	// missing on Apple silicon, where importing radfiled3d then failed outright.
 	DECLARE_SCALAR_VOXEL(m, int64_t, "Int64Voxel", IVoxel);
 	DECLARE_OWNING_SCALAR_VOXEL(m, int64_t, "OwningInt64Voxel", ScalarVoxel<int64_t>);
-#endif
 
     py::class_<ScalarVoxel<glm::vec2>, std::shared_ptr<ScalarVoxel<glm::vec2>>, IVoxel>(m, "Vec2Voxel")
         .def("get_data", &ScalarVoxel<glm::vec2>::get_data, py::return_value_policy::reference_internal)
@@ -1574,6 +1580,7 @@ PYBIND11_MODULE(_core, m) {
         .value("HISTOGRAM", typing::DType::Hist)
         .value("ANGULAR", typing::DType::AngularResolved)
         .value("UINT64", typing::DType::UInt64)
+        .value("INT64", typing::DType::Int64)
         .value("UINT32", typing::DType::UInt32)
         .value("BYTE", typing::DType::Byte)
         .value("FLOAT16", typing::DType::Float16)
@@ -1663,6 +1670,9 @@ PYBIND11_MODULE(_core, m) {
                 case typing::DType::UInt64:
                     self.add_layer<uint64_t>(name, 0, unit);
 					break;
+                case typing::DType::Int64:
+                    self.add_layer<int64_t>(name, 0, unit);
+					break;
 				case typing::DType::UInt32:
 					self.add_layer<unsigned long>(name, 0, unit);
 					break;
@@ -1722,6 +1732,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<VMFMixtureVoxel<float>>(layer_name, idx));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(layer_name, idx));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<int64_t>>(layer_name, idx));
                     case typing::DType::UInt32:
 						return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<unsigned long>>(layer_name, idx));
                     default:
@@ -1759,6 +1771,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<VMFMixtureVoxel<float>>(layer_name, x, y, z));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<int64_t>>(layer_name, x, y, z));
                     case typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<unsigned long>>(layer_name, x, y, z));
                     default:
@@ -1796,6 +1810,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<VMFMixtureVoxel<float>>(layer_name, x, y, z));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(layer_name, x, y, z));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<int64_t>>(layer_name, x, y, z));
                     case typing::DType::UInt32:
 						return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<unsigned long>>(layer_name, x, y, z));
                     default:
@@ -1824,6 +1840,8 @@ PYBIND11_MODULE(_core, m) {
                             return create_py_array<uint8_t>(self->get_layer<uint8_t>(layer), self->get_voxel_counts(), self, copy);
                         case typing::DType::UInt64:
 							return create_py_array<uint64_t>(self->get_layer<uint64_t>(layer), self->get_voxel_counts(), self, copy);
+                        case typing::DType::Int64:
+							return create_py_array<int64_t>(self->get_layer<int64_t>(layer), self->get_voxel_counts(), self, copy);
                         case typing::DType::UInt32:
                             return create_py_array<unsigned long>(self->get_layer<unsigned long>(layer), self->get_voxel_counts(), self, copy);
                         case typing::DType::AngularResolved:
@@ -1905,6 +1923,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_flat<VMFMixtureVoxel<float>>(idx));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<uint64_t>>(idx));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<int64_t>>(idx));
                     case typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel_flat<ScalarVoxel<unsigned long>>(idx));
                     default:
@@ -1952,6 +1972,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_voxel<VMFMixtureVoxel<float>>(x, y, z));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<uint64_t>>(x, y, z));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<int64_t>>(x, y, z));
                     case typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel<ScalarVoxel<unsigned long>>(x, y, z));
                     default:
@@ -1987,6 +2009,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<VMFMixtureVoxel<float>>(x, y, z));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<uint64_t>>(x, y, z));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<int64_t>>(x, y, z));
                     case typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_voxel_by_coord<ScalarVoxel<unsigned long>>(x, y, z));
                     default:
@@ -2026,6 +2050,8 @@ PYBIND11_MODULE(_core, m) {
                             return create_py_array<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
                         case typing::DType::UInt64:
 						    return create_py_array<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
+                        case typing::DType::Int64:
+						    return create_py_array<int64_t>((int64_t*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case typing::DType::UInt32:
 						    return create_py_array<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_voxel_counts(), self, copy);
 					    case typing::DType::VMFMixture:
@@ -2072,6 +2098,8 @@ PYBIND11_MODULE(_core, m) {
 				    return VOXEL_REFERENCE(&self.get_segment<HistogramVoxel<float>>(x, y));
 			    case typing::DType::UInt64:
 				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<uint64_t>>(x, y));
+			    case typing::DType::Int64:
+				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<int64_t>>(x, y));
 			    case typing::DType::UInt32:
 				    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<unsigned long>>(x, y));
 			    default:
@@ -2101,6 +2129,8 @@ PYBIND11_MODULE(_core, m) {
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<HistogramVoxel<float>>(phi, theta));
 			    case typing::DType::UInt64:
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<uint64_t>>(phi, theta));
+			    case typing::DType::Int64:
+				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<int64_t>>(phi, theta));
 			    case typing::DType::UInt32:
 				    return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<unsigned long>>(phi, theta));
 			    default:
@@ -2134,6 +2164,8 @@ PYBIND11_MODULE(_core, m) {
                         return create_py_array<uint8_t>((uint8_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case typing::DType::UInt64:
                         return create_py_array<uint64_t>((uint64_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
+                    case typing::DType::Int64:
+                        return create_py_array<int64_t>((int64_t*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     case typing::DType::UInt32:
                         return create_py_array<unsigned long>((unsigned long*)self->get_layer()->get_raw_data(), self->get_segments_count(), self, copy);
                     }
@@ -2175,6 +2207,8 @@ PYBIND11_MODULE(_core, m) {
                         return VOXEL_REFERENCE(&self.get_segment_flat<HistogramVoxel<float>>(layer, idx));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<uint64_t>>(layer, idx));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<int64_t>>(layer, idx));
                     case typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_segment_flat<ScalarVoxel<unsigned long>>(layer, idx));
                     default:
@@ -2204,6 +2238,8 @@ PYBIND11_MODULE(_core, m) {
 						return VOXEL_REFERENCE(&self.get_segment_by_coord<HistogramVoxel<float>>(layer, phi, theta));
                     case typing::DType::UInt64:
                         return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<uint64_t>>(layer, phi, theta));
+                    case typing::DType::Int64:
+                        return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<int64_t>>(layer, phi, theta));
                     case typing::DType::UInt32:
                         return VOXEL_REFERENCE(&self.get_segment_by_coord<ScalarVoxel<unsigned long>>(layer, phi, theta));
                     default:
@@ -2233,6 +2269,8 @@ PYBIND11_MODULE(_core, m) {
                     return VOXEL_REFERENCE(&self.get_segment<HistogramVoxel<float>>(layer, x, y));
                 case typing::DType::UInt64:
                     return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<uint64_t>>(layer, x, y));
+                case typing::DType::Int64:
+                    return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<int64_t>>(layer, x, y));
                 case typing::DType::UInt32:
 					return VOXEL_REFERENCE(&self.get_segment<ScalarVoxel<unsigned long>>(layer, x, y));
                 default:
@@ -2260,6 +2298,8 @@ PYBIND11_MODULE(_core, m) {
                         return create_py_array<uint8_t>(self->get_layer<uint8_t>(layer), self->get_segments_count(), self, copy);
                     case typing::DType::UInt64:
 						return create_py_array<uint64_t>(self->get_layer<uint64_t>(layer), self->get_segments_count(), self, copy);
+                    case typing::DType::Int64:
+						return create_py_array<int64_t>(self->get_layer<int64_t>(layer), self->get_segments_count(), self, copy);
                     case typing::DType::UInt32:
                         return create_py_array<unsigned long>(self->get_layer<unsigned long>(layer), self->get_segments_count(), self, copy);
                 }
@@ -2713,6 +2753,8 @@ PYBIND11_MODULE(_core, m) {
                         return create_owning_py_array<uint8_t>(data_buffer, voxel_count, sizeof(uint8_t));
                     case typing::DType::UInt64:
                         return create_owning_py_array<uint64_t>(data_buffer, voxel_count, sizeof(uint64_t));
+                    case typing::DType::Int64:
+                        return create_owning_py_array<int64_t>(data_buffer, voxel_count, sizeof(int64_t));
                     case typing::DType::UInt32:
                         return create_owning_py_array<unsigned long>(data_buffer, voxel_count, sizeof(unsigned long));
                 }

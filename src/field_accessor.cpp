@@ -293,7 +293,7 @@ IVoxel* radfiled3d::storage::v1::FileParser::createVoxelFromBuffer(char* data_bu
 		throw RadiationFieldStoreException("RadFiled3D was built without float16 support (needs GCC >= 12 or a modern Clang).");
 #endif
 	case typing::DType::Double:
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 		voxel = new OwningScalarVoxel<double>((double*)data_buffer);
 #else
 		throw RadiationFieldStoreException("Can't load 64-bit file in 32-bit system!");
@@ -306,8 +306,15 @@ IVoxel* radfiled3d::storage::v1::FileParser::createVoxelFromBuffer(char* data_bu
 		voxel = new OwningScalarVoxel<uint32_t>((uint32_t*)data_buffer);
 		break;
 	case typing::DType::UInt64:
-#if defined(__x86_64__) || defined(_M_X64)
+#if RADFILED3D_HAS_64BIT
 		voxel = new OwningScalarVoxel<uint64_t>((uint64_t*)data_buffer);
+#else
+		throw RadiationFieldStoreException("Can't load 64-bit file in 32-bit system!");
+#endif
+		break;
+	case typing::DType::Int64:
+#if RADFILED3D_HAS_64BIT
+		voxel = new OwningScalarVoxel<int64_t>((int64_t*)data_buffer);
 #else
 		throw RadiationFieldStoreException("Can't load 64-bit file in 32-bit system!");
 #endif

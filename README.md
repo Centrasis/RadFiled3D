@@ -40,11 +40,12 @@ Prebuilt wheels are published for:
 | -------- | ------------- | ------ |
 | Linux (manylinux 2.28 / 2.17, musllinux 1.2) | x86_64 | 3.11 – 3.14 |
 | Windows | x64 | 3.12 – 3.14 |
-| macOS (11+ on Apple silicon, 10.15+ on Intel) | arm64, x86_64 | 3.11 – 3.14 |
+| macOS 11+ (Apple silicon) | arm64 | 3.11 – 3.14 |
 
-On any other platform pip falls back to the source distribution and compiles the module on the fly;
-this needs a C++20 compiler, while CMake and Ninja are provisioned automatically by the build
-backend.
+On any other platform — including **Intel macs**, whose wheels were dropped as Apple winds down
+x86 support — pip falls back to the source distribution and compiles the module on the fly. That
+needs a C++20 compiler (and macOS 10.15 or newer, where `std::filesystem` became available),
+while CMake and Ninja are provisioned automatically by the build backend.
 
 ### Installing from Source
 You can build and install this library and python module from source by using CMake and a C++ compiler. The CMake Project will be 
@@ -339,6 +340,7 @@ In general, a C++ Scalar- or HistogramVoxel (and thus layers) can hold any datat
 | char    | DType.SCHAR  |
 | uint32_t   | DType.UINT32  |
 | uint64_t   | DType.UINT64  |
+| int64_t    | DType.INT64   |
 | unsigned long long | DType.UINT64  |
 | _Float16   | DType.FLOAT16 |
 | glm::vec2     | DType.VEC2 |

@@ -154,3 +154,65 @@ def test_float64_voxel():
 
     channel["energy"][0, 0, 1] = 4.0
     assert channel.get_voxel("energy", 0, 0, 1).get_data() == 4.0
+
+
+def test_package_imports_without_optional_symbols():
+    """Importing radfiled3d must never depend on a conditionally registered class.
+
+    Float16Voxel only exists where the compiler provides _Float16, and Int64Voxel used to be
+    registered on x86_64 only. Importing such a name unconditionally in __init__.py makes the
+    whole package unimportable on those builds (it broke the macOS arm64 wheel test).
+    """
+    import radfiled3d
+    from radfiled3d import _core
+
+    for name in radfiled3d.__all__:
+        assert hasattr(radfiled3d, name), f"{name} is in __all__ but not importable"
+
+    # every conditionally registered symbol must be gated behind its feature flag
+    assert hasattr(radfiled3d, "Float16Voxel") == radfiled3d.HAS_FLOAT16
+    assert hasattr(radfiled3d, "OwningFloat16Voxel") == radfiled3d.HAS_FLOAT16
+
+    # ... and everything the extension exports unconditionally must be reachable
+    moved = {"FieldStore", "StoreVersion", "FieldJoinMode", "FieldJoinCheckMode", "FieldAccessor",
+             "CartesianFieldAccessor", "PolarFieldAccessor", "CartesianFieldAccessorV1",
+             "PolarFieldAccessorV1", "vec2", "vec3", "vec4", "uvec2", "uvec3", "uvec4"}
+    exported = {n for n in dir(_core) if not n.startswith("_")} - moved
+    missing = exported - set(radfiled3d.__all__)
+    assert not missing, f"exported by _core but not re-exported: {sorted(missing)}"
+
+
+def test_int64_layers():
+    """DType.INT64 must behave like every other scalar dtype, on every platform.
+
+    Signed 64-bit was previously half-present: Int64Voxel was registered for x86_64 only and
+    no DType mapped to it, so no layer could ever use it.
+    """
+    from radfiled3d import CartesianRadiationField, DType, Int64Voxel
+    from radfiled3d.glm import vec3
+    from radfiled3d.store import FieldStore, StoreVersion
+    from radfiled3d.metadata.v1 import Metadata
+    import tempfile, os
+
+    field = CartesianRadiationField(vec3(1, 1, 1), vec3(0.5, 0.5, 0.5))
+    channel = field["c"]
+    channel.add_layer("counts", "n", DType.INT64)
+    assert channel["counts"].dtype == "int64"
+
+    # the full signed range, including negatives, must survive
+    smallest, largest = -(2 ** 63), 2 ** 63 - 1
+    channel["counts"][0, 0, 0] = smallest
+    channel["counts"][1, 1, 1] = largest
+    voxel = channel.get_voxel("counts", 0, 0, 0)
+    assert isinstance(voxel, Int64Voxel)
+    assert voxel.get_data() == smallest
+    voxel.set_data(-42)
+    assert int(channel["counts"][0, 0, 0, 0]) == -42
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "int64.rf3")
+        FieldStore.store(field, Metadata.default(), path, StoreVersion.V1)
+        loaded = FieldStore.load(path)
+        assert int(loaded["c"]["counts"][0, 0, 0, 0]) == -42
+        assert int(loaded["c"]["counts"][1, 1, 1, 0]) == largest
+        assert isinstance(loaded["c"].get_voxel("counts", 1, 1, 1), Int64Voxel)
