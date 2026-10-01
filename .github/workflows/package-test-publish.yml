@@ -83,6 +83,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     strategy:
+      # Report every platform's failure in one run: a publish needs all of them
+      # anyway, and fail-fast cancelled siblings before they could be diagnosed.
+      fail-fast: false
       max-parallel: 5
       matrix:
         include:
@@ -138,17 +141,28 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     strategy:
+      # Report every platform's failure in one run: a publish needs all of them
+      # anyway, and fail-fast cancelled siblings before they could be diagnosed.
+      fail-fast: false
       max-parallel: 5
       matrix:
+        # legacy-build selects what the glibc 2.17 step builds. numpy ships manylinux2014
+        # (glibc 2.17) wheels only up to cp313 and none at all in recent releases, so a
+        # cp314 wheel for that platform could not satisfy its own numpy>=2.0 dependency --
+        # and its test venv cannot install numpy either. Only musllinux is built for cp314.
         include:
           - python-version: 3.11
             python-name: cp311
+            legacy-build: "cp311-*"
           - python-version: 3.12
             python-name: cp312
+            legacy-build: "cp312-*"
           - python-version: 3.13
             python-name: cp313
+            legacy-build: "cp313-*"
           - python-version: 3.14
             python-name: cp314
+            legacy-build: "cp314-musllinux_x86_64"
     steps:
     - uses: actions/checkout@v7
     - name: Set up Python ${{ matrix.python-version }}
@@ -189,7 +203,7 @@ jobs:
         CIBW_BUILD_FRONTEND: "build"
         CIBW_ARCHS: "x86_64"
         CIBW_ENVIRONMENT_PASS_LINUX: "GITHUB_REF"
-        CIBW_BUILD: "${{ matrix.python-name }}-*"
+        CIBW_BUILD: ${{ matrix.legacy-build }}
         CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
         CIBW_TEST_REQUIRES: "pytest numpy"
         CIBW_TEST_COMMAND: "python -m pytest {project}/tests"
@@ -213,6 +227,9 @@ jobs:
     name: Build macOS wheel (arm64 ${{ matrix.python-name }})
     runs-on: macos-15
     strategy:
+      # Report every platform's failure in one run: a publish needs all of them
+      # anyway, and fail-fast cancelled siblings before they could be diagnosed.
+      fail-fast: false
       # One job per python version, like build-linux and build-windows. Building all
       # four interpreters in a single cibuildwheel run made this the slowest job, since
       # each wheel is also test-run.
